@@ -1,4 +1,14 @@
 {
+    "META": {
+        "use_tenant": "admin",
+        "encrypted_sensitive_fields": false,
+        "version": {
+            "Product": "controller",
+            "Version": "17.1.2",
+            "min_version": "17.1.1",
+            "ProductName": "Avi Cloud Controller"
+        }
+    },
     "IpamDnsProviderProfile": [
         {
             "url": "/api/ipamdnsproviderprofile/ipamdnsproviderprofile-b6df245d-05f7-4bd2-a436-c350aa292901", 
