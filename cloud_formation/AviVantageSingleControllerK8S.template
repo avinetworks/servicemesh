@@ -39,14 +39,14 @@ Mappings:
 Outputs:
   InstanceId:
     Description: InstanceId of the newly created EC2 instance
-    Value:
-      Ref: EC2Instance
+    Value: !Ref AviController
   PrivateIp:
     Description: Private IP of Avi Controller
-    Value:
-      Fn::GetAtt:
-      - EC2Instance
-      - PrivateIp
+    Value: !GetAtt AviController.PrivateIp
+  PublicIp:
+    Description: Public IP of Avi Controller
+    Value: !GetAtt AviController.PublicIp
+
 Parameters:
   AZId:
     Description: Availability Zone for the deployment
@@ -250,7 +250,7 @@ Resources:
       Roles:
       - Ref: AviControllerRole
     Type: AWS::IAM::Policy
-  EC2Instance:
+  AviController:
     Properties:
       IamInstanceProfile:
         Ref: AviControllerInstanceProfile
@@ -271,7 +271,7 @@ Resources:
         DeleteOnTermination: 'true'
         DeviceIndex: '0'
         GroupSet:
-        - Ref: InstanceSecurityGroup
+        - Ref: AviSecurityGroup
         - Ref: ClusterSecurityGroup
         SubnetId:
           Ref: ManagementNetwork
@@ -292,7 +292,7 @@ Resources:
             - "   } \n"
             - "}\n"
     Type: AWS::EC2::Instance
-  InstanceSecurityGroup:
+  AviSecurityGroup:
     Properties:
       GroupDescription: Enable SSH access via port 22
       SecurityGroupIngress:
