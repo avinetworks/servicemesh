@@ -40,13 +40,10 @@ Metadata:
     - Label:
         default: Advanced
       Parameters:
-      - NetworkingProvider
       - K8sNodeCapacity
       - InstanceType
       - DiskSizeGb
       - BastionInstanceType
-      - QSS3BucketName
-      - QSS3KeyPrefix
 
     ParameterLabels:
       KeyName:
@@ -63,12 +60,6 @@ Metadata:
         default: Instance Type (Bastion Host)
       K8sNodeCapacity:
         default: Node Capacity
-      QSS3BucketName:
-        default: S3 Bucket
-      QSS3KeyPrefix:
-        default: S3 Key Prefix
-      NetworkingProvider:
-        default: Networking Provider
 
 # The Parameters allow the user to pass custom settings to the stack before creation
 Parameters:
@@ -234,14 +225,12 @@ Parameters:
 
   NetworkingProvider:
     AllowedValues:
-    - calico
+    - flannel
     - weave
-    ConstraintDescription: 'Currently supported values are "calico" and "weave"'
-    Default: calico
+    ConstraintDescription: 'Currently supported values is "weave"'
+    Default: weave
     Description: Choose the networking provider to use for communication between
-      pods in the Kubernetes cluster. Supported configurations are calico 
-      (http://docs.projectcalico.org/v2.0/getting-started/kubernetes/installation/hosted/kubeadm/)
-      and weave (https://github.com/weaveworks/weave/blob/master/site/kube-addon.md).
+      pods in the Kubernetes cluster.
     Type: String
 
 Mappings:
@@ -467,7 +456,7 @@ Resources:
   K8sStack:
     Type: AWS::CloudFormation::Stack
     Properties:
-      TemplateURL: !Sub "https://${QSS3BucketName}.s3.amazonaws.com/${QSS3KeyPrefix}/templates/kubernetes-cluster.template"
+      TemplateURL: "https://s3-us-west-2.amazonaws.com/aviservicemesh/kubernetes-cluster-create.template"
       Parameters:
         VPCID: !Ref VPC
         AvailabilityZone: !Ref AvailabilityZone
@@ -484,6 +473,23 @@ Resources:
         ClusterAssociation: !Ref AWS::StackName
         NetworkingProvider: !Ref NetworkingProvider
         LoadBalancerSubnetId: !Ref PublicSubnet
+
+  # This creates a new stack that creates Avi controller within the VPC
+  AviStack:
+    Type: AWS::CloudFormation::Stack
+    DependsOn: K8sStack
+    Properties:
+      TemplateURL: "https://s3-us-west-2.amazonaws.com/aviservicemesh/AviVantageSingleControllerK8S.template"
+      Parameters:
+        VpcId: !Ref VPC
+        AZId: !Ref AvailabilityZone
+        AviVantageVersion: 17.1.3
+        InstanceType: c4.2xlarge
+        KeyName: !Ref KeyName
+        ManagementNetwork: !Ref PublicSubnet
+        SSHLocation: 0.0.0.0/0
+        ClusterSecurityGroup: !GetAtt K8sStack.Outputs.K8SClusterSG
+        K8SMaster: !GetAtt K8sStack.Outputs.MasterPrivateIp
 
 Outputs:
   # Outputs from VPC creation
@@ -544,3 +550,12 @@ Outputs:
     Description: Verify your cluster and deploy a test application. Instructions -
       http://jump.heptio.com/aws-qs-next
     Value: !GetAtt K8sStack.Outputs.NextSteps
+
+  # Outputs forwarded from the Avi template
+  AviControllerURL:
+    Description: URL to access Avi Controller UI. It may take upto 10 min for the Avi Controller to initially startup. 
+    Value: !Sub https://AviStack.Outputs.PublicIp/
+  AviLoginInfo:
+    Description: Default login info for Avi Controller login.
+    Value: Username- admin Password- avi123$%
+
