@@ -8,3 +8,4 @@ cd ..
 root=`pwd`
 
 git pull
+${mydir}/push.sh
