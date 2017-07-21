@@ -206,6 +206,7 @@ Parameters:
     AllowedValues:
     - "True"
     - "False"
+    Default: "False"
     ConstraintDescription: Beta version may have invalid CFT and may fail.
       Set this to true only if you know the latest CFT is stable.
 
@@ -250,11 +251,13 @@ Mappings:
     us-west-2:
       '64': ami-b2d463d2
 
-Conditions:
-  BetaCFTCondition:
-    Fn::Equals:
-    - !Ref BetaCFT
-    - 'True'
+  BetaURLMap:
+    "True":
+      AviStackURL: "https://s3-us-west-2.amazonaws.com/aviservicemesh/staging/AviVantageSingleControllerK8S.template"
+      K8SStackURL: "https://s3-us-west-2.amazonaws.com/aviservicemesh/staging/kubernetes-cluster-create.template"
+    "False":
+      AviStackURL: "https://s3-us-west-2.amazonaws.com/aviservicemesh/AviVantageSingleControllerK8S.template"
+      K8SStackURL: "https://s3-us-west-2.amazonaws.com/aviservicemesh/kubernetes-cluster-create.template"
 
 Resources:
   # Resources for new VPC
@@ -448,10 +451,11 @@ Resources:
   K8sStack:
     Type: AWS::CloudFormation::Stack
     Properties:
-      TemplateURL: !If 
-        - BetaCFTCondition
-        - "https://s3-us-west-2.amazonaws.com/aviservicemesh/staging/kubernetes-cluster-create.template"
-        - "https://s3-us-west-2.amazonaws.com/aviservicemesh/kubernetes-cluster-create.template"
+      TemplateURL: 
+        Fn::FindInMap:
+          - BetaURLMap
+          - !Ref BetaCFT
+          - K8SStackURL
       Parameters:
         VPCID: !Ref VPC
         AvailabilityZone: !Ref AvailabilityZone
@@ -475,10 +479,11 @@ Resources:
     Type: AWS::CloudFormation::Stack
     DependsOn: K8sStack
     Properties:
-      TemplateURL: !If 
-        - BetaCFTCondition
-        - "https://s3-us-west-2.amazonaws.com/aviservicemesh/staging/AviVantageSingleControllerK8S.template"
-        - "https://s3-us-west-2.amazonaws.com/aviservicemesh/AviVantageSingleControllerK8S.template"
+      TemplateURL:
+        Fn::FindInMap:
+          - BetaURLMap
+          - !Ref BetaCFT
+          - AviStackURL
       Parameters:
         VpcId: !Ref VPC
         AZId: !Ref AvailabilityZone
