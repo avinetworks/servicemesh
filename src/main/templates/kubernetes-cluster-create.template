@@ -303,6 +303,14 @@ Mappings:
     us-west-2:
       '64': ami-9fdacee6
 
+  BetaURLMap:
+    "True":
+      ScriptURL: "https://s3-us-west-2.amazonaws.com/aviservicemesh/staging/day0config/setup_avi_json.sh"
+      TemplateURL: "https://s3-us-west-2.amazonaws.com/aviservicemesh/staging/day0config/template_setup.json"
+    "False":
+      AviStackURL: "https://s3-us-west-2.amazonaws.com/aviservicemesh/day0config/setup_avi_json.sh"
+      K8SStackURL: "https://s3-us-west-2.amazonaws.com/aviservicemesh/day0config/template_setup.json"
+
 # Helper Conditions which help find the right values for resources
 Conditions:
   AssociationProvidedCondition:
@@ -315,12 +323,6 @@ Conditions:
     - Fn::Equals:
       - !Ref LoadBalancerSubnetId
       - ''
-
-Conditions:
-  BetaCFTCondition:
-    Fn::Equals:
-    - !Ref BetaCFT
-    - 'True'
 
 # Resources are the AWS services we want to actually create as part of the Stack
 Resources:
@@ -371,18 +373,20 @@ Resources:
 
             # Create Avi config template file
             "/tmp/template_setup.json":
-              source: !If 
-                - BetaCFTCondition
-                - "https://s3-us-west-2.amazonaws.com/aviservicemesh/staging/day0config/template_setup.json"
-                - "https://s3-us-west-2.amazonaws.com/aviservicemesh/day0config/template_setup.json"
+              source:
+                Fn::FindInMap:
+                  - BetaURLMap
+                  - !Ref BetaCFT
+                  - TemplateURL
               mode: '000666'
 
             # Script to create Avi configuration
             "/tmp/setup_avi_json.sh":
-              source: !If 
-                - BetaCFTCondition
-                - "https://s3-us-west-2.amazonaws.com/aviservicemesh/staging/day0config/setup_avi_json.sh"
-                - "https://s3-us-west-2.amazonaws.com/aviservicemesh/day0config/setup_avi_json.sh"
+              source: 
+                Fn::FindInMap:
+                  - BetaURLMap
+                  - !Ref BetaCFT
+                  - ScriptURL
               mode: '000755'
               ignoreErrors: true
               cwd: "/tmp/"
