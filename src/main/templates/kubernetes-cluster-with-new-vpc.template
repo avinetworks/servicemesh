@@ -1,31 +1,5 @@
-# Copyright 2017 by the contributors
-#
-#    Licensed under the Apache License, Version 2.0 (the "License");
-#    you may not use this file except in compliance with the License.
-#    You may obtain a copy of the License at
-#
-#        http://www.apache.org/licenses/LICENSE-2.0
-#
-#    Unless required by applicable law or agreed to in writing, software
-#    distributed under the License is distributed on an "AS IS" BASIS,
-#    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-#    See the License for the specific language governing permissions and
-#    limitations under the License.
-
 ---
-AWSTemplateFormatVersion: '2010-09-09'
-Description: 'QS(5042) Kubernetes AWS CloudFormation Template: Create a Kubernetes
-  cluster in a new VPC. The master node is an auto-recovering Amazon EC2
-  instance. 1-20 additional EC2 instances in an AutoScalingGroup join the
-  Kubernetes cluster as nodes. An ELB provides configurable external access
-  to the Kubernetes API. The new VPC includes a bastion host to grant
-  SSH access to the private subnet for the cluster. This template creates
-  two stacks: one for the new VPC and one for the cluster. The stack is
-  suitable for development and small single-team clusters. **WARNING** This
-  template creates four Amazon EC2 instances with default settings. You will
-  be billed for the AWS resources used if you create a stack from this template.
-  **SUPPORT** Please visit http://jump.heptio.com/aws-qs-help for support.
-  **NEXT STEPS** Please visit http://jump.heptio.com/aws-qs-next.'
+Description: 'Creates VPC and deploys K8S cluster and Avi Controller in it.'
 
 # The Metadata tells AWS how to display the parameters during stack creation
 Metadata:
@@ -494,6 +468,7 @@ Resources:
         ClusterAssociation: !Ref AWS::StackName
         NetworkingProvider: !Ref NetworkingProvider
         LoadBalancerSubnetId: !Ref PublicSubnet
+        BetaCFT: !Ref BetaCFT
 
   # This creates a new stack that creates Avi controller within the VPC
   AviStack:
