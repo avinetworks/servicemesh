@@ -44,6 +44,7 @@ Metadata:
       - InstanceType
       - DiskSizeGb
       - BastionInstanceType
+      - BetaCFT
 
     ParameterLabels:
       KeyName:
@@ -60,6 +61,8 @@ Metadata:
         default: Instance Type (Bastion Host)
       K8sNodeCapacity:
         default: Node Capacity
+      BetaCFT:
+        default: Run beta version
 
 # The Parameters allow the user to pass custom settings to the stack before creation
 Parameters:
@@ -223,6 +226,15 @@ Parameters:
       forward slashes (/) because they are automatically appended.
     Type: String
 
+  BetaCFT:
+    Description: Beta version of CloudFormation Template
+    Type: String
+    AllowedValues:
+    - "True"
+    - "False"
+    ConstraintDescription: Beta version may have invalid CFT and may fail.
+      Set this to true only if you know the latest CFT is stable.
+
   NetworkingProvider:
     AllowedValues:
     - flannel
@@ -263,6 +275,12 @@ Mappings:
       '64': ami-b05203d0
     us-west-2:
       '64': ami-b2d463d2
+
+Conditions:
+  BetaCFTCondition:
+    Fn::Equals:
+    - !Ref BetaCFT
+    - 'True'
 
 Resources:
   # Resources for new VPC
@@ -456,7 +474,10 @@ Resources:
   K8sStack:
     Type: AWS::CloudFormation::Stack
     Properties:
-      TemplateURL: "https://s3-us-west-2.amazonaws.com/aviservicemesh/kubernetes-cluster-create.template"
+      TemplateURL: !If 
+        - BetaCFTCondition
+        - "https://s3-us-west-2.amazonaws.com/aviservicemesh/staging/kubernetes-cluster-create.template"
+        - "https://s3-us-west-2.amazonaws.com/aviservicemesh/kubernetes-cluster-create.template"
       Parameters:
         VPCID: !Ref VPC
         AvailabilityZone: !Ref AvailabilityZone
@@ -479,11 +500,14 @@ Resources:
     Type: AWS::CloudFormation::Stack
     DependsOn: K8sStack
     Properties:
-      TemplateURL: "https://s3-us-west-2.amazonaws.com/aviservicemesh/AviVantageSingleControllerK8S.template"
+      TemplateURL: !If 
+        - BetaCFTCondition
+        - "https://s3-us-west-2.amazonaws.com/aviservicemesh/staging/AviVantageSingleControllerK8S.template"
+        - "https://s3-us-west-2.amazonaws.com/aviservicemesh/AviVantageSingleControllerK8S.template"
       Parameters:
         VpcId: !Ref VPC
         AZId: !Ref AvailabilityZone
-        AviVantageVersion: 17.1.3
+        AviVantageVersion: 17.1.4
         InstanceType: c4.2xlarge
         KeyName: !Ref KeyName
         ManagementNetwork: !Ref PublicSubnet
