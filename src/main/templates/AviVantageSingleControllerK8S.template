@@ -26,7 +26,8 @@ Mappings:
     us-west-2:
       "1711": "ami-12ce5472"
       "1712": "ami-ba5c52c3"
-      "1713": "ami-820a18fb"
+      "1713": "ami-2f243856"
+      "1714": "ami-354b524c"
     us-west-2-priv:
       '1622': ami-0ef4256e
   VersionMap:
@@ -36,6 +37,8 @@ Mappings:
       version: "1712"
     "17.1.3": 
       version: "1713"
+    "17.1.4": 
+      version: "1714"
 Outputs:
   InstanceId:
     Description: InstanceId of the newly created EC2 instance
@@ -56,8 +59,9 @@ Parameters:
     - 17.1.1
     - 17.1.2
     - 17.1.3
+    - 17.1.4
     ConstraintDescription: must be a valid Avi Vantage version
-    Default: 17.1.3
+    Default: 17.1.4
     Description: The version of Avi Vantage
     Type: String
   InstanceType:

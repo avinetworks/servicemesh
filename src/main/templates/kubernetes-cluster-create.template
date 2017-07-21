@@ -58,6 +58,7 @@ Metadata:
       - QSS3BucketName
       - QSS3KeyPrefix
       - ClusterAssociation
+      - BetaCFT
 
     ParameterLabels:
       KeyName:
@@ -88,7 +89,8 @@ Metadata:
         default: Networking Provider
       LoadBalancerSubnetId:
         default: Load Balancer Subnet
-
+      BetaCFT:
+        default: Run beta version
 
 # The Parameters allow the user to pass custom settings to the stack before creation
 Parameters:
@@ -118,6 +120,15 @@ Parameters:
      and the value of this parameter, to resources created as part of this stack. Leave blank
      to use this Quick Start Stack name.
     Type: String
+
+  BetaCFT:
+    Description: Beta version of CloudFormation Template
+    Type: String
+    AllowedValues:
+    - "True"
+    - "False"
+    ConstraintDescription: Beta version may have invalid CFT and may fail.
+      Set this to true only if you know the latest CFT is stable.
 
   # Default is t2.medium. EC2 instance type for the cluster
   # https://aws.amazon.com/ec2/instance-types/
@@ -305,6 +316,12 @@ Conditions:
       - !Ref LoadBalancerSubnetId
       - ''
 
+Conditions:
+  BetaCFTCondition:
+    Fn::Equals:
+    - !Ref BetaCFT
+    - 'True'
+
 # Resources are the AWS services we want to actually create as part of the Stack
 Resources:
   # Install a CloudWatch logging group for system logs for each instance
@@ -354,12 +371,18 @@ Resources:
 
             # Create Avi config template file
             "/tmp/template_setup.json":
-              source: "https://s3-us-west-2.amazonaws.com/aviservicemesh/day0config/template_setup.json"
+              source: !If 
+                - BetaCFTCondition
+                - "https://s3-us-west-2.amazonaws.com/aviservicemesh/staging/day0config/template_setup.json"
+                - "https://s3-us-west-2.amazonaws.com/aviservicemesh/day0config/template_setup.json"
               mode: '000666'
 
             # Script to create Avi configuration
             "/tmp/setup_avi_json.sh":
-              source: "https://s3-us-west-2.amazonaws.com/aviservicemesh/day0config/setup_avi_json.sh"
+              source: !If 
+                - BetaCFTCondition
+                - "https://s3-us-west-2.amazonaws.com/aviservicemesh/staging/day0config/setup_avi_json.sh"
+                - "https://s3-us-west-2.amazonaws.com/aviservicemesh/day0config/setup_avi_json.sh"
               mode: '000755'
               ignoreErrors: true
               cwd: "/tmp/"
