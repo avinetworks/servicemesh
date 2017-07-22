@@ -605,6 +605,7 @@ Resources:
         PropagateAtLaunch: 'true'
       - Key: Type
         Value: PrivateNode
+        PropagateAtLaunch: 'true'
       - Key: KubernetesCluster
         Value:
           Fn::If:
@@ -649,6 +650,7 @@ Resources:
         PropagateAtLaunch: 'true'
       - Key: Type
         Value: PublicNode
+        PropagateAtLaunch: 'true'
       - Key: KubernetesCluster
         Value:
           Fn::If:
