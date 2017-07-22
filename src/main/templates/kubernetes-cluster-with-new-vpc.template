@@ -563,9 +563,8 @@ Outputs:
     Value: !GetAtt K8sStack.Outputs.JoinNodes
 
   NextSteps:
-    Description: Verify your cluster and deploy a test application. Instructions -
-      http://jump.heptio.com/aws-qs-next
-    Value: !GetAtt K8sStack.Outputs.NextSteps
+    Description: Verify your cluster and deploy a test application. Instructions
+    Value: https://avinetworks.servicemesh.com
 
   # Outputs forwarded from the Avi template
   AviControllerURL:
