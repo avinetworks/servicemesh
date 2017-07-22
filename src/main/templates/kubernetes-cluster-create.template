@@ -14,19 +14,7 @@
 
 ---
 AWSTemplateFormatVersion: '2010-09-09'
-Description: 'QS(5042) Kubernetes AWS CloudFormation Template: Create a Kubernetes
-  cluster in an existing VPC. This template is for users who want to add
-  a Kubernetes cluster to existing AWS infrastructure. The master node is
-  an auto-recovering Amazon EC2 instance. 1-20 additional EC2 instances in an
-  AutoScalingGroup join the Kubernetes cluster as nodes. An ELB provides
-  configurable external access to the Kubernetes API. If you choose a private
-  subnet, make sure it has a bastion host for SSH access to your cluster. If you
-  choose a public subnet, you can connect directly to the master node. The stack
-  is suitable for development and small single-team clusters. **WARNING** This
-  template creates four Amazon EC2 instances with default settings. You will
-  be billed for the AWS resources used if you create a stack from this template.
-  **SUPPORT** Please visit http://jump.heptio.com/aws-qs-help for support.
-  **NEXT STEPS** Please visit http://jump.heptio.com/aws-qs-next.'
+Description: "Deploys K8S cluster with one master and atleast one private and one public instance"
 
 # The Metadata tells AWS how to display the parameters during stack creation
 Metadata:
@@ -787,7 +775,6 @@ Resources:
       KeyName: !Ref KeyName
       # Join the cluster security group so that we can customize the access
       # control (See the ClusterSecGroup resource for details)
-      AssociatePublicIpAddress: 'false'
       SecurityGroups:
       - !Ref ClusterSecGroup
       # The userdata script is launched on startup, but contains only the commands that call out to cfn-init, which runs
