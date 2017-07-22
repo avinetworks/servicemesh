@@ -50,7 +50,8 @@ Metadata:
     - Label:
         default: Kubernetes Configuration
       Parameters:
-      - K8sNodeCapacity
+      - K8sPrivateNodeCapacity
+      - K8sPublicNodeCapacity
       - NetworkingProvider
     - Label:
         default: Advanced
@@ -77,8 +78,10 @@ Metadata:
         default: Instance Type
       DiskSizeGb:
         default: Disk Size (GiB)
-      K8sNodeCapacity:
-        default: Node Capacity
+      K8sPrivateNodeCapacity:
+        default: Private Node Capacity
+      K8sPublicNodeCapacity:
+        default: Public Node Capacity
       QSS3BucketName:
         default: S3 Bucket
       QSS3KeyPrefix:
@@ -219,9 +222,18 @@ Parameters:
 
   # Default 2. Choose 1-20 initial nodes to run cluster workloads (in addition to the master node instance)
   # You can scale up your cluster later and add more nodes
-  K8sNodeCapacity:
-    Default: '2'
-    Description: Initial number of Kubernetes nodes (1-20).
+  K8sPrivateNodeCapacity:
+    Default: '1'
+    Description: Initial number of Kubernetes nodes on private subnet(1-20).
+    Type: Number
+    MinValue: '1'
+    MaxValue: '20'
+    ConstraintDescription: must be between 1 and 20 EC2 instances.
+  # Default 2. Choose 1-20 initial nodes to run cluster workloads (in addition to the master node instance)
+  # You can scale up your cluster later and add more nodes
+  K8sPublicNodeCapacity:
+    Default: '1'
+    Description: Initial number of Kubernetes nodes on public subnet(1-20).
     Type: Number
     MinValue: '1'
     MaxValue: '20'
@@ -562,23 +574,23 @@ Resources:
 
   # This is the Auto Scaling Group that contains EC2 instances that are Kubernetes nodes
   # http://docs.aws.amazon.com/autoscaling/latest/userguide/AutoScalingGroup.html
-  K8sNodeGroup:
+  K8sPrivateNodeGroup:
     Type: AWS::AutoScaling::AutoScalingGroup
     DependsOn: K8sMasterInstance
     CreationPolicy:
       ResourceSignal:
-        # Ensure at least <K8sNodeCapacity> nodes have signaled success before
+        # Ensure at least <K8sPrivateNodeCapacity> nodes have signaled success before
         # this resource is considered created.
-        Count: !Ref K8sNodeCapacity
+        Count: !Ref K8sPrivateNodeCapacity
         Timeout: PT10M
     Properties:
       # Where the EC2 instance gets deployed geographically
       AvailabilityZones:
       - !Ref AvailabilityZone
-      # Refers to the K8sNodeCapacity parameter, which specifies the number of nodes (1-20)
-      DesiredCapacity: !Ref K8sNodeCapacity
+      # Refers to the K8sPrivateNodeCapacity parameter, which specifies the number of nodes (1-20)
+      DesiredCapacity: !Ref K8sPrivateNodeCapacity
       # Refers to the LaunchConfig, which has specific config details for the EC2 instances
-      LaunchConfigurationName: !Ref LaunchConfig
+      LaunchConfigurationName: !Ref PrivateNodeLaunchConfig
       # More cluster sizing
       MinSize: '1'
       MaxSize: '20'
@@ -591,6 +603,52 @@ Resources:
       - Key: Name
         Value: k8s-node
         PropagateAtLaunch: 'true'
+      - Key: Type
+        Value: PrivateNode
+      - Key: KubernetesCluster
+        Value:
+          Fn::If:
+          - AssociationProvidedCondition
+          - !Ref ClusterAssociation
+          - !Ref AWS::StackName
+        PropagateAtLaunch: 'true'
+    # Tells the group how many instances to update at a time, if an update is applied
+    UpdatePolicy:
+      AutoScalingRollingUpdate:
+        MinInstancesInService: '1'
+        MaxBatchSize: '1'
+
+  K8sPublicNodeGroup:
+    Type: AWS::AutoScaling::AutoScalingGroup
+    DependsOn: K8sMasterInstance
+    CreationPolicy:
+      ResourceSignal:
+        # Ensure at least <K8sPublicNodeCapacity> nodes have signaled success before
+        # this resource is considered created.
+        Count: !Ref K8sPublicNodeCapacity
+        Timeout: PT10M
+    Properties:
+      # Where the EC2 instance gets deployed geographically
+      AvailabilityZones:
+      - !Ref AvailabilityZone
+      # Refers to the K8sPublicNodeCapacity parameter, which specifies the number of nodes (1-20)
+      DesiredCapacity: !Ref K8sPublicNodeCapacity
+      # Refers to the LaunchConfig, which has specific config details for the EC2 instances
+      LaunchConfigurationName: !Ref PublicNodeLaunchConfig
+      # More cluster sizing
+      MinSize: '1'
+      MaxSize: '20'
+      # VPC Zone Identifier is the subnets to put the hosts in
+      VPCZoneIdentifier:
+        - !Ref LoadBalancerSubnetId
+      # Designates names for these EC2 instances that will appear in the instances list (k8s-node)
+      # Tags each node with KubernetesCluster=<stackname> or chosen value (needed for cloud-provider's IAM roles)
+      Tags:
+      - Key: Name
+        Value: k8s-node
+        PropagateAtLaunch: 'true'
+      - Key: Type
+        Value: PublicNode
       - Key: KubernetesCluster
         Value:
           Fn::If:
@@ -605,7 +663,7 @@ Resources:
         MaxBatchSize: '1'
 
   # This tells AWS what kinds of servers we want in our Auto Scaling Group
-  LaunchConfig:
+  PrivateNodeLaunchConfig:
     Type: AWS::AutoScaling::LaunchConfiguration
     Metadata:
       AWS::CloudFormation::Init:
@@ -668,14 +726,88 @@ Resources:
               --verbose \
               --stack '${AWS::StackName}' \
               --region '${AWS::Region}' \
-              --resource LaunchConfig \
+              --resource PrivateNodeLaunchConfig \
               --configsets node-setup
 
             /usr/local/bin/cfn-signal \
               --exit-code $? \
               --stack '${AWS::StackName}' \
               --region '${AWS::Region}' \
-              --resource K8sNodeGroup
+              --resource K8sPrivateNodeGroup
+
+ # This tells AWS what kinds of servers we want in our Auto Scaling Group
+  PublicNodeLaunchConfig:
+    Type: AWS::AutoScaling::LaunchConfiguration
+    Metadata:
+      AWS::CloudFormation::Init:
+        configSets:
+          node-setup: node-setup
+        node-setup:
+          # (See comments in the master instance Metadata for details.)
+          files:
+            "/tmp/kubernetes-awslogs.conf":
+              source: !Sub "https://${QSS3BucketName}.s3.amazonaws.com/${QSS3KeyPrefix}/scripts/kubernetes-awslogs.conf"
+              context:
+                StackName: !Ref AWS::StackName
+            "/usr/local/aws/awslogs-agent-setup.py":
+              source: https://s3.amazonaws.com/aws-cloudwatch/downloads/latest/awslogs-agent-setup.py
+              mode: '000755'
+            "/etc/systemd/system/awslogs.service":
+              source: !Sub "https://${QSS3BucketName}.s3.amazonaws.com/${QSS3KeyPrefix}/scripts/awslogs.service"
+          commands:
+            "01-cloudwatch-agent-setup":
+              command: !Sub "python /usr/local/aws/awslogs-agent-setup.py -n -r ${AWS::Region} -c /tmp/kubernetes-awslogs.conf"
+            "02-cloudwatch-service-config":
+              command: "systemctl enable awslogs.service && systemctl start awslogs.service"
+            # This joins the existing cluster with kubeadm.  Kubeadm is preinstalled in the AMI this template uses, so
+            # all that's left is to join the cluster with the correct token.
+            "03-k8s-setup-node":
+              command: !Sub "kubeadm reset && kubeadm join --token=${KubeadmToken.Token} ${K8sMasterInstance.PrivateIp}:6443"
+    Properties:
+      # Refers to the NodeInstanceProfile resource, which applies the IAM role for the nodes
+      # The IAM role allows us to create further AWS resources (like an EBS drive) from the cluster
+      # This is needed for the Kubernetes-AWS cloud-provider integration
+      IamInstanceProfile: !Ref NodeInstanceProfile
+      # http://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-properties-ec2-instance.html#cfn-ec2-instance-imageid
+      ImageId:
+        Fn::FindInMap:
+        - RegionMap
+        - !Ref AWS::Region
+        - '64'
+      BlockDeviceMappings:
+      - DeviceName: '/dev/sda1'
+        Ebs:
+          VolumeSize: !Ref DiskSizeGb
+          VolumeType: gp2
+      # Type of instance; the default is t2.medium
+      InstanceType: !Ref InstanceType
+      # Adds our SSH key to the instance
+      KeyName: !Ref KeyName
+      # Join the cluster security group so that we can customize the access
+      # control (See the ClusterSecGroup resource for details)
+      SecurityGroups:
+      - !Ref ClusterSecGroup
+      # The userdata script is launched on startup, but contains only the commands that call out to cfn-init, which runs
+      # the commands in the metadata above, and cfn-signal, which signals when the initialization is complete.
+      UserData:
+        Fn::Base64:
+          Fn::Sub: |
+            #!/bin/bash
+            set -o xtrace
+
+            /usr/local/bin/cfn-init \
+              --verbose \
+              --stack '${AWS::StackName}' \
+              --region '${AWS::Region}' \
+              --resource PublicNodeLaunchConfig \
+              --configsets node-setup
+
+            /usr/local/bin/cfn-signal \
+              --exit-code $? \
+              --stack '${AWS::StackName}' \
+              --region '${AWS::Region}' \
+              --resource K8sPublicNodeGroup
+
 
   # Define the (one) security group for all machines in the cluster.  Keeping
   # just one security group helps with k8s's cloud-provider=aws integration so
@@ -905,15 +1037,7 @@ Outputs:
     Description: K8S cluster Security Group.
     Value: !Ref ClusterSecGroup
 
-  NodeGroupInstanceId:
-    Description: InstanceId of the newly-created NodeGroup.
-    Value: !Ref K8sNodeGroup
-
   JoinNodes:
     Description: Command to join more nodes to this cluster.
     Value: !Sub "kubeadm join --token=${KubeadmToken.Token} ${K8sMasterInstance.PrivateIp}"
 
-  NextSteps:
-    Description: Verify your cluster and deploy a test application. Instructions -
-      http://jump.heptio.com/aws-qs-next
-    Value: http://jump.heptio.com/aws-qs-next
