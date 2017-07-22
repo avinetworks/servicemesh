@@ -787,6 +787,7 @@ Resources:
       KeyName: !Ref KeyName
       # Join the cluster security group so that we can customize the access
       # control (See the ClusterSecGroup resource for details)
+      AssociatePublicIpAddress: 'false'
       SecurityGroups:
       - !Ref ClusterSecGroup
       # The userdata script is launched on startup, but contains only the commands that call out to cfn-init, which runs
