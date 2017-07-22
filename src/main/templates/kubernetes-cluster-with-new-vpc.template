@@ -14,7 +14,8 @@ Metadata:
     - Label:
         default: Advanced
       Parameters:
-      - K8sNodeCapacity
+      - K8sPublicNodeCapacity
+      - K8sPrivateNodeCapacity
       - InstanceType
       - DiskSizeGb
       - BastionInstanceType
@@ -33,8 +34,10 @@ Metadata:
         default: Disk Size (GiB)
       BastionInstanceType:
         default: Instance Type (Bastion Host)
-      K8sNodeCapacity:
-        default: Node Capacity
+      K8sPublicNodeCapacity:
+        default: Public Node Capacity
+      K8sPrivateNodeCapacity:
+        default: Private Node Capacity
       BetaCFT:
         default: Run beta version
 
@@ -162,9 +165,17 @@ Parameters:
     AllowedPattern: "(\\d{1,3})\\.(\\d{1,3})\\.(\\d{1,3})\\.(\\d{1,3})/(\\d{1,2})"
     ConstraintDescription: must be a valid IP CIDR range of the form x.x.x.x/x.
 
-  K8sNodeCapacity:
-    Default: '2'
-    Description: Initial number of Kubernetes nodes (1-20).
+  K8sPrivateNodeCapacity:
+    Default: '1'
+    Description: Initial number of Kubernetes nodes on private subnet(1-20).
+    Type: Number
+    MinValue: '1'
+    MaxValue: '20'
+    ConstraintDescription: must be between 1 and 20 EC2 instances.
+
+  K8sPublicNodeCapacity:
+    Default: '1'
+    Description: Initial number of Kubernetes nodes on public subnet(1-20).
     Type: Number
     MinValue: '1'
     MaxValue: '20'
@@ -466,7 +477,8 @@ Resources:
         SSHLocation: !Sub "${BastionHost.PrivateIp}/32"
         ApiLbLocation: !Ref AdminIngressLocation
         KeyName: !Ref KeyName
-        K8sNodeCapacity: !Ref K8sNodeCapacity
+        K8sPrivateNodeCapacity: !Ref K8sPrivateNodeCapacity
+        K8sPublicNodeCapacity: !Ref K8sPublicNodeCapacity
         QSS3BucketName: !Ref QSS3BucketName
         QSS3KeyPrefix: !Ref QSS3KeyPrefix
         ClusterAssociation: !Ref AWS::StackName
@@ -558,7 +570,7 @@ Outputs:
   # Outputs forwarded from the Avi template
   AviControllerURL:
     Description: URL to access Avi Controller UI. It may take upto 10 min for the Avi Controller to initially startup. 
-    Value: !Sub https://AviStack.Outputs.PublicIp/
+    Value: !Sub https://${AviStack.Outputs.PublicIp}/
   AviLoginInfo:
     Description: Default login info for Avi Controller login.
     Value: Username- admin Password- avi123$%
