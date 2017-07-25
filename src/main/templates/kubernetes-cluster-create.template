@@ -382,15 +382,6 @@ Resources:
                   - TemplateURL
               mode: '000666'
 
-            # kubernetes dashboard
-            "/tmp/kubernetes-dashboard.yaml":
-              source:
-                Fn::FindInMap:
-                  - BetaURLMap
-                  - !Ref BetaCFT
-                  - K8sDashURL
-              mode: '000666'
-
             # Script to create Avi configuration
             "/tmp/setup_avi_json.sh":
               source: 
@@ -423,13 +414,6 @@ Resources:
             "04-avi-setup":
               command: "/tmp/setup_avi_json.sh"
 
-            # Disable kube-proxy
-            "05-disable-kube-proxy":
-              command: "kubectl delete ds kube-proxy -n kube-system --kubeconfig=/home/ubuntu/kubeconfig"
-
-            # Install kubernetes dashboard
-            "06-k8s-dashboard":
-              command: "kubectl apply -f /tmp/kubernetes-dashboard.yaml --kubeconfig=/home/ubuntu/kubeconfig"
     Properties:
       # Where the EC2 instance gets deployed geographically
       AvailabilityZone: !Ref AvailabilityZone
