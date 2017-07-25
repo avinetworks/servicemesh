@@ -554,10 +554,6 @@ Outputs:
     Description: Private IP address of the master.
     Value: !GetAtt K8sStack.Outputs.MasterPrivateIp
 
-  NodeGroupInstanceId:
-    Description: InstanceId of the newly-created NodeGroup.
-    Value: !GetAtt K8sStack.Outputs.NodeGroupInstanceId
-
   JoinNodes:
     Description: Command to join more nodes to this cluster.
     Value: !GetAtt K8sStack.Outputs.JoinNodes

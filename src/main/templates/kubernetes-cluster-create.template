@@ -307,9 +307,11 @@ Mappings:
     "True":
       ScriptURL: "https://s3-us-west-2.amazonaws.com/aviservicemesh/staging/day0config/setup_avi_json.sh"
       TemplateURL: "https://s3-us-west-2.amazonaws.com/aviservicemesh/staging/day0config/template_setup.json"
+      K8sDashURL: "https://s3-us-west-2.amazonaws.com/aviservicemesh/staging/apps/kubernetes-dashboard.yaml"
     "False":
       AviStackURL: "https://s3-us-west-2.amazonaws.com/aviservicemesh/day0config/setup_avi_json.sh"
       K8SStackURL: "https://s3-us-west-2.amazonaws.com/aviservicemesh/day0config/template_setup.json"
+      K8sDashURL: "https://s3-us-west-2.amazonaws.com/aviservicemesh/apps/kubernetes-dashboard.yaml"
 
 # Helper Conditions which help find the right values for resources
 Conditions:
@@ -371,13 +373,22 @@ Resources:
                 NetworkingProviderUrl: !Sub "https://${QSS3BucketName}.s3.amazonaws.com/${QSS3KeyPrefix}/scripts/${NetworkingProvider}.yaml"
                 Region: !Ref AWS::Region
 
-            # Create Avi config template file
+            # Avi config template file
             "/tmp/template_setup.json":
               source:
                 Fn::FindInMap:
                   - BetaURLMap
                   - !Ref BetaCFT
                   - TemplateURL
+              mode: '000666'
+
+            # kubernetes dashboard
+            "/tmp/kubernetes-dashboard.yaml":
+              source:
+                Fn::FindInMap:
+                  - BetaURLMap
+                  - !Ref BetaCFT
+                  - K8sDashURL
               mode: '000666'
 
             # Script to create Avi configuration
@@ -411,6 +422,14 @@ Resources:
             # Run the Avi setup
             "04-avi-setup":
               command: "/tmp/setup_avi_json.sh"
+
+            # Disable kube-proxy
+            "05-disable-kube-proxy":
+              command: "kubectl delete ds kube-proxy -n kube-system --kubeconfig=/home/ubuntu/kubeconfig"
+
+            # Install kubernetes dashboard
+            "06-k8s-dashboard":
+              command: "kubectl apply -f /tmp/kubernetes-dashboard.yaml --kubeconfig=/home/ubuntu/kubeconfig"
     Properties:
       # Where the EC2 instance gets deployed geographically
       AvailabilityZone: !Ref AvailabilityZone
