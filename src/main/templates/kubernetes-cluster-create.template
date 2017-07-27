@@ -433,8 +433,8 @@ Resources:
               command: "/tmp/setup-k8s-master.sh"
 
             # Disable kube-proxy
-            "04-disable-kube-proxy":
-              command: "kubectl delete ds kube-proxy -n kube-system --kubeconfig=/etc/kubernetes/admin.conf"
+            #"04-disable-kube-proxy":
+            #  command: "kubectl delete ds kube-proxy -n kube-system --kubeconfig=/etc/kubernetes/admin.conf"
 
             # Install kubernetes dashboard
             "05-k8s-dashboard":
