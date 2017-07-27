@@ -27,7 +27,7 @@ Mappings:
       "1711": "ami-12ce5472"
       "1712": "ami-ba5c52c3"
       "1713": "ami-2f243856"
-      "1714": "ami-e3ffe59a"
+      "1714": "ami-e5f2e89c"
     us-west-2-priv:
       '1622': ami-0ef4256e
   VersionMap:

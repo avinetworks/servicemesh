@@ -175,7 +175,7 @@
                     "prefix": {
                         "ip_addr": {
                             "type": "V4", 
-                            "addr": "10.96.0.0"
+                            "addr": "172.30.0.0"
                         }, 
                         "mask": 12
                     }
@@ -222,7 +222,7 @@
                 "east_west_placement_subnet": {
                     "ip_addr": {
                         "type": "V4", 
-                        "addr": "10.96.0.0"
+                        "addr": "172.30.0.0"
                     }, 
                     "mask": 12
                 }, 
@@ -235,7 +235,7 @@
                 "l4_health_monitoring": false, 
                 "se_deployment_method": "SE_CREATE_POD", 
                 "sdn_overlay": true, 
-                "use_service_cluster_ip_as_ew_vip": true, 
+                "use_service_cluster_ip_as_ew_vip": false, 
                 "docker_registry_se": {
                     "oshift_registry": {
                         "registry_service": "docker-registry", 
