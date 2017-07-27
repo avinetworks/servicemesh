@@ -308,10 +308,12 @@ Mappings:
       ScriptURL: "https://s3-us-west-2.amazonaws.com/aviservicemesh/staging/day0config/setup_avi_json.sh"
       TemplateURL: "https://s3-us-west-2.amazonaws.com/aviservicemesh/staging/day0config/template_setup.json"
       K8sDashURL: "https://s3-us-west-2.amazonaws.com/aviservicemesh/staging/apps/kubernetes-dashboard.yaml"
+      GalleryAppURL: "https://s3-us-west-2.amazonaws.com/aviservicemesh/staging/apps/gallery-app.yaml"
     "False":
       AviStackURL: "https://s3-us-west-2.amazonaws.com/aviservicemesh/day0config/setup_avi_json.sh"
       K8SStackURL: "https://s3-us-west-2.amazonaws.com/aviservicemesh/day0config/template_setup.json"
       K8sDashURL: "https://s3-us-west-2.amazonaws.com/aviservicemesh/apps/kubernetes-dashboard.yaml"
+      GalleryAppURL: "https://s3-us-west-2.amazonaws.com/aviservicemesh/apps/gallery-app.yaml"
 
 # Helper Conditions which help find the right values for resources
 Conditions:
@@ -382,6 +384,26 @@ Resources:
                   - TemplateURL
               mode: '000666'
 
+            # kubernetes dashboard
+            "/tmp/kubernetes-dashboard.yaml":
+              source:
+                Fn::FindInMap:
+                  - BetaURLMap
+                  - !Ref BetaCFT
+                  - K8sDashURL
+              mode: '000666'
+
+            "/tmp/gallery-app.yaml":
+              source:
+                Fn::FindInMap:
+                  - BetaURLMap
+                  - !Ref BetaCFT
+                  - GalleryAppURL
+              mode: '000666'
+              context:
+                EW_SUBDOMAIN: ewavi.avi.local
+                NS_SUBDOMAIN: nsavi.avi.local
+
             # Script to create Avi configuration
             "/tmp/setup_avi_json.sh":
               source: 
@@ -410,8 +432,20 @@ Resources:
             "03-master-setup":
               command: "/tmp/setup-k8s-master.sh"
 
+            # Disable kube-proxy
+            "04-disable-kube-proxy":
+              command: "kubectl delete ds kube-proxy -n kube-system --kubeconfig=/etc/kubernetes/admin.conf"
+
+            # Install kubernetes dashboard
+            "05-k8s-dashboard":
+              command: "kubectl apply -f /tmp/kubernetes-dashboard.yaml --kubeconfig=/etc/kubernetes/admin.conf"
+
+            # Install kubernetes dashboard
+            "06-demo-app":
+              command: "kubectl apply -f /tmp/gallery-app.yaml --kubeconfig=/etc/kubernetes/admin.conf"
+
             # Run the Avi setup
-            "04-avi-setup":
+            "07-avi-setup":
               command: "/tmp/setup_avi_json.sh"
 
     Properties:
