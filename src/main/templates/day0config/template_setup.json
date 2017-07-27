@@ -177,8 +177,20 @@
                             "type": "V4", 
                             "addr": "172.30.0.0"
                         }, 
-                        "mask": 12
-                    }
+                        "mask": 16
+                    },
+                    "static_ranges": [
+                        {
+                            "begin": {
+                                "type": "V4",
+                                "addr": "172.30.0.10"
+                            },
+                            "end": {
+                                "type": "V4",
+                                "addr": "172.30.255.250"
+                            }
+                        }
+                    ]
                 }
             ], 
             "exclude_discovered_subnets": false, 
@@ -224,7 +236,7 @@
                         "type": "V4", 
                         "addr": "172.30.0.0"
                     }, 
-                    "mask": 12
+                    "mask": 16
                 }, 
                 "enable_event_subscription": true, 
                 "feproxy_vips_enable_proxy_arp": true, 
