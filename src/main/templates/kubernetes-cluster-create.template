@@ -44,6 +44,7 @@ Metadata:
     - Label:
         default: Advanced
       Parameters:
+      - R53HostedZone
       - QSS3BucketName
       - QSS3KeyPrefix
       - ClusterAssociation
@@ -80,6 +81,8 @@ Metadata:
         default: Networking Provider
       LoadBalancerSubnetId:
         default: Load Balancer Subnet
+      R53HostedZone:
+        default: Route53 Hosted Zone
       BetaCFT:
         default: Run beta version
 
@@ -104,6 +107,11 @@ Parameters:
     Description: Existing subnet to use for load balancing HTTPS access to the Kubernetes API server.
       Must be a public subnet. Must belong to the Availability Zone above.
     Type: AWS::EC2::Subnet::Id
+
+  R53HostedZone:
+    Description: Route53 Hosted Zone
+    Type: AWS::Route53::HostedZone
+    ConstraintDescription: must be a private and public R53 Hosted Zone
 
   ClusterAssociation:
     Description: Enter a string, unique within your AWS account, to associate resources in
@@ -418,6 +426,7 @@ Resources:
                 VPCID: !Ref VPCID
                 REGION: !Ref AWS::Region
                 SUBNETID: !Ref LoadBalancerSubnetId
+                DOMAIN: !Ref R53HostedZone
 
           commands:
             # Install the Cloudwatch agent with configuration for the current region and log group name

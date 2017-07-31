@@ -25,6 +25,7 @@ setup=${setup/XXk8sapicrtXX/$APICRT}
 setup=${setup/XXk8sapikeyXX/$APIKEY}
 setup=${setup/XXk8scacrtXX/$CACRT}
 setup=${setup/XXvpcidXX/{{VPCID}}}
+setup=${setup/XXdomainXX/{{DOMAIN}}}
 setup=${setup/XXregionXX/{{REGION}}}
 setup=${setup/XXsubnetidXX/{{SUBNETID}}}
 setup=${setup/XXk8smasterXX/$masterIP}

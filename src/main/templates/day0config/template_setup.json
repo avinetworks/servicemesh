@@ -11,8 +11,6 @@
     },
     "IpamDnsProviderProfile": [
         {
-            "url": "/api/ipamdnsproviderprofile/ipamdnsproviderprofile-b6df245d-05f7-4bd2-a436-c350aa292901", 
-            "uuid": "ipamdnsproviderprofile-b6df245d-05f7-4bd2-a436-c350aa292901", 
             "name": "East-West-IPAM", 
             "tenant_ref": "/api/tenant/?name=admin", 
             "internal_profile": {
@@ -24,8 +22,6 @@
             "type": "IPAMDNS_TYPE_INTERNAL"
         }, 
         {
-            "url": "/api/ipamdnsproviderprofile/ipamdnsproviderprofile-bf564cb2-14d6-4229-b459-87b441ebb046", 
-            "uuid": "ipamdnsproviderprofile-bf564cb2-14d6-4229-b459-87b441ebb046", 
             "name": "North-South-IPAM", 
             "tenant_ref": "/api/tenant/?name=admin", 
             "aws_profile": {
@@ -37,23 +33,20 @@
                 ]
             }, 
             "type": "IPAMDNS_TYPE_AWS"
-        }, 
+        },
         {
-            "url": "/api/ipamdnsproviderprofile/ipamdnsproviderprofile-b866e047-5240-458a-a3f2-62f532cca9e1", 
-            "uuid": "ipamdnsproviderprofile-b866e047-5240-458a-a3f2-62f532cca9e1", 
-            "name": "DNS-Profile", 
-            "tenant_ref": "/api/tenant/?name=admin", 
-            "internal_profile": {
-                "dns_service_domain": [
-                    {
-                        "num_dns_ip": 1, 
-                        "domain_name": "k8s.local", 
-                        "pass_through": true
-                    }
-                ], 
-                "ttl": 30
-            }, 
-            "type": "IPAMDNS_TYPE_INTERNAL_DNS"
+            "name": "DNS-Profile",
+            "tenant_ref": "/api/tenant/?name=admin",
+            "aws_profile": {
+                "use_iam_roles": true,
+                "vpc_id": "vXXvpcidXX",
+                "region": "XXregionXX",
+                "usable_domains": [
+                    "XXdomainXX"
+                ],
+                "ttl": 60
+            },
+            "type": "IPAMDNS_TYPE_AWS_DNS"
         }
     ], 
     "SystemConfiguration": [
@@ -165,8 +158,6 @@
     ], 
     "Network": [
         {
-            "url": "/api/network/network-260c3bf9-d048-461c-8955-9a4710dc54d7", 
-            "uuid": "network-260c3bf9-d048-461c-8955-9a4710dc54d7", 
             "name": "East-West-NW", 
             "tenant_ref": "/api/tenant/?name=admin", 
             "cloud_ref": "/api/cloud/?tenant=admin&name=Default-Cloud", 
