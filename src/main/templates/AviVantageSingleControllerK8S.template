@@ -204,7 +204,6 @@ Resources:
           - ec2:UnassignPrivateIpAddresses
           Effect: Allow
           Resource: '*'
-          Sid: Stmt1450393199000
       PolicyName: AviControllerEC2Policy
       Roles:
       - Ref: AviControllerRole
@@ -249,8 +248,41 @@ Resources:
           Effect: Allow
           Resource:
           - '*'
-          Sid: Stmt1450394113000
       PolicyName: AviControllerS3Policy
+      Roles:
+      - Ref: AviControllerRole
+    Type: AWS::IAM::Policy
+  AviControllerR53Policy:
+    Properties:
+      PolicyDocument:
+        Statement:
+        - Action:
+          - route53:ChangeResourceRecordSets
+          - route53:CreateHealthCheck
+          - route53:DeleteHealthCheck
+          - route53:GetChange
+          - route53:GetHealthCheck
+          - route53:GetHealthCheckCount
+          - route53:GetHealthCheckLastFailureReason
+          - route53:GetHealthCheckStatus
+          - route53:GetHostedZone
+          - route53:GetHostedZoneCount
+          - route53:ListHealthChecks
+          - route53:ListHostedZones
+          - route53:ListHostedZonesByName
+          - route53:ListResourceRecordSets
+          - route53:UpdateHealthCheck
+          Effect: Allow
+          Resource:
+          - '*'
+        - Action:
+          - route53domains:GetDomainDetail
+          - route53domains:ListDomains
+          - route53domains:ListTagsForDomain
+          Effect: Allow
+          Resource:
+          - '*'
+      PolicyName: AviControllerR53Policy
       Roles:
       - Ref: AviControllerRole
     Type: AWS::IAM::Policy
