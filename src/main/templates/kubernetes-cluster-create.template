@@ -892,6 +892,30 @@ Resources:
       ToPort: '6443'
       SourceSecurityGroupId: !Ref ApiLoadBalancerSecGroup
 
+  # Allow HTTPS so clients can reach apps over internet
+  ClusterSecGroupAllowHTTPS:
+    Metadata:
+      Comment: Open up HTTPS so clients can reach apps over internet
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      GroupId: !Ref ClusterSecGroup
+      IpProtocol: tcp
+      FromPort: '443'
+      ToPort: '443'
+      SourceSecurityGroupId: !Ref ApiLoadBalancerSecGroup
+
+  # Allow HTTP so clients can reach apps over internet
+  ClusterSecGroupAllowHTTP:
+    Metadata:
+      Comment: Open up HTTP so clients can reach apps over internet
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      GroupId: !Ref ClusterSecGroup
+      IpProtocol: tcp
+      FromPort: '80'
+      ToPort: '80'
+      SourceSecurityGroupId: !Ref ApiLoadBalancerSecGroup
+
   # IAM role for nodes http://docs.aws.amazon.com/IAM/latest/UserGuide/id_roles.html
   NodeRole:
     Type: AWS::IAM::Role
