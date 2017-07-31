@@ -110,7 +110,7 @@ Parameters:
 
   R53HostedZone:
     Description: Route53 Hosted Zone
-    Type: AWS::Route53::HostedZone
+    Type: AWS::Route53::HostedZone::Id
     ConstraintDescription: must be a private and public R53 Hosted Zone
 
   ClusterAssociation:
@@ -426,7 +426,7 @@ Resources:
                 VPCID: !Ref VPCID
                 REGION: !Ref AWS::Region
                 SUBNETID: !Ref LoadBalancerSubnetId
-                DOMAIN: !Ref R53HostedZone
+                DOMAIN: !GetAtt R53HostedZone.Name
 
           commands:
             # Install the Cloudwatch agent with configuration for the current region and log group name

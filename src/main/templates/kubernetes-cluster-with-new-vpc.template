@@ -160,7 +160,7 @@ Parameters:
 
   R53HostedZone:
     Description: Route53 Hosted Zone
-    Type: AWS::Route53::HostedZone
+    Type: AWS::Route53::HostedZone::Id
     ConstraintDescription: must be a private and public R53 Hosted Zone
 
   AdminIngressLocation:
