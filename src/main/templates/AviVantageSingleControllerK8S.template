@@ -4,32 +4,32 @@ Description: Deploys Single Avi Controller with proper IAM Role, cretes VS and a
 Mappings:
   AviAMI:
     ap-northeast-1:
-      '1622': ami-a19c48c0
+      "1714": ami-a19c48c0
     ap-northeast-2:
-      '1622': ami-eb12c785
+      "1714": ami-eb12c785
     ap-south-1:
-      '1622': ami-bb9aefd4
+      "1714": ami-bb9aefd4
     ap-southeast-1:
-      '1622': ami-0778a364
+      "1714": ami-0778a364
     ap-southeast-2:
-      '1622': ami-485c6d2b
+      "1714": ami-485c6d2b
     eu-central-1:
-      '1622': ami-6459aa0b
+      "1714": ami-6459aa0b
     eu-west-1:
-      '1622': ami-b55824c6
+      "1714": ami-b55824c6
     sa-east-1:
-      '1622': ami-cb9303a7
+      "1714": ami-cb9303a7
     us-east-1:
-      '1622': ami-0191e516
+      "1714": ami-2bc99150
     us-west-1:
-      '1622': ami-01703c61
+      "1714": ami-01703c61
     us-west-2:
       "1711": "ami-12ce5472"
       "1712": "ami-ba5c52c3"
       "1713": "ami-2f243856"
-      "1714": "ami-e5f2e89c"
+      "1714": "ami-50cd2828"
     us-west-2-priv:
-      '1622': ami-0ef4256e
+      "1714": ami-0ef4256e
   VersionMap:
     "17.1.1": 
       version: "1711"
@@ -204,7 +204,6 @@ Resources:
           - ec2:UnassignPrivateIpAddresses
           Effect: Allow
           Resource: '*'
-          Sid: Stmt1450393199000
       PolicyName: AviControllerEC2Policy
       Roles:
       - Ref: AviControllerRole
@@ -249,8 +248,41 @@ Resources:
           Effect: Allow
           Resource:
           - '*'
-          Sid: Stmt1450394113000
       PolicyName: AviControllerS3Policy
+      Roles:
+      - Ref: AviControllerRole
+    Type: AWS::IAM::Policy
+  AviControllerR53Policy:
+    Properties:
+      PolicyDocument:
+        Statement:
+        - Action:
+          - route53:ChangeResourceRecordSets
+          - route53:CreateHealthCheck
+          - route53:DeleteHealthCheck
+          - route53:GetChange
+          - route53:GetHealthCheck
+          - route53:GetHealthCheckCount
+          - route53:GetHealthCheckLastFailureReason
+          - route53:GetHealthCheckStatus
+          - route53:GetHostedZone
+          - route53:GetHostedZoneCount
+          - route53:ListHealthChecks
+          - route53:ListHostedZones
+          - route53:ListHostedZonesByName
+          - route53:ListResourceRecordSets
+          - route53:UpdateHealthCheck
+          Effect: Allow
+          Resource:
+          - '*'
+        - Action:
+          - route53domains:GetDomainDetail
+          - route53domains:ListDomains
+          - route53domains:ListTagsForDomain
+          Effect: Allow
+          Resource:
+          - '*'
+      PolicyName: AviControllerR53Policy
       Roles:
       - Ref: AviControllerRole
     Type: AWS::IAM::Policy

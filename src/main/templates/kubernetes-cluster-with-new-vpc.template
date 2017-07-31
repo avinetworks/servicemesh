@@ -11,6 +11,7 @@ Metadata:
       - AvailabilityZone
       - AdminIngressLocation
       - KeyName
+      - R53HostedZone
     - Label:
         default: Advanced
       Parameters:
@@ -40,6 +41,8 @@ Metadata:
         default: Private Node Capacity
       BetaCFT:
         default: Run beta version
+      R53HostedZone:
+        default: Route53 Hosted Zone
 
 # The Parameters allow the user to pass custom settings to the stack before creation
 Parameters:
@@ -154,6 +157,11 @@ Parameters:
       that you run one cluster per AZ and use tooling to coordinate across AZs.
     Type: AWS::EC2::AvailabilityZone::Name
     ConstraintDescription: must be the name of an AWS Availability Zone
+
+  R53HostedZone:
+    Description: Route53 Hosted Zone
+    Type: AWS::Route53::HostedZone
+    ConstraintDescription: must be a private and public R53 Hosted Zone
 
   AdminIngressLocation:
     Description: CIDR block (IP address range) to allow SSH access to the 
@@ -477,6 +485,7 @@ Resources:
         SSHLocation: !Sub "${BastionHost.PrivateIp}/32"
         ApiLbLocation: !Ref AdminIngressLocation
         KeyName: !Ref KeyName
+        R53HostedZone: !Ref R53HostedZone
         K8sPrivateNodeCapacity: !Ref K8sPrivateNodeCapacity
         K8sPublicNodeCapacity: !Ref K8sPublicNodeCapacity
         QSS3BucketName: !Ref QSS3BucketName
