@@ -42,7 +42,7 @@ Metadata:
       BetaCFT:
         default: Run beta version
       R53HostedZone:
-        default: Route53 Hosted Zone
+        default: Route53 Hosted Zone Name
 
 # The Parameters allow the user to pass custom settings to the stack before creation
 Parameters:
@@ -159,9 +159,9 @@ Parameters:
     ConstraintDescription: must be the name of an AWS Availability Zone
 
   R53HostedZone:
-    Description: Route53 Hosted Zone
-    Type: AWS::Route53::HostedZone::Id
-    ConstraintDescription: must be a private and public R53 Hosted Zone
+    Description: Route53 Hosted Zone Name
+    Type: String
+    ConstraintDescription: must be the name of a private and public R53 Hosted Zone
 
   AdminIngressLocation:
     Description: CIDR block (IP address range) to allow SSH access to the 

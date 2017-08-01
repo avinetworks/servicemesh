@@ -82,7 +82,7 @@ Metadata:
       LoadBalancerSubnetId:
         default: Load Balancer Subnet
       R53HostedZone:
-        default: Route53 Hosted Zone
+        default: Route53 Hosted Zone Name
       BetaCFT:
         default: Run beta version
 
@@ -110,8 +110,8 @@ Parameters:
 
   R53HostedZone:
     Description: Route53 Hosted Zone
-    Type: AWS::Route53::HostedZone::Id
-    ConstraintDescription: must be a private and public R53 Hosted Zone
+    Type: String
+    ConstraintDescription: must be the name of a private and public R53 Hosted Zone
 
   ClusterAssociation:
     Description: Enter a string, unique within your AWS account, to associate resources in
@@ -426,7 +426,7 @@ Resources:
                 VPCID: !Ref VPCID
                 REGION: !Ref AWS::Region
                 SUBNETID: !Ref LoadBalancerSubnetId
-                DOMAIN: !GetAtt R53HostedZone.Name
+                DOMAIN: !Ref R53HostedZone
 
           commands:
             # Install the Cloudwatch agent with configuration for the current region and log group name
