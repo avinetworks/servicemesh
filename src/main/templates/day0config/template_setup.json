@@ -15,7 +15,7 @@
             "tenant_ref": "/api/tenant/?name=admin", 
             "internal_profile": {
                 "usable_network_refs": [
-                    "/api/network/network-260c3bf9-d048-461c-8955-9a4710dc54d7"
+                    "/api/network/?name=East-West-NW"
                 ], 
                 "ttl": 30
             }, 
