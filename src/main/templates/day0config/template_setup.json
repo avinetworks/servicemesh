@@ -39,7 +39,7 @@
             "tenant_ref": "/api/tenant/?name=admin",
             "aws_profile": {
                 "use_iam_roles": true,
-                "vpc_id": "vXXvpcidXX",
+                "vpc_id": "XXvpcidXX",
                 "region": "XXregionXX",
                 "usable_domains": [
                     "XXdomainXX"
