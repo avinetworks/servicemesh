@@ -911,7 +911,7 @@ Resources:
       IpProtocol: tcp
       FromPort: '443'
       ToPort: '443'
-      SourceSecurityGroupId: !Ref ApiLoadBalancerSecGroup
+      CidrIp: 0.0.0.0/0
 
   # Allow HTTP so clients can reach apps over internet
   ClusterSecGroupAllowHTTP:
@@ -923,7 +923,7 @@ Resources:
       IpProtocol: tcp
       FromPort: '80'
       ToPort: '80'
-      SourceSecurityGroupId: !Ref ApiLoadBalancerSecGroup
+      CidrIp: 0.0.0.0/0
 
   # IAM role for nodes http://docs.aws.amazon.com/IAM/latest/UserGuide/id_roles.html
   NodeRole:
