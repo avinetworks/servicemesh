@@ -504,7 +504,7 @@ Resources:
         NetworkingProvider: !Ref NetworkingProvider
         LoadBalancerSubnetId: !Ref PublicSubnet
         BetaCFT: !Ref BetaCFT
-        DNSVip: !GetAtt DNSVipInterface.PrivateIpAddress
+        DNSVip: !GetAtt DNSVipInterface.PrimaryPrivateIpAddress
 
   # This creates a new stack that creates Avi controller within the VPC
   AviStack:
