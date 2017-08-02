@@ -28,7 +28,8 @@ Metadata:
       - InstanceType
       - DiskSizeGb
       - ClusterSubnetId
-      - LoadBalancerSubnetId      
+      - LoadBalancerSubnetId
+      - DNSVip
     - Label:
         default: Access Configuration
       Parameters:
@@ -85,6 +86,8 @@ Metadata:
         default: Route53 Hosted Zone Name
       BetaCFT:
         default: Run beta version
+      DNSVip:
+        default: VIP for DNS VS
 
 # The Parameters allow the user to pass custom settings to the stack before creation
 Parameters:
@@ -118,6 +121,10 @@ Parameters:
      this Kubernetes cluster with each other. This adds a tag, with the key KubernetesCluster
      and the value of this parameter, to resources created as part of this stack. Leave blank
      to use this Quick Start Stack name.
+    Type: String
+
+  DNSVip:
+    Description: IP of DNS VS
     Type: String
 
   BetaCFT:
@@ -409,8 +416,8 @@ Resources:
                   - GalleryAppURL
               mode: '000666'
               context:
-                EW_SUBDOMAIN: ewavi.avi.local
-                NS_SUBDOMAIN: nsavi.avi.local
+                EW_SUBDOMAIN: k8savi.local
+                NS_SUBDOMAIN: nsavi.local
 
             # Script to create Avi configuration
             "/tmp/setup_avi_json.sh":
@@ -427,6 +434,7 @@ Resources:
                 REGION: !Ref AWS::Region
                 SUBNETID: !Ref LoadBalancerSubnetId
                 DOMAIN: !Ref R53HostedZone
+                DNSVIP: !Ref DNSVip
 
           commands:
             # Install the Cloudwatch agent with configuration for the current region and log group name
