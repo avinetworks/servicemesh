@@ -420,7 +420,8 @@ Resources:
     Type: "AWS::EC2::NetworkInterface"
     Properties:
       Description: "Temporary interface to reserve IP for DNS VIP"
-      GroupSet: !Ref BastionSecurityGroup
+      GroupSet:
+      - !Ref BastionSecurityGroup
       SubnetId: !Ref PrivateSubnet
 
 
