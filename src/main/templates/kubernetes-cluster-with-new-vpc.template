@@ -414,6 +414,16 @@ Resources:
       SubnetId: !Ref PublicSubnet
       RouteTableId: !Ref PublicSubnetRouteTable
 
+  # Temporary interface to reserve IP for DNS VIP
+  # interface will get deleted when the IP is used for DNS VS
+  DNSVipInterface:
+    Type: "AWS::EC2::NetworkInterface"
+    Properties:
+      Description: "Temporary interface to reserve IP for DNS VIP"
+      GroupSet: !Ref BastionSecurityGroup
+      SubnetId: !Ref PrivateSubnet
+
+
   # Taken from github.com/aws-quickstart/quickstart-linux-bastion.  We don't
   # call it directly because that quickstart forces 2 bastion hosts and we only
   # want one
@@ -494,6 +504,7 @@ Resources:
         NetworkingProvider: !Ref NetworkingProvider
         LoadBalancerSubnetId: !Ref PublicSubnet
         BetaCFT: !Ref BetaCFT
+        DNSVip: !GetAtt DNSVipInterface.PrivateIpAddress
 
   # This creates a new stack that creates Avi controller within the VPC
   AviStack:

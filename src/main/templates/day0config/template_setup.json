@@ -35,7 +35,7 @@
             "type": "IPAMDNS_TYPE_AWS"
         },
         {
-            "name": "DNS-Profile",
+            "name": "North-South-DNS",
             "tenant_ref": "/api/tenant/?name=admin",
             "aws_profile": {
                 "use_iam_roles": true,
@@ -47,6 +47,21 @@
                 "ttl": 60
             },
             "type": "IPAMDNS_TYPE_AWS_DNS"
+        },
+        {
+            "name": "East-West-DNS",
+            "tenant_ref": "/api/tenant/?name=admin",
+            "internal_profile": {
+                "dns_service_domain": [
+                    {
+                        "num_dns_ip": 1,
+                        "domain_name": "k8savi.local",
+                        "pass_through": true
+                    }
+                ],
+                "ttl": 30
+            },
+            "type": "IPAMDNS_TYPE_INTERNAL_DNS"
         }
     ], 
     "SystemConfiguration": [
@@ -77,7 +92,10 @@
                         "addr": "8.8.8.8"
                     }
                 ]
-            }, 
+            },
+            "dns_virtualservice_refs": [
+                "/api/virtualservice/?name=k8sdns"
+            ],
             "portal_configuration": {
                 "use_uuid_from_input": false, 
                 "redirect_to_https": true, 
@@ -122,7 +140,55 @@
                 ]
             }
         }
-    ], 
+    ],
+    "VirtualService": [
+        {
+            "name": "k8sdns",
+            "application_profile_ref": "/api/applicationprofile/?tenant=admin&name=System-DNS",
+            "analytics_profile_ref": "/api/analyticsprofile/?tenant=admin&name=System-Analytics-Profile",
+            "tenant_ref": "/api/tenant/?name=admin",
+            "cloud_ref": "/api/cloud/?tenant=admin&name=Default-Cloud",
+            "vip": [
+                {
+                    "vip_id": "1",
+                    "avi_allocated_fip": false,
+                    "auto_allocate_ip": false,
+                    "enabled": true,
+                    "auto_allocate_floating_ip": false,
+                    "avi_allocated_vip": false,
+                    "ip_address": {
+                        "type": "V4",
+                        "addr": "XXdnsvipXX"
+                    }
+                }
+            ],
+            "network_profile_ref": "/api/networkprofile/?tenant=admin&name=System-UDP-Per-Pkt",
+            "type": "VS_TYPE_NORMAL",
+            "use_bridge_ip_as_vip": false,
+            "services": [
+                {
+                    "enable_ssl": false,
+                    "port_range_end": 53,
+                    "port": 53
+                }
+            ],
+            "analytics_policy": {
+                "client_insights": "ACTIVE",
+                "udf_log_throttle": 10,
+                "metrics_realtime_update": {
+                    "duration": 0,
+                    "enabled": true
+                },
+                "significant_log_throttle": 10,
+                "full_client_logs": {
+                    "duration": 0,
+                    "all_headers": false,
+                    "throttle": 10,
+                    "enabled": true
+                }
+            }
+        }
+    ],
     "InitialConfiguration": [
         {
             "user_initial_setup": false, 
@@ -272,11 +338,11 @@
                 "disable_auto_se_creation": false
             }, 
             "prefer_static_routes": false, 
-            "east_west_dns_provider_ref": "/api/ipamdnsproviderprofile/?tenant=admin&name=DNS-Profile", 
+            "east_west_dns_provider_ref": "/api/ipamdnsproviderprofile/?tenant=admin&name=East-West-DNS", 
             "license_type": "LIC_CORES", 
             "apic_mode": false, 
             "enable_vip_static_routes": false, 
-            "dns_provider_ref": "/api/ipamdnsproviderprofile/?tenant=admin&name=DNS-Profile"
+            "dns_provider_ref": "/api/ipamdnsproviderprofile/?tenant=admin&name=North-South-DNS"
         }
     ]
 }

@@ -28,6 +28,7 @@ setup=${setup//XXvpcidXX/{{VPCID}}}
 setup=${setup//XXdomainXX/{{DOMAIN}}}
 setup=${setup//XXregionXX/{{REGION}}}
 setup=${setup//XXsubnetidXX/{{SUBNETID}}}
+setup=${setup//XXdnsvipXX/{{DNSVIP}}}
 setup=${setup//XXk8smasterXX/$masterIP}
 
 
