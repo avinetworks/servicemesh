@@ -141,6 +141,35 @@
             }
         }
     ],
+    "VsVip": [
+        {
+            "name": "vsvip-k8sdns-Default-Cloud", 
+            "vrf_context_ref": "/api/vrfcontext/?tenant=admin&name=global&cloud=Default-Cloud", 
+            "tenant_ref": "/api/tenant/?name=admin", 
+            "cloud_ref": "/api/cloud/?tenant=admin&name=Default-Cloud", 
+            "east_west_placement": false, 
+            "vip": [
+                {
+                    "subnet": {
+                        "ip_addr": {
+                            "type": "V4", 
+                            "addr": "10.0.0.0"
+                        }, 
+                        "mask": 19
+                    }, 
+                    "vip_id": "1", 
+                    "auto_allocate_ip": false, 
+                    "enabled": true, 
+                    "subnet_uuid": "XXsubnetidXX", 
+                    "network_ref": "/api/network/XXsubnetidXX", 
+                    "ip_address": {
+                        "type": "V4", 
+                        "addr": "XXdnsvipXX"
+                    }
+                }
+            ]
+        }
+    ],
     "VirtualService": [
         {
             "name": "k8sdns",
@@ -148,20 +177,7 @@
             "analytics_profile_ref": "/api/analyticsprofile/?tenant=admin&name=System-Analytics-Profile",
             "tenant_ref": "/api/tenant/?name=admin",
             "cloud_ref": "/api/cloud/?tenant=admin&name=Default-Cloud",
-            "vip": [
-                {
-                    "vip_id": "1",
-                    "avi_allocated_fip": false,
-                    "auto_allocate_ip": false,
-                    "enabled": true,
-                    "auto_allocate_floating_ip": false,
-                    "avi_allocated_vip": false,
-                    "ip_address": {
-                        "type": "V4",
-                        "addr": "XXdnsvipXX"
-                    }
-                }
-            ],
+            "vsvip_ref": "/api/vsvip/?tenant=admin&name=vsvip-k8sdns-Default-Cloud&cloud=Default-Cloud",
             "network_profile_ref": "/api/networkprofile/?tenant=admin&name=System-UDP-Per-Pkt",
             "type": "VS_TYPE_NORMAL",
             "use_bridge_ip_as_vip": false,

@@ -422,7 +422,7 @@ Resources:
       Description: "Temporary interface to reserve IP for DNS VIP"
       GroupSet:
       - !Ref BastionSecurityGroup
-      SubnetId: !Ref PrivateSubnet
+      SubnetId: !Ref PublicSubnet
 
 
   # Taken from github.com/aws-quickstart/quickstart-linux-bastion.  We don't
