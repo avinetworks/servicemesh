@@ -421,8 +421,7 @@ Resources:
                   - GalleryAppURL
               mode: '000666'
               context:
-                EW_SUBDOMAIN: k8savi.local
-                NS_SUBDOMAIN: nsavi.local
+                EW_SUBDOMAIN: demo.k8savi.local
 
             # Script to create Avi configuration
             "/tmp/setup_avi_json.sh":
