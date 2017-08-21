@@ -37,7 +37,7 @@ spec:
         - containerPort: 8080
           protocol: TCP
         resources: {}
-      dnsPolicy: ClusterFirst
+      dnsPolicy: Default
       restartPolicy: Always
       securityContext: {}
       terminationGracePeriodSeconds: 30
@@ -75,7 +75,7 @@ spec:
         - containerPort: 8080
           protocol: TCP
         resources: {}
-      dnsPolicy: ClusterFirst
+      dnsPolicy: Default
       restartPolicy: Always
       securityContext: {}
       terminationGracePeriodSeconds: 30
@@ -113,7 +113,7 @@ spec:
         - containerPort: 8080
           protocol: TCP
         resources: {}
-      dnsPolicy: ClusterFirst
+      dnsPolicy: Default
       restartPolicy: Always
       securityContext: {}
       terminationGracePeriodSeconds: 30
@@ -151,7 +151,7 @@ spec:
         - containerPort: 8080
           protocol: TCP
         resources: {}
-      dnsPolicy: ClusterFirst
+      dnsPolicy: Default
       restartPolicy: Always
       securityContext: {}
       terminationGracePeriodSeconds: 30
@@ -189,7 +189,7 @@ spec:
         - containerPort: 8080
           protocol: TCP
         resources: {}
-      dnsPolicy: ClusterFirst
+      dnsPolicy: Default
       restartPolicy: Always
       securityContext: {}
       terminationGracePeriodSeconds: 30
