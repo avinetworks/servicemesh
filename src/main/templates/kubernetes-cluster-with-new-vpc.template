@@ -293,9 +293,11 @@ Resources:
   DHCPOptions:
     Type: AWS::EC2::DHCPOptions
     Properties:
-      DomainName: !Sub "${AWS::Region}.compute.internal"
+      DomainName: !Sub "k8savi.local ${AWS::Region}.compute.internal"
       DomainNameServers:
-      - AmazonProvidedDNS
+        - !Sub
+            - "${DNSVipInterface.PrimaryPrivateIpAddress}, ${AWSDNS}"
+            - AWSDNS: AmazonProvidedDNS
 
   VPCDHCPOptionsAssociation:
     Type: AWS::EC2::VPCDHCPOptionsAssociation
@@ -423,7 +425,6 @@ Resources:
       GroupSet:
       - !Ref BastionSecurityGroup
       SubnetId: !Ref PublicSubnet
-
 
   # Taken from github.com/aws-quickstart/quickstart-linux-bastion.  We don't
   # call it directly because that quickstart forces 2 bastion hosts and we only
