@@ -588,7 +588,15 @@ Outputs:
   AviControllerURL:
     Description: URL to access Avi Controller UI. It may take upto 10 min for the Avi Controller to initially startup. 
     Value: !Sub https://${AviStack.Outputs.PublicIp}/
+  
   AviLoginInfo:
     Description: Default login info for Avi Controller login.
     Value: Username- admin Password- avi123$%
 
+  KubernetesDashboard:
+    Description: Kubernetes Dashboard URL
+    Value: !Sub https://kubernetes-dashboard.{R53HostedZone}
+
+  AppPublicVip:
+    Description: Public Vip of the photo application
+    Value: !Sub https://photo.demo.{R53HostedZone}
