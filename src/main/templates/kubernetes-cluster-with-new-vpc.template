@@ -272,10 +272,10 @@ Mappings:
 
   BetaURLMap:
     "True":
-      AviStackURL: "https://s3-us-west-2.amazonaws.com/aviservicemesh/staging/AviVantageSingleControllerK8S.template"
+      AviStackURL: "https://s3-us-west-2.amazonaws.com/aviservicemesh/staging/avi-vantage-single-controller.template"
       K8SStackURL: "https://s3-us-west-2.amazonaws.com/aviservicemesh/staging/kubernetes-cluster-create.template"
     "False":
-      AviStackURL: "https://s3-us-west-2.amazonaws.com/aviservicemesh/AviVantageSingleControllerK8S.template"
+      AviStackURL: "https://s3-us-west-2.amazonaws.com/aviservicemesh/avi-vantage-single-controller.template"
       K8SStackURL: "https://s3-us-west-2.amazonaws.com/aviservicemesh/kubernetes-cluster-create.template"
 
 Resources:
@@ -588,7 +588,15 @@ Outputs:
   AviControllerURL:
     Description: URL to access Avi Controller UI. It may take upto 10 min for the Avi Controller to initially startup. 
     Value: !Sub https://${AviStack.Outputs.PublicIp}/
+  
   AviLoginInfo:
     Description: Default login info for Avi Controller login.
     Value: Username- admin Password- avi123$%
 
+  KubernetesDashboard:
+    Description: Kubernetes Dashboard URL
+    Value: !Sub https://kubernetes-dashboard.{R53HostedZone}
+
+  AppPublicVip:
+    Description: Public Vip of the photo application
+    Value: !Sub https://photo.demo.{R53HostedZone}
