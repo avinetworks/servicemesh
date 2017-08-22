@@ -273,7 +273,7 @@ apiVersion: v1
 kind: Service
 metadata:
   annotations:
-    avi_proxy: '{"virtualservice": {"east_west_placement": false, "auto_allocate_ip":
+    avi_proxy: '{"virtualservice": {"east_west_placement": false, "auto_allocate_floating_ip":
       true, "application_profile_ref": "/api/applicationprofile?name=System-Secure-HTTP",
       "ssl_profile_ref": "/api/sslprofile/?name=System-Standard", "analytics_policy":
       {"client_insights": "NO_INSIGHTS", "metrics_realtime_update": {"duration":
