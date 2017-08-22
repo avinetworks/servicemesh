@@ -325,8 +325,8 @@ Mappings:
       K8sDashURL: "https://s3-us-west-2.amazonaws.com/aviservicemesh/staging/apps/kubernetes-dashboard.yaml"
       GalleryAppURL: "https://s3-us-west-2.amazonaws.com/aviservicemesh/staging/apps/gallery-app.yaml"
     "False":
-      AviStackURL: "https://s3-us-west-2.amazonaws.com/aviservicemesh/day0config/setup_avi_json.sh"
-      K8SStackURL: "https://s3-us-west-2.amazonaws.com/aviservicemesh/day0config/template_setup.json"
+      ScriptURL: "https://s3-us-west-2.amazonaws.com/aviservicemesh/day0config/setup_avi_json.sh"
+      TemplateURL: "https://s3-us-west-2.amazonaws.com/aviservicemesh/day0config/template_setup.json"
       K8sDashURL: "https://s3-us-west-2.amazonaws.com/aviservicemesh/apps/kubernetes-dashboard.yaml"
       GalleryAppURL: "https://s3-us-west-2.amazonaws.com/aviservicemesh/apps/gallery-app.yaml"
 
