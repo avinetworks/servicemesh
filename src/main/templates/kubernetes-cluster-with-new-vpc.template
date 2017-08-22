@@ -595,8 +595,8 @@ Outputs:
 
   KubernetesDashboard:
     Description: Kubernetes Dashboard URL
-    Value: !Sub https://kubernetes-dashboard.{R53HostedZone}
+    Value: !Sub https://kubernetes-dashboard.${R53HostedZone}
 
   AppPublicVip:
     Description: Public Vip of the photo application
-    Value: !Sub https://photo.demo.{R53HostedZone}
+    Value: !Sub https://photo.demo.${R53HostedZone}
