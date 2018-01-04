@@ -189,36 +189,6 @@ Parameters:
     MaxValue: '20'
     ConstraintDescription: must be between 1 and 20 EC2 instances.
 
-  # S3 Bucket configuration: allows users to use their own downstream snapshots
-  # of the quickstart-aws-vpc and quickstart-linux-bastion templates
-  QSS3BucketName:
-    AllowedPattern: "^[0-9a-zA-Z]+([0-9a-zA-Z-]*[0-9a-zA-Z])*$"
-    ConstraintDescription: Quick Start bucket name can include numbers, lowercase
-      letters, uppercase letters, and hyphens (-). It cannot start or end with a hyphen
-      (-).
-
-    Default: quickstart-reference
-    Description: Only change this if you have set up assets, like your own networking
-      configuration, in an S3 bucket. This and the S3 Key Prefix parameter let you access
-      scripts from the scripts/ and templates/ directories of your own fork of the Heptio 
-      Quick Start assets, uploaded to S3 and stored at
-      ${bucketname}.s3.amazonaws.com/${prefix}/scripts/somefile.txt.S3. The bucket name
-      can include numbers, lowercase letters, uppercase letters, and hyphens (-).
-      It cannot start or end with a hyphen (-).
-    Type: String
-  
-  QSS3KeyPrefix:
-    AllowedPattern: "^[0-9a-zA-Z-]+(/[0-9a-zA-Z-]+)*$"
-    ConstraintDescription: Quick Start key prefix can include numbers, lowercase letters,
-      uppercase letters, hyphens (-), and forward slash (/). It cannot start or end
-      with forward slash (/) because they are automatically appended.
-    Default: heptio/latest
-    Description: Only change this if you have set up assets in an S3 bucket, as explained
-      in the S3 Bucket parameter. The S3 key prefix can include numbers, lowercase letters,
-      uppercase letters, hyphens (-), and forward slashes (/). It cannot start or end with
-      forward slashes (/) because they are automatically appended.
-    Type: String
-
   BetaCFT:
     Description: Beta version of CloudFormation Template
     Type: String
@@ -274,9 +244,11 @@ Mappings:
     "True":
       AviStackURL: "https://s3-us-west-2.amazonaws.com/aviservicemesh/staging/avi-vantage-single-controller.template"
       K8SStackURL: "https://s3-us-west-2.amazonaws.com/aviservicemesh/staging/kubernetes-cluster-create.template"
+      BannerURL: "https://s3-us-west-2.amazonaws.com/aviservicemesh/staging/scripts/banner_message.txt"
     "False":
       AviStackURL: "https://s3-us-west-2.amazonaws.com/aviservicemesh/avi-vantage-single-controller.template"
       K8SStackURL: "https://s3-us-west-2.amazonaws.com/aviservicemesh/kubernetes-cluster-create.template"
+      BannerURL: "https://s3-us-west-2.amazonaws.com/aviservicemesh/scripts/banner_message.txt"
 
 Resources:
   # Resources for new VPC
@@ -462,7 +434,7 @@ Resources:
             curl -s -o $BASTION_BOOTSTRAP_FILE $BASTION_BOOTSTRAP
             chmod +x $BASTION_BOOTSTRAP_FILE
 
-            ./$BASTION_BOOTSTRAP_FILE --banner https://${QSS3BucketName}/${QSS3KeyPrefix}/scripts/banner_message.txt --enable true
+            ./$BASTION_BOOTSTRAP_FILE --banner https://s3-us-west-2.amazonaws.com/aviservicemesh/staging/scripts/banner_message.txt --enable true
 
   # Open up port 22 for SSH for the bastion host
   BastionSecurityGroup:
@@ -500,8 +472,6 @@ Resources:
         R53HostedZone: !Ref R53HostedZone
         K8sPrivateNodeCapacity: !Ref K8sPrivateNodeCapacity
         K8sPublicNodeCapacity: !Ref K8sPublicNodeCapacity
-        QSS3BucketName: !Ref QSS3BucketName
-        QSS3KeyPrefix: !Ref QSS3KeyPrefix
         ClusterAssociation: !Ref AWS::StackName
         NetworkingProvider: !Ref NetworkingProvider
         LoadBalancerSubnetId: !Ref PublicSubnet
