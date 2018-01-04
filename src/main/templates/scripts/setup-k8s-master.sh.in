@@ -1,0 +1,110 @@
+#!/bin/bash
+
+# Copyright 2017 by the contributors
+#
+#    Licensed under the Apache License, Version 2.0 (the "License");
+#    you may not use this file except in compliance with the License.
+#    You may obtain a copy of the License at
+#
+#        http://www.apache.org/licenses/LICENSE-2.0
+#
+#    Unless required by applicable law or agreed to in writing, software
+#    distributed under the License is distributed on an "AS IS" BASIS,
+#    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+#    See the License for the specific language governing permissions and
+#    limitations under the License.
+
+
+set -o verbose
+set -o errexit
+set -o nounset
+set -o pipefail
+
+# Sanity check: This is a mustache template, so make the script die if any of
+# these aren't set.
+test -n "{{LoadBalancerDns}}"
+test -n "{{LoadBalancerName}}"
+test -n "{{ClusterToken}}"
+test -n "{{NetworkingProviderUrl}}"
+test -n "{{DashboardUrl}}"
+test -n "{{StorageClassUrl}}"
+test -n "{{NetworkPolicyUrl}}"
+test -n "{{Region}}"
+
+# kubeadm wants lowercase for DNS (as it probably should)
+LB_DNS=$(echo "{{LoadBalancerDns}}" | tr 'A-Z' 'a-z')
+
+HOSTNAME="$(hostname -f)"
+
+# reset kubeadm (workaround for kubelet package presence)
+kubeadm reset
+
+cat >/tmp/kubeadm.yaml <<EOF
+---
+apiVersion: kubeadm.k8s.io/v1alpha1
+kind: MasterConfiguration
+token: {{ClusterToken}}
+cloudProvider: aws
+kubernetesVersion: $(cat /etc/kubernetes_community_ami_version)
+nodeName: ${HOSTNAME}
+tokenTTL: 0s
+apiServerCertSANs:
+- ${LB_DNS}
+EOF
+
+# Initialize master node
+kubeadm init --config /tmp/kubeadm.yaml
+rm /tmp/kubeadm.yaml
+
+export KUBECONFIG=/etc/kubernetes/admin.conf
+
+# Grant the "admin" user complete access to the cluster
+kubectl create clusterrolebinding admin-cluster-binding --clusterrole=cluster-admin --user=admin
+
+# Label this node as a master
+kubectl label node "${HOSTNAME}" "kubernetes.io/role=master"
+
+# Add-on for networking providers, so pods can communicate.  see the scripts/
+# directory of the quickstart.  Currently either calico.yaml or weave.yaml
+kubectl apply -f {{NetworkingProviderUrl}}
+
+# Install the kubernetes dashboard by default
+kubectl apply -f {{DashboardUrl}}
+
+# Install the default StorageClass
+kubectl apply -f {{StorageClassUrl}}
+
+# Set up the network policy blocking the AWS metadata endpoint from the default namespace.
+kubectl apply -f {{NetworkPolicyUrl}}
+
+INSTANCE_ID=$(ec2metadata --instance-id)
+# Add this machine (master) to the load balancer for external access
+aws elb register-instances-with-load-balancer \
+  --load-balancer-name {{LoadBalancerName}} \
+  --instances ${INSTANCE_ID} \
+  --region {{Region}}
+
+# Use kubeadm's kubeconfig command to grab a client-cert-authenticated
+# kubeconfig file for administrative access to the cluster.
+KUBECONFIG_OUTPUT=/home/ubuntu/kubeconfig
+
+# TODO(@chuckha): --apiserver-advertise-address is resolved to an IP address.
+# We don't want this to happen because we need to use the ELB load balancer as the
+# api server address.
+# Instead we set the server by hand.
+kubeadm alpha phase kubeconfig user \
+  --client-name admin \
+  --apiserver-advertise-address "${LB_DNS}" \
+  >$KUBECONFIG_OUTPUT
+
+# This line sets the generated kubeconfig file's api server address to our loadbalancer.
+# This should be removed if kubeadm supports non-ip advertise addresses.
+KUBECONFIG="${KUBECONFIG_OUTPUT}" kubectl config set-cluster kubernetes --server="https://${LB_DNS}"
+chown ubuntu:ubuntu $KUBECONFIG_OUTPUT
+chmod 0600 $KUBECONFIG_OUTPUT
+
+# And for local debugging, set up ~/.kube/config for the main user account on
+# the master.
+mkdir -p /home/ubuntu/.kube
+cp /etc/kubernetes/admin.conf /home/ubuntu/.kube/config
+chown -R ubuntu:ubuntu /home/ubuntu/.kube

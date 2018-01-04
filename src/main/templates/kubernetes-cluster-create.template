@@ -46,8 +46,6 @@ Metadata:
         default: Advanced
       Parameters:
       - R53HostedZone
-      - QSS3BucketName
-      - QSS3KeyPrefix
       - ClusterAssociation
       - BetaCFT
 
@@ -72,10 +70,6 @@ Metadata:
         default: Private Node Capacity
       K8sPublicNodeCapacity:
         default: Public Node Capacity
-      QSS3BucketName:
-        default: S3 Bucket
-      QSS3KeyPrefix:
-        default: S3 Key Prefix
       ClusterAssociation:
         default: Cluster Association
       NetworkingProvider:
@@ -242,36 +236,6 @@ Parameters:
     MaxValue: '20'
     ConstraintDescription: must be between 1 and 20 EC2 instances.
 
-  # S3 Bucket configuration: allows users to use their own downstream snapshots
-  # of the quickstart-aws-vpc and quickstart-linux-bastion templates
-  QSS3BucketName:
-    AllowedPattern: "^[0-9a-zA-Z]+([0-9a-zA-Z-]*[0-9a-zA-Z])*$"
-    ConstraintDescription: Quick Start bucket name can include numbers, lowercase
-      letters, uppercase letters, and hyphens (-). It cannot start or end with a hyphen
-      (-).
-    
-    Default: quickstart-reference
-    Description: Only change this if you have set up assets, like your own networking
-      configuration, in an S3 bucket. This and the S3 Key Prefix parameter let you access
-      scripts from the scripts/ and templates/ directories of your own fork of the Heptio 
-      Quick Start assets, uploaded to S3 and stored at
-      ${bucketname}.s3.amazonaws.com/${prefix}/scripts/somefile.txt.S3. The bucket name
-      can include numbers, lowercase letters, uppercase letters, and hyphens (-).
-      It cannot start or end with a hyphen (-).
-    Type: String
-
-  QSS3KeyPrefix:
-    AllowedPattern: "^[0-9a-zA-Z-]+(/[0-9a-zA-Z-]+)*$"
-    ConstraintDescription: Quick Start key prefix can include numbers, lowercase letters,
-      uppercase letters, hyphens (-), and forward slash (/). It cannot start or end
-      with forward slash (/) because they are automatically appended.
-    Default: heptio/latest
-    Description: Only change this if you have set up assets in an S3 bucket, as explained
-      in the S3 Bucket parameter. The S3 key prefix can include numbers, lowercase letters,
-      uppercase letters, hyphens (-), and forward slashes (/). It cannot start or end with
-      forward slashes (/) because they are automatically appended.
-    Type: String
-
   NetworkingProvider:
     AllowedValues:
     - calico
@@ -324,11 +288,24 @@ Mappings:
       TemplateURL: "https://s3-us-west-2.amazonaws.com/aviservicemesh/staging/day0config/template_setup.json"
       K8sDashURL: "https://s3-us-west-2.amazonaws.com/aviservicemesh/staging/apps/kubernetes-dashboard.yaml"
       GalleryAppURL: "https://s3-us-west-2.amazonaws.com/aviservicemesh/staging/apps/gallery-app.yaml"
+      AwsLogsURL: "https://s3-us-west-2.amazonaws.com/aviservicemesh/staging/scripts/awslogs.service"
+      StorageClassURL: "https://s3-us-west-2.amazonaws.com/aviservicemesh/staging/scripts/default.storageclass.yaml"
+      K8SAwsLogsURL: "https://s3-us-west-2.amazonaws.com/aviservicemesh/staging/scripts/kubernetes-awslogs.conf"
+      NetworkPolicyURL: "https://s3-us-west-2.amazonaws.com/aviservicemesh/staging/scripts/network-policy.yaml"
+      SetupK8SMasterURL: "https://s3-us-west-2.amazonaws.com/aviservicemesh/staging/scripts/setup-k8s-master.sh.in"
+      NetworkingProviderURL: "https://s3-us-west-2.amazonaws.com/aviservicemesh/staging/scripts/weave.yaml"
+
     "False":
       ScriptURL: "https://s3-us-west-2.amazonaws.com/aviservicemesh/day0config/setup_avi_json.sh"
       TemplateURL: "https://s3-us-west-2.amazonaws.com/aviservicemesh/day0config/template_setup.json"
       K8sDashURL: "https://s3-us-west-2.amazonaws.com/aviservicemesh/apps/kubernetes-dashboard.yaml"
       GalleryAppURL: "https://s3-us-west-2.amazonaws.com/aviservicemesh/apps/gallery-app.yaml"
+      AwsLogsURL: "https://s3-us-west-2.amazonaws.com/aviservicemesh/scripts/awslogs.service"
+      StorageClassURL: "https://s3-us-west-2.amazonaws.com/aviservicemesh/scripts/default.storageclass.yaml"
+      K8SAwsLogsURL: "https://s3-us-west-2.amazonaws.com/aviservicemesh/scripts/kubernetes-awslogs.conf"
+      NetworkPolicyURL: "https://s3-us-west-2.amazonaws.com/aviservicemesh/scripts/network-policy.yaml"
+      SetupK8SMasterURL: "https://s3-us-west-2.amazonaws.com/aviservicemesh/scripts/setup-k8s-master.sh.in"
+      NetworkingProviderURL: "https://s3-us-west-2.amazonaws.com/aviservicemesh/staging/weave.yaml"
 
 # Helper Conditions which help find the right values for resources
 Conditions:
@@ -365,7 +342,11 @@ Resources:
             # Configuration file for the cloudwatch agent. The file is a Mustache template, and we're creating it with
             # the below context (mainly to substitute in the AWS Stack Name for the logging group.)
             "/tmp/kubernetes-awslogs.conf":
-              source: !Sub "https://${QSS3BucketName}.s3.amazonaws.com/${QSS3KeyPrefix}/scripts/kubernetes-awslogs.conf"
+              source:
+                Fn::FindInMap:
+                  - BetaURLMap
+                  - !Ref BetaCFT
+                  - K8SAwsLogsURL
               context:
                 StackName: !Ref AWS::StackName
 
@@ -376,25 +357,44 @@ Resources:
 
             # systemd init script for the Cloudwatch logs agent
             "/etc/systemd/system/awslogs.service":
-              source: !Sub "https://${QSS3BucketName}.s3.amazonaws.com/${QSS3KeyPrefix}/scripts/awslogs.service"
-
+              source:
+                Fn::FindInMap:
+                  - BetaURLMap
+                  - !Ref BetaCFT
+                  - AwsLogsURL
             # Setup script for initializing the Kubernetes master instance.  This is where most of the cluster
             # initialization happens.  See scripts/setup-k8s-master.sh in the Quick Start repo for details.
             "/tmp/setup-k8s-master.sh":
-              source: !Sub "https://${QSS3BucketName}.s3.amazonaws.com/${QSS3KeyPrefix}/scripts/setup-k8s-master.sh.in"
+              source:
+                Fn::FindInMap:
+                  - BetaURLMap
+                  - !Ref BetaCFT
+                  - SetupK8SMasterURL
               mode: '000755'
               context:
                 LoadBalancerDns: !GetAtt ApiLoadBalancer.DNSName
                 LoadBalancerName: !Ref ApiLoadBalancer
                 ClusterToken: !GetAtt KubeadmToken.Token
-                NetworkingProviderUrl: !Sub "https://${QSS3BucketName}.s3.amazonaws.com/${QSS3KeyPrefix}/scripts/${NetworkingProvider}.yaml"
+                NetworkingProviderUrl:
+                  Fn::FindInMap:
+                    - BetaURLMap
+                    - !Ref BetaCFT
+                    - NetworkingProviderURL
                 DashboardUrl: 
                   Fn::FindInMap:
                     - BetaURLMap
                     - !Ref BetaCFT
                     - K8sDashURL
-                StorageClassUrl: !Sub "https://${QSS3BucketName}.s3.amazonaws.com/${QSS3KeyPrefix}/scripts/default.storageclass.yaml"
-                NetworkPolicyUrl: !Sub "https://${QSS3BucketName}.s3.amazonaws.com/${QSS3KeyPrefix}/scripts/network-policy.yaml"
+                StorageClassUrl:
+                  Fn::FindInMap:
+                    - BetaURLMap
+                    - !Ref BetaCFT
+                    - StorageClassURL
+                NetworkPolicyUrl:
+                  Fn::FindInMap:
+                    - BetaURLMap
+                    - !Ref BetaCFT
+                    - NetworkPolicyURL
                 Region: !Ref AWS::Region
 
             # Avi config template file
@@ -733,9 +733,9 @@ Resources:
           - "kubernetes.io/cluster/${ClusterID}"
           - ClusterID:
               Fn::If:
-              - AssociationProvidedCondition
-              - !Ref ClusterAssociation
-              - !Ref AWS::StackName
+                - AssociationProvidedCondition
+                - !Ref ClusterAssociation
+                - !Ref AWS::StackName
         Value: 'owned'
         PropagateAtLaunch: 'true'
     # Tells the group how many instances to update at a time, if an update is applied
@@ -755,14 +755,22 @@ Resources:
           # (See comments in the master instance Metadata for details.)
           files:
             "/tmp/kubernetes-awslogs.conf":
-              source: !Sub "https://${QSS3BucketName}.s3.amazonaws.com/${QSS3KeyPrefix}/scripts/kubernetes-awslogs.conf"
+              source:
+                Fn::FindInMap:
+                  - BetaURLMap
+                  - !Ref BetaCFT
+                  - K8SAwsLogsURL
               context:
                 StackName: !Ref AWS::StackName
             "/usr/local/aws/awslogs-agent-setup.py":
               source: https://s3.amazonaws.com/aws-cloudwatch/downloads/latest/awslogs-agent-setup.py
               mode: '000755'
             "/etc/systemd/system/awslogs.service":
-              source: !Sub "https://${QSS3BucketName}.s3.amazonaws.com/${QSS3KeyPrefix}/scripts/awslogs.service"
+              source:
+                Fn::FindInMap:
+                  - BetaURLMap
+                  - !Ref BetaCFT
+                  - AwsLogsURL
           commands:
             "01-cloudwatch-agent-setup":
               command: !Sub "python /usr/local/aws/awslogs-agent-setup.py -n -r ${AWS::Region} -c /tmp/kubernetes-awslogs.conf"
@@ -828,14 +836,22 @@ Resources:
           # (See comments in the master instance Metadata for details.)
           files:
             "/tmp/kubernetes-awslogs.conf":
-              source: !Sub "https://${QSS3BucketName}.s3.amazonaws.com/${QSS3KeyPrefix}/scripts/kubernetes-awslogs.conf"
+              source:
+                Fn::FindInMap:
+                  - BetaURLMap
+                  - !Ref BetaCFT
+                  - K8SAwsLogsURL
               context:
                 StackName: !Ref AWS::StackName
             "/usr/local/aws/awslogs-agent-setup.py":
               source: https://s3.amazonaws.com/aws-cloudwatch/downloads/latest/awslogs-agent-setup.py
               mode: '000755'
             "/etc/systemd/system/awslogs.service":
-              source: !Sub "https://${QSS3BucketName}.s3.amazonaws.com/${QSS3KeyPrefix}/scripts/awslogs.service"
+              source:
+                Fn::FindInMap:
+                  - BetaURLMap
+                  - !Ref BetaCFT
+                  - AwsLogsURL
           commands:
             "01-cloudwatch-agent-setup":
               command: !Sub "python /usr/local/aws/awslogs-agent-setup.py -n -r ${AWS::Region} -c /tmp/kubernetes-awslogs.conf"
