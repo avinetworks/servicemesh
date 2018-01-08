@@ -305,7 +305,7 @@ Mappings:
       K8SAwsLogsURL: "https://s3-us-west-2.amazonaws.com/aviservicemesh/scripts/kubernetes-awslogs.conf"
       NetworkPolicyURL: "https://s3-us-west-2.amazonaws.com/aviservicemesh/scripts/network-policy.yaml"
       SetupK8SMasterURL: "https://s3-us-west-2.amazonaws.com/aviservicemesh/scripts/setup-k8s-master.sh.in"
-      NetworkingProviderURL: "https://s3-us-west-2.amazonaws.com/aviservicemesh/staging/weave.yaml"
+      NetworkingProviderURL: "https://s3-us-west-2.amazonaws.com/aviservicemesh/scripts/weave.yaml"
 
 # Helper Conditions which help find the right values for resources
 Conditions:
