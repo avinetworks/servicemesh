@@ -17,6 +17,7 @@ Metadata:
       Parameters:
       - K8sPublicNodeCapacity
       - K8sPrivateNodeCapacity
+      - MasterInstanceType
       - InstanceType
       - DiskSizeGb
       - BastionInstanceType
@@ -29,6 +30,8 @@ Metadata:
         default: Availability Zone
       AdminIngressLocation:
         default: Admin Ingress Location
+      MasterInstanceType:
+        default: Master Instance Type
       InstanceType:
         default: Instance Type
       DiskSizeGb:
@@ -97,11 +100,20 @@ Parameters:
     - d2.8xlarge
     ConstraintDescription: must be a valid EC2 instance type.
 
+  MasterInstanceType:
+    Description: EC2 instance type for the master.
+    Type: String
+    Default: c4.2xlarge
+    AllowedValues:
+    - c4.2xlarge
+    - c4.4xlarge
+    ConstraintDescription: must be a valid EC2 instance type.
+
   # Specifies the size of the root disk for all EC2 instances, including master
   # and nodes.
   DiskSizeGb:
-    Description: 'Size of the root disk for the EC2 instances, in GiB.  Default: 40'
-    Default: 40
+    Description: 'Size of the root disk for the EC2 instances, in GiB.  Default: 80'
+    Default: 80
     Type: Number
     MinValue: 8
     MaxValue: 1024
@@ -463,6 +475,7 @@ Resources:
         VPCID: !Ref VPC
         AvailabilityZone: !Ref AvailabilityZone
         InstanceType: !Ref InstanceType
+        MasterInstanceType: !Ref MasterInstanceType
         DiskSizeGb: !Ref DiskSizeGb
         ClusterSubnetId: !Ref PrivateSubnet
         # Direct SSH access only from the bastion host itself
@@ -477,27 +490,6 @@ Resources:
         LoadBalancerSubnetId: !Ref PublicSubnet
         BetaCFT: !Ref BetaCFT
         DNSVip: !GetAtt DNSVipInterface.PrimaryPrivateIpAddress
-
-  # This creates a new stack that creates Avi controller within the VPC
-  AviStack:
-    Type: AWS::CloudFormation::Stack
-    DependsOn: K8sStack
-    Properties:
-      TemplateURL:
-        Fn::FindInMap:
-          - BetaURLMap
-          - !Ref BetaCFT
-          - AviStackURL
-      Parameters:
-        VpcId: !Ref VPC
-        AZId: !Ref AvailabilityZone
-        AviVantageVersion: 17.1.4
-        InstanceType: c4.2xlarge
-        KeyName: !Ref KeyName
-        ManagementNetwork: !Ref PublicSubnet
-        SSHLocation: 0.0.0.0/0
-        ClusterSecurityGroup: !GetAtt K8sStack.Outputs.K8SClusterSG
-        K8SMaster: !GetAtt K8sStack.Outputs.MasterPrivateIp
 
 Outputs:
   # Outputs from VPC creation
@@ -554,10 +546,9 @@ Outputs:
     Description: Verify your cluster and deploy a test application. Instructions
     Value: https://avinetworks.servicemesh.com
 
-  # Outputs forwarded from the Avi template
   AviControllerURL:
     Description: URL to access Avi Controller UI. It may take upto 10 min for the Avi Controller to initially startup. 
-    Value: !Sub https://${AviStack.Outputs.PublicIp}/
+    Value: !GetAtt K8sStack.Outputs.AviControllerURL
   
   AviLoginInfo:
     Description: Default login info for Avi Controller login.

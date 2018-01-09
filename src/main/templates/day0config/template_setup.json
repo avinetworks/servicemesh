@@ -315,7 +315,6 @@
                 "feproxy_vips_enable_proxy_arp": true, 
                 "disable_auto_backend_service_sync": false, 
                 "container_port_match_http_service": true, 
-                "routes_share_virtualservice": false, 
                 "se_volume": "/opt/avi", 
                 "l4_health_monitoring": false, 
                 "se_deployment_method": "SE_CREATE_POD", 

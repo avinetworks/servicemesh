@@ -35,7 +35,5 @@ setup=${setup//XXk8smasterXX/$masterIP}
 # Store setup.json file
 echo $setup | python -mjson.tool > /tmp/setup.json
 
-# Host setup.json
-#(pushd /tmp/; python -m SimpleHTTPServer &) &
-docker run -d -v /tmp/:/var/www:ro -p 8000:8080 --name=avi-setup trinitronx/python-simplehttpserver
-echo "Hosting avi setup on port 8000"
+# Install Avi Controller
+sudo /tmp/avi_baremetal_setup.py -c -cc 4 -cm 12 -i $(curl http://169.254.169.254/latest/meta-data/local-ipv4) -sj /tmp/setup.json
