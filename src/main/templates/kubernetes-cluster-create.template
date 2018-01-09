@@ -26,6 +26,7 @@ Metadata:
       - VPCID
       - AvailabilityZone
       - InstanceType
+      - MasterInstanceType
       - DiskSizeGb
       - ClusterSubnetId
       - LoadBalancerSubnetId
@@ -64,6 +65,8 @@ Metadata:
         default: API Ingress Location
       InstanceType:
         default: Instance Type
+      MasterInstanceType:
+        default: Master Instance Type
       DiskSizeGb:
         default: Disk Size (GiB)
       K8sPrivateNodeCapacity:
@@ -178,11 +181,21 @@ Parameters:
     - d2.8xlarge
     ConstraintDescription: must be a valid EC2 instance type.
 
+  # Default is c4.2xlarge. EC2 instance type for the master
+  MasterInstanceType:
+    Description: EC2 instance type for the master.
+    Type: String
+    Default: c4.2xlarge
+    AllowedValues:
+    - c4.2xlarge
+    - c4.4xlarge
+    ConstraintDescription: must be a valid EC2 instance type.
+
   # Specifies the size of the root disk for all EC2 instances, including master
   # and nodes.
   DiskSizeGb:
-    Description: 'Size of the root disk for the EC2 instances, in GiB.  Default: 40'
-    Default: 40
+    Description: 'Size of the root disk for the EC2 instances, in GiB.  Default: 80'
+    Default: 80
     Type: Number
     MinValue: 8
     MaxValue: 1024
@@ -294,6 +307,8 @@ Mappings:
       NetworkPolicyURL: "https://s3-us-west-2.amazonaws.com/aviservicemesh/staging/scripts/network-policy.yaml"
       SetupK8SMasterURL: "https://s3-us-west-2.amazonaws.com/aviservicemesh/staging/scripts/setup-k8s-master.sh.in"
       NetworkingProviderURL: "https://s3-us-west-2.amazonaws.com/aviservicemesh/staging/scripts/weave.yaml"
+      CtrlSetup: "https://s3-us-west-2.amazonaws.com/aviservicemesh/staging/scripts/avi_baremetal_setup.py"
+      ControllerImage: "https://s3-us-west-2.amazonaws.com/aviservicemesh/img/controller_docker-17.2.4-9024.tgz"
 
     "False":
       ScriptURL: "https://s3-us-west-2.amazonaws.com/aviservicemesh/day0config/setup_avi_json.sh"
@@ -306,6 +321,8 @@ Mappings:
       NetworkPolicyURL: "https://s3-us-west-2.amazonaws.com/aviservicemesh/scripts/network-policy.yaml"
       SetupK8SMasterURL: "https://s3-us-west-2.amazonaws.com/aviservicemesh/scripts/setup-k8s-master.sh.in"
       NetworkingProviderURL: "https://s3-us-west-2.amazonaws.com/aviservicemesh/scripts/weave.yaml"
+      CtrlSetup: "https://s3-us-west-2.amazonaws.com/aviservicemesh/scripts/avi_baremetal_setup.py"
+      ControllerImage: "https://s3-us-west-2.amazonaws.com/aviservicemesh/img/controller_docker-17.2.4-9024.tgz"
 
 # Helper Conditions which help find the right values for resources
 Conditions:
@@ -415,6 +432,25 @@ Resources:
             #      - K8sDashURL
             #  mode: '000666'
 
+            # Avi Controller Image
+            "/tmp/controller_docker.tgz":
+              source:
+                Fn::FindInMap:
+                  - BetaURLMap
+                  - !Ref BetaCFT
+                  - ControllerImage
+              mode: '000666'
+
+            # Avi Controller installation script
+            "/tmp/avi_baremetal_setup.py":
+              source:
+                Fn::FindInMap:
+                  - BetaURLMap
+                  - !Ref BetaCFT
+                  - CtrlSetup
+              mode: '000776'
+
+            # Gallery App
             "/tmp/gallery-app.yaml":
               source:
                 Fn::FindInMap:
@@ -479,13 +515,13 @@ Resources:
       # This is needed for the Kubernetes-AWS cloud-provider integration
       IamInstanceProfile: !Ref MasterInstanceProfile
       # Type of instance; the default is t2.medium
-      InstanceType: !Ref InstanceType
+      InstanceType: !Ref MasterInstanceType
       # Adds our SSH key to the instance
       KeyName: !Ref KeyName
       NetworkInterfaces:
       - DeleteOnTermination: true
         DeviceIndex: 0
-        SubnetId: !Ref ClusterSubnetId
+        SubnetId: !Ref LoadBalancerSubnetId
         # Joins the ClusterSecGroup Security Group for cluster communication and SSH access
         # The ClusterSecGroupCrossTalk rules allow all instances in the same stack to communicate internally
         # The ClusterSecGroupAllow22 rules allow external communication on port 22 from a chosen CIDR range
@@ -1097,6 +1133,36 @@ Resources:
             - logs:PutLogEvents
             - logs:DescribeLogStreams
             Resource: !Sub ["${LogGroupArn}:*", LogGroupArn: !GetAtt KubernetesLogGroup.Arn]
+      - PolicyName: avir53
+        PolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+          - Action:
+            - route53:ChangeResourceRecordSets
+            - route53:CreateHealthCheck
+            - route53:DeleteHealthCheck
+            - route53:GetChange
+            - route53:GetHealthCheck
+            - route53:GetHealthCheckCount
+            - route53:GetHealthCheckLastFailureReason
+            - route53:GetHealthCheckStatus
+            - route53:GetHostedZone
+            - route53:GetHostedZoneCount
+            - route53:ListHealthChecks
+            - route53:ListHostedZones
+            - route53:ListHostedZonesByName
+            - route53:ListResourceRecordSets
+            - route53:UpdateHealthCheck
+            Effect: Allow
+            Resource:
+            - '*'
+          - Action:
+            - route53domains:GetDomainDetail
+            - route53domains:ListDomains
+            - route53domains:ListTagsForDomain
+            Effect: Allow
+            Resource:
+            - '*'
 
   # Resource that creates the master node IAM role
   MasterInstanceProfile:
@@ -1172,6 +1238,10 @@ Outputs:
   MasterPrivateIp:
     Description: Private IP address of the master.
     Value: !GetAtt K8sMasterInstance.PrivateIp
+
+  AviControllerURL:
+    Description: URL to access Avi Controller UI. It may take upto 10 min for the Avi Controller to initially startup. 
+    Value: !Sub http://${K8sMasterInstance.PublicIp}/
 
   K8SClusterSG:
     Description: K8S cluster Security Group.
