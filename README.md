@@ -5,3 +5,4 @@
 
 Or use S3 url of the template: https://s3-us-west-2.amazonaws.com/aviservicemesh/kubernetes-cluster-with-new-vpc.template
 
+[Video Tutorial](https://youtu.be/k8tjLTihnzE)
