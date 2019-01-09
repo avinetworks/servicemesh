@@ -1,0 +1,29 @@
+package: .
+import:
+- package: github.com/avinetworks/sdk
+  subpackages:
+  - go/clients
+  - go/models
+  - go/session
+- package: github.com/golang/glog
+- package: k8s.io/api
+  subpackages:
+  - core/v1
+  - extensions/v1beta1
+- package: k8s.io/apimachinery
+  subpackages:
+  - pkg/api/errors
+  - pkg/util/runtime
+  - pkg/util/wait
+- package: k8s.io/client-go
+  subpackages:
+  - informers
+  - informers/core/v1
+  - informers/extensions/v1beta1
+  - kubernetes
+  - kubernetes/scheme
+  - kubernetes/typed/core/v1
+  - tools/cache
+  - tools/clientcmd
+  - tools/record
+  - util/workqueue
