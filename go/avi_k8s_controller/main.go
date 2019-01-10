@@ -15,8 +15,9 @@
 package main
 
 import (
-           "github.com/golang/glog"
+           "log"
            "flag"
+           "io/ioutil"
            "os"
            "k8s.io/client-go/tools/clientcmd"
            "k8s.io/client-go/kubernetes"
@@ -27,23 +28,45 @@ var (
     kubeconfig string
 )
 
+var AviLog AviLogger
+
+func AviLogInit() {
+    // Change from ioutil.Discard for log to appear
+    AviLog.Trace = log.New(ioutil.Discard,
+        "TRACE: ",
+        log.Ldate|log.Ltime|log.Lshortfile)
+
+    AviLog.Info = log.New(os.Stdout,
+        "INFO: ",
+        log.Ldate|log.Ltime|log.Lshortfile)
+
+    AviLog.Warning = log.New(os.Stdout,
+        "WARNING: ",
+        log.Ldate|log.Ltime|log.Lshortfile)
+
+    AviLog.Error = log.New(os.Stdout,
+        "ERROR: ",
+        log.Ldate|log.Ltime|log.Lshortfile)
+}
+
 func main() {
     flag.Parse()
 
     flag.Lookup("logtostderr").Value.Set("true")
 
+    AviLogInit()
 
     // set up signals so we handle the first shutdown signal gracefully
     stopCh := SetupSignalHandler()
 
     cfg, err := clientcmd.BuildConfigFromFlags(masterURL, kubeconfig)
     if err != nil {
-        glog.Fatalf("Error building kubeconfig: %s", err.Error())
+        AviLog.Error.Fatalf("Error building kubeconfig: %s", err.Error())
     }
 
     kubeClient, err := kubernetes.NewForConfig(cfg)
     if err != nil {
-        glog.Fatalf("Error building kubernetes clientset: %s", err.Error())
+        AviLog.Error.Fatalf("Error building kubernetes clientset: %s", err.Error())
     }
 
     informers := NewInformers(kubeClient)

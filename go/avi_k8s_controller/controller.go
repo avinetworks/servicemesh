@@ -22,7 +22,6 @@ import (
           "reflect"
           "strings"
           "hash/fnv"
-          "github.com/golang/glog"
           corev1 "k8s.io/api/core/v1"
           extensions "k8s.io/api/extensions/v1beta1"
           "k8s.io/apimachinery/pkg/util/runtime"
@@ -52,7 +51,7 @@ type AviController struct {
 func ObjKey(obj interface{}) string {
     key, err := cache.DeletionHandlingMetaNamespaceKeyFunc(obj)
     if err != nil {
-        glog.Warning(err)
+        AviLog.Warning.Print(err)
     }
 
     return key
@@ -81,7 +80,7 @@ func CrudHashKey(obj_type string, obj interface{}) (string, error) {
             ns = ing.Namespace
             name = ing.Name
         default:
-            glog.Errorf("Unknown obj_type %s obj %v", obj_type, obj)
+            AviLog.Error.Printf("Unknown obj_type %s obj %v", obj_type, obj)
             return "", errors.New(fmt.Sprintf("Unknown obj_type %s", obj_type))
         }
         return ns + "/" + name, nil
@@ -99,9 +98,9 @@ func NewInformers(cs *kubernetes.Clientset) *Informers {
 
 func NewAviController(num_workers uint32, inf *Informers, cs *kubernetes.Clientset,
     k8s_ep *K8sEp, k8s_svc *K8sSvc) *AviController {
-    glog.Info("Creating event broadcaster")
+    AviLog.Info.Printf("Creating event broadcaster")
     eventBroadcaster := record.NewBroadcaster()
-    eventBroadcaster.StartLogging(glog.Infof)
+    eventBroadcaster.StartLogging(AviLog.Info.Printf)
     eventBroadcaster.StartRecordingToSink(&typedcorev1.EventSinkImpl{Interface: cs.CoreV1().Events("")})
     recorder := eventBroadcaster.NewRecorder(scheme.Scheme, corev1.EventSource{Component: "avi-k8s-controller"})
 
@@ -132,12 +131,12 @@ func NewAviController(num_workers uint32, inf *Informers, cs *kubernetes.Clients
                 // endpoints was deleted but its final state is unrecorded.
                 tombstone, ok := obj.(cache.DeletedFinalStateUnknown)
                 if !ok {
-                    glog.Errorf("couldn't get object from tombstone %#v", obj)
+                    AviLog.Error.Printf("couldn't get object from tombstone %#v", obj)
                     return
                 }
                 ep, ok = tombstone.Obj.(*corev1.Endpoints)
                 if !ok {
-                    glog.Errorf("Tombstone contained object that is not an Endpoints: %#v", obj)
+                    AviLog.Error.Printf("Tombstone contained object that is not an Endpoints: %#v", obj)
                     return
                 }
             }
@@ -170,12 +169,12 @@ func NewAviController(num_workers uint32, inf *Informers, cs *kubernetes.Clients
                 // endpoints was deleted but its final state is unrecorded.
                 tombstone, ok := obj.(cache.DeletedFinalStateUnknown)
                 if !ok {
-                    glog.Errorf("couldn't get object from tombstone %#v", obj)
+                    AviLog.Error.Printf("couldn't get object from tombstone %#v", obj)
                     return
                 }
                 svc, ok = tombstone.Obj.(*corev1.Service)
                 if !ok {
-                    glog.Errorf("Tombstone contained object that is not an Service: %#v", obj)
+                    AviLog.Error.Printf("Tombstone contained object that is not an Service: %#v", obj)
                     return
                 }
             }
@@ -206,12 +205,12 @@ func NewAviController(num_workers uint32, inf *Informers, cs *kubernetes.Clients
                 // endpoints was deleted but its final state is unrecorded.
                 tombstone, ok := obj.(cache.DeletedFinalStateUnknown)
                 if !ok {
-                    glog.Errorf("couldn't get object from tombstone %#v", obj)
+                    AviLog.Error.Printf("couldn't get object from tombstone %#v", obj)
                     return
                 }
                 ing, ok = tombstone.Obj.(*extensions.Ingress)
                 if !ok {
-                    glog.Errorf("Tombstone contained object that is not an Ingress: %#v", obj)
+                    AviLog.Error.Printf("Tombstone contained object that is not an Ingress: %#v", obj)
                     return
                 }
             }
@@ -248,7 +247,7 @@ func (c *AviController) Start(stopCh <-chan struct{}) {
     ) {
         runtime.HandleError(fmt.Errorf("Timed out waiting for caches to sync"))
     } else {
-        glog.Info("Caches synced")
+        AviLog.Info.Print("Caches synced")
     }
 }
 
@@ -263,17 +262,17 @@ func (c *AviController) Run(stopCh <-chan struct{}) error {
     }
 
     // Start the informer factories to begin populating the informer caches
-    glog.Info("Starting Avi controller")
+    AviLog.Info.Print("Starting Avi controller")
 
-    glog.Info("Starting workers")
+    AviLog.Info.Print("Starting workers")
     // Launch two workers to process Foo resources
     for i := uint32(0); i < c.num_workers; i++ {
         go wait.Until(c.runWorker, time.Second, stopCh)
     }
 
-    glog.Info("Started workers")
+    AviLog.Info.Print("Started workers")
     <-stopCh
-    glog.Info("Shutting down workers")
+    AviLog.Info.Print("Shutting down workers")
 
     return nil
 }
@@ -292,13 +291,13 @@ func (c *AviController) runWorker() {
         }
     }
     c.worker_id_mutex.Unlock()
-    glog.Infof("Worker id %d", worker_id)
+    AviLog.Info.Printf("Worker id %d", worker_id)
     for c.processNextWorkItem(worker_id) {
     }
     c.worker_id_mutex.Lock()
     c.worker_id = c.worker_id | (uint32(1) << worker_id)
     c.worker_id_mutex.Unlock()
-    glog.Infof("Worker id %d restarting", worker_id)
+    AviLog.Info.Printf("Worker id %d restarting", worker_id)
 }
 
 // processNextWorkItem will read a single work item off the workqueue and
@@ -342,7 +341,7 @@ func (c *AviController) processNextWorkItem(worker_id uint32) bool {
         // Finally, if no error occurs we Forget this item so it does not
         // get queued again until another change happens.
         c.workqueue[worker_id].Forget(obj)
-        glog.Infof("Successfully synced '%s'", ev)
+        AviLog.Info.Printf("Successfully synced '%s'", ev)
         return nil
     }(obj)
 
@@ -380,7 +379,7 @@ func (c *AviController) syncHandler(key string, worker_id uint32) error {
     } else if obj_type_ns[0] == "Ingress" {
         obj, err = c.informers.IngInformer.Lister().Ingresses(namespace).Get(name)
     } else {
-        glog.Errorf("Unable to handle unknown obj type %v", key)
+        AviLog.Error.Printf("Unable to handle unknown obj type %v", key)
         return errors.New("Unable to handle unknown obj type")
     }
 
@@ -399,7 +398,7 @@ func (c *AviController) syncHandler(key string, worker_id uint32) error {
     var k string
     k, err = CrudHashKey(obj_type_ns[0], obj)
     if err != nil {
-        glog.Errorf("Unable to hash obj_type %s obj %v", obj_type_ns[0],
+        AviLog.Error.Printf("Unable to hash obj_type %s obj %v", obj_type_ns[0],
                 obj)
         return err
     }

@@ -18,7 +18,6 @@ import (
         "strings"
         "strconv"
         "fmt"
-        "github.com/golang/glog"
         corev1 "k8s.io/api/core/v1"
         avimodels "github.com/avinetworks/sdk/go/models"
         )
@@ -75,7 +74,7 @@ func (p *K8sEp) K8sObjCrUpd(shard uint32, ep *corev1.Endpoints,
     port_protocols := make(map[AviPortStrProtocol]bool)
     svc, err := p.informers.ServiceInformer.Lister().Services(ep.Namespace).Get(ep.Name)
     if err != nil {
-        glog.Warningf("Service for Endpoint Namespace %v Name %v doesn't exist",
+        AviLog.Warning.Printf("Service for Endpoint Namespace %v Name %v doesn't exist",
                    ep.Namespace, ep.Name)
         return nil, nil
     }
@@ -94,13 +93,13 @@ func (p *K8sEp) K8sObjCrUpd(shard uint32, ep *corev1.Endpoints,
                                 return name
                             }
                         }
-                        glog.Warningf("Matching port %v name %v not found in Svc namespace %s name %s",
+                        AviLog.Warning.Printf("Matching port %v name %v not found in Svc namespace %s name %s",
                                    port, name, svc.Namespace, svc.Name)
                         return ""
                     }(svc, ep_port.Port, ep_port.Name)
 
                 if tgt_port == "" {
-                    glog.Warningf("Matching port %v name %v not found in Svc",
+                    AviLog.Warning.Printf("Matching port %v name %v not found in Svc",
                                    ep_port.Port, ep_port.Name)
                     return nil, nil
                 }
@@ -133,13 +132,13 @@ func (p *K8sEp) K8sObjCrUpd(shard uint32, ep *corev1.Endpoints,
                 var pool_cache interface{}
                 pool_cache, ok := p.avi_obj_cache.pool_cache.AviCacheGet(pool_name)
                 if !ok {
-                    glog.Warningf("Pool %s not present in Obj cache but present in Pool cache", pool_name)
+                    AviLog.Warning.Printf("Pool %s not present in Obj cache but present in Pool cache", pool_name)
                 } else {
                     pool_cache_obj, ok := pool_cache.(*AviPoolCache)
                     if ok {
                         service_metadata = pool_cache_obj.ServiceMetadata
                     } else {
-                        glog.Warningf("Pool %s cache incorrect type", pool_name)
+                        AviLog.Warning.Printf("Pool %s cache incorrect type", pool_name)
                         service_metadata = ServiceMetadataObj{}
                     }
                 }
@@ -155,7 +154,7 @@ func (p *K8sEp) K8sObjCrUpd(shard uint32, ep *corev1.Endpoints,
     }
 
     if !process_pool {
-        glog.Infof("Endpoint %v is not present in Pool/Pg cache.", k)
+        AviLog.Info.Printf("Endpoint %v is not present in Pool/Pg cache.", k)
         return nil, nil
     }
 

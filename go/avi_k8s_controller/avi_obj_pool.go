@@ -18,7 +18,6 @@ import (
         "fmt"
         "errors"
         "encoding/json"
-        "github.com/golang/glog"
         avimodels "github.com/avinetworks/sdk/go/models"
        )
 
@@ -64,25 +63,25 @@ func AviPoolBuild(pool_meta *K8sAviPoolMeta) *RestOp {
 
 func AviPoolCacheAdd(pool_cache *AviCache, rest_op *RestOp) error {
     if (rest_op.Err != nil) || (rest_op.Response == nil) {
-        glog.Warningf("rest_op has err or no reponse")
+        AviLog.Warning.Printf("rest_op has err or no reponse")
         return errors.New("Errored rest_op")
     }
 
     resp, ok := rest_op.Response.(map[string]string)
     if !ok {
-        glog.Warningf("Response has unknown type %t", resp)
+        AviLog.Warning.Printf("Response has unknown type %t", resp)
         return errors.New("Malformed response")
     }
 
     name, ok := resp["Name"]
     if !ok {
-        glog.Warningf("Name not present in response %v", resp)
+        AviLog.Warning.Printf("Name not present in response %v", resp)
         return errors.New("Name not present in response")
     }
 
     uuid, ok := resp["UUID"]
     if !ok {
-        glog.Warningf("Uuid not present in response %v", resp)
+        AviLog.Warning.Printf("Uuid not present in response %v", resp)
         return errors.New("Uuid not present in response")
     }
 
@@ -95,11 +94,11 @@ func AviPoolCacheAdd(pool_cache *AviCache, rest_op *RestOp) error {
     if err := json.Unmarshal([]byte(resp["ServiceMetadata"]), &svc_mdata); err != nil {
         svc_mdata_obj, ok = svc_mdata.(ServiceMetadataObj)
         if !ok {
-            glog.Warningf("resp %v has invalid ServiceMetadata type", resp)
+            AviLog.Warning.Printf("resp %v has invalid ServiceMetadata type", resp)
             svc_mdata_obj = ServiceMetadataObj{}
         }
     } else {
-        glog.Warningf("resp %v has invalid ServiceMetadata value", resp)
+        AviLog.Warning.Printf("resp %v has invalid ServiceMetadata value", resp)
         svc_mdata_obj = ServiceMetadataObj{}
     }
 

@@ -17,7 +17,6 @@ package main
 import (
         "fmt"
         "errors"
-        "github.com/golang/glog"
         "github.com/avinetworks/sdk/go/session"
         "github.com/avinetworks/sdk/go/clients"
     )
@@ -34,7 +33,7 @@ func NewAviRestClientPool(num uint32, api_ep string, username string,
         aviClient, err := clients.NewAviClient(api_ep, username,
                         session.SetPassword(password), session.SetInsecure)
         if err != nil {
-            glog.Warningf("NewAviClient returned err %v", err)
+            AviLog.Warning.Printf("NewAviClient returned err %v", err)
             return &p, err
         }
 
@@ -63,18 +62,18 @@ func (p *AviRestClientPool) AviRestOperate(c *clients.AviClient, rest_ops []*Res
         case RestDelete:
             op.Err = c.AviSession.Delete(op.Path)
         default:
-            glog.Errorf("Unknown RestOp %v", op.Method)
+            AviLog.Error.Printf("Unknown RestOp %v", op.Method)
             op.Err = fmt.Errorf("Unknown RestOp %v", op.Method)
         }
         if op.Err != nil {
-            glog.Warningf("RestOp method %v path %v tenant %v returned err %v",
+            AviLog.Warning.Printf("RestOp method %v path %v tenant %v returned err %v",
                        op.Method, op.Path, op.Tenant, op.Err)
             for j := i+1; j < len(rest_ops); j++ {
                 rest_ops[j].Err = errors.New("Aborted due to prev error")
             }
             return op.Err
         } else {
-            glog.Infof("RestOp method %v path %v tenant %v response %v",
+            AviLog.Info.Printf("RestOp method %v path %v tenant %v response %v",
                        op.Method, op.Path, op.Tenant, op.Response)
         }
     }
@@ -88,7 +87,7 @@ func AviModelToUrl(model string) string {
         case "VirtualService":
             return "/api/virtualservice"
         default:
-            glog.Warningf("Unknown model %v", model)
+            AviLog.Warning.Printf("Unknown model %v", model)
             return ""
     }
 }

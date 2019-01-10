@@ -17,7 +17,6 @@ package main
 import (
         "strings"
         "fmt"
-        "github.com/golang/glog"
         corev1 "k8s.io/api/core/v1"
         "github.com/avinetworks/sdk/go/session"
         avimodels "github.com/avinetworks/sdk/go/models"
@@ -47,7 +46,7 @@ func NewK8sSvc(avi_obj_cache *AviObjCache, avi_rest_client_pool *AviRestClientPo
 func (s *K8sSvc) K8sObjCrUpd(shard uint32, svc *corev1.Service) ([]*RestOp, error) {
     ep, err := s.informers.EpInformer.Lister().Endpoints(svc.Namespace).Get(svc.Name)
     if err != nil {
-        glog.Warningf("Ep for Svc Namespace %s Name %s not present",
+        AviLog.Warning.Printf("Ep for Svc Namespace %s Name %s not present",
                    svc.Namespace, svc.Name)
         return nil, fmt.Errorf("Svc ep Namespace %s Name %s not found", 
                                 svc.Namespace, svc.Name)
@@ -93,13 +92,13 @@ func (s *K8sSvc) K8sObjCrUpd(shard uint32, svc *corev1.Service) ([]*RestOp, erro
             if pool_rest_op.Model == "Pool" {
                 macro, ok := pool_rest_op.Obj.(AviRestObjMacro)
                 if !ok {
-                    glog.Warningf("pool_rest_op %v has unknown Obj type", 
+                    AviLog.Warning.Printf("pool_rest_op %v has unknown Obj type", 
                                   pool_rest_op)
                     break
                 }
                 pool, ok := macro.Data.(avimodels.Pool)
                 if !ok {
-                    glog.Warningf("pool_rest_op %v has unknown macro type", 
+                    AviLog.Warning.Printf("pool_rest_op %v has unknown macro type", 
                                   pool_rest_op)
                 } else {
                     avi_vs_meta.DefaultPool = *pool.Name
@@ -127,7 +126,7 @@ func (s *K8sSvc) K8sObjCrUpd(shard uint32, svc *corev1.Service) ([]*RestOp, erro
     aviClient := s.avi_rest_client_pool.AviClient[shard]
     err = s.avi_rest_client_pool.AviRestOperate(aviClient, rest_ops)
     if err != nil {
-        glog.Warningf("Error %v with rest_ops", err)
+        AviLog.Warning.Printf("Error %v with rest_ops", err)
         // Iterate over rest_ops in reverse and delete created objs
         for i := len(rest_ops)-1; i >= 0; i-- {
             if rest_ops[i].Err == nil {
@@ -137,12 +136,12 @@ func (s *K8sSvc) K8sObjCrUpd(shard uint32, svc *corev1.Service) ([]*RestOp, erro
                     url := AviModelToUrl(rest_ops[i].Model) + "/" + uuid
                     err := aviClient.AviSession.Delete(url)
                     if err != nil {
-                        glog.Warningf("Error %v deleting url %v", err, url)
+                        AviLog.Warning.Printf("Error %v deleting url %v", err, url)
                     } else {
-                        glog.Infof("Success deleting url %v", url)
+                        AviLog.Info.Printf("Success deleting url %v", url)
                     }
                 } else {
-                    glog.Warningf("Invalid resp for rest_op %v", rest_ops[i])
+                    AviLog.Warning.Printf("Invalid resp for rest_op %v", rest_ops[i])
                 }
             }
         }
@@ -171,11 +170,11 @@ func (s *K8sSvc) K8sObjDelete(shard uint32, svc *corev1.Service) ([]*RestOp, err
     err = aviClient.AviSession.GetObjectByName("virtualservice",
                                         svc.Name, &obj)
     if err != nil {
-        glog.Warningf("Unable to retrieve VS tenant %s name %s", svc.Namespace,
+        AviLog.Warning.Printf("Unable to retrieve VS tenant %s name %s", svc.Namespace,
                    svc.Name)
         return nil, nil
     } else {
-        glog.Infof("Tenant %s name %s VS %v", svc.Namespace, svc.Name, obj)
+        AviLog.Info.Printf("Tenant %s name %s VS %v", svc.Namespace, svc.Name, obj)
     }
 
 
@@ -184,10 +183,10 @@ func (s *K8sSvc) K8sObjDelete(shard uint32, svc *corev1.Service) ([]*RestOp, err
 
     _, rerror := aviClient.AviSession.DeleteRaw(path, payload)
     if rerror != nil {
-        glog.Warningf("VS tenant %s name %s delete returned %v", svc.Namespace, 
+        AviLog.Warning.Printf("VS tenant %s name %s delete returned %v", svc.Namespace, 
                    svc.Name, rerror)
     } else {
-        glog.Infof("VS tenant %s name %s delete success", svc.Namespace,
+        AviLog.Info.Printf("VS tenant %s name %s delete success", svc.Namespace,
                    svc.Name)
     }
 

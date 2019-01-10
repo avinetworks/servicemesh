@@ -15,6 +15,7 @@
 package main
 
 import (
+        "log"
         avimodels "github.com/avinetworks/sdk/go/models"
         coreinformers "k8s.io/client-go/informers/core/v1"
         extinformers "k8s.io/client-go/informers/extensions/v1beta1"
@@ -38,6 +39,13 @@ const (
        AVI_DEFAULT_TCP_HM string = "System-TCP"
        AVI_DEFAULT_UDP_HM string = "System-UDP"
 )
+
+type AviLogger struct {
+    Trace   *log.Logger
+    Info    *log.Logger
+    Warning *log.Logger
+    Error   *log.Logger
+}
 
 type Informers struct {
     ServiceInformer coreinformers.ServiceInformer
