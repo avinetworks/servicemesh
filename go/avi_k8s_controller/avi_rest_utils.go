@@ -73,8 +73,8 @@ func (p *AviRestClientPool) AviRestOperate(c *clients.AviClient, rest_ops []*Res
             }
             return op.Err
         } else {
-            AviLog.Info.Printf("RestOp method %v path %v tenant %v response %v",
-                       op.Method, op.Path, op.Tenant, op.Response)
+            AviLog.Info.Printf("RestOp method %v path %v tenant %v response %v response type %T",
+                       op.Method, op.Path, op.Tenant, op.Response, op.Response)
         }
     }
     return nil

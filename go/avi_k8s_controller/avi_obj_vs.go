@@ -18,6 +18,7 @@ import (
         "fmt"
         "errors"
         "encoding/json"
+        "github.com/davecgh/go-spew/spew"
         avimodels "github.com/avinetworks/sdk/go/models"
        )
 
@@ -31,8 +32,12 @@ func AviVsBuild(vs_meta *K8sAviVsMeta) *RestOp {
     atype := "V4"
     sip := avimodels.IPAddr{Type: &atype, Addr: &addr}
     ew_subnet := avimodels.IPAddrPrefix{IPAddr: &sip, Mask: &mask}
+    var east_west bool
     if vs_meta.EastWest == true {
         vip.Subnet = &ew_subnet
+        east_west = true
+    } else {
+        east_west = false
     }
 
     network_prof := "/api/networkprofile/?name=" + vs_meta.NetworkProfile
@@ -49,7 +54,8 @@ func AviVsBuild(vs_meta *K8sAviVsMeta) *RestOp {
           ApplicationProfileRef: &app_prof,
           PoolRef: &pool_ref,
           CloudConfigCksum: &cksum,
-          CreatedBy: &cr}
+          CreatedBy: &cr,
+          EastWestPlacement: &east_west}
 
     vs.Vip = append(vs.Vip, &vip)
 
@@ -72,6 +78,8 @@ func AviVsBuild(vs_meta *K8sAviVsMeta) *RestOp {
     // TODO Version from configmap
     rest_op := RestOp{Path: "/api/macro", Method: RestPost, Obj: macro,
         Tenant: vs_meta.Tenant, Model: "VirtualService", Version: "18.1.5"}
+
+    AviLog.Info.Print(spew.Sprintf("VS Restop %v\n", rest_op))
     return &rest_op
 }
 
@@ -83,7 +91,7 @@ func AviVsCacheAdd(vs_cache *AviCache, rest_op *RestOp) error {
 
     resp, ok := rest_op.Response.(map[string]string)
     if !ok {
-        AviLog.Warning.Printf("Response has unknown type %t", resp)
+        AviLog.Warning.Printf("Response has unknown type %T", rest_op.Response)
         return errors.New("Malformed response")
     }
 
@@ -121,6 +129,8 @@ func AviVsCacheAdd(vs_cache *AviCache, rest_op *RestOp) error {
 
     k := NamespaceName{Namespace: rest_op.Tenant, Name: name}
     vs_cache.AviCacheAdd(k, vs_cache_obj)
+
+    AviLog.Info.Print(spew.Sprintf("VS cache key %v val %v\n", k, vs_cache_obj))
 
     return nil
 }

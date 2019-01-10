@@ -109,15 +109,15 @@ func (s *K8sSvc) K8sObjCrUpd(shard uint32, svc *corev1.Service) ([]*RestOp, erro
     }
 
     if is_http {
-        avi_vs_meta.ApplicationProfile = "APPLICATION_PROFILE_TYPE_HTTP"
+        avi_vs_meta.ApplicationProfile = "System-HTTP"
     } else {
-        avi_vs_meta.ApplicationProfile = "APPLICATION_PROFILE_TYPE_L4"
+        avi_vs_meta.ApplicationProfile = "System-L4-Application"
     }
 
     if is_tcp {
-        avi_vs_meta.NetworkProfile = "PROTOCOL_TYPE_TCP_PROXY"
+        avi_vs_meta.NetworkProfile = "System-TCP-Proxy"
     } else {
-        avi_vs_meta.NetworkProfile = "PROTOCOL_TYPE_UDP_FAST_PATH"
+        avi_vs_meta.NetworkProfile = "System-UDP-Per-Pkt"
     }
 
     rop := AviVsBuild(&avi_vs_meta)

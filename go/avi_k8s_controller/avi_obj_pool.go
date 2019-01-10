@@ -18,6 +18,7 @@ import (
         "fmt"
         "errors"
         "encoding/json"
+        "github.com/davecgh/go-spew/spew"
         avimodels "github.com/avinetworks/sdk/go/models"
        )
 
@@ -58,6 +59,8 @@ func AviPoolBuild(pool_meta *K8sAviPoolMeta) *RestOp {
     // TODO Version should be latest from configmap
     rest_op := RestOp{Path: "/api/macro", Method: RestPost, Obj: macro,
         Tenant: pool_meta.Tenant, Model: "Pool", Version: "18.1.5"}
+
+    AviLog.Info.Print(spew.Sprintf("Pool Restop %v\n", rest_op))
     return &rest_op
 }
 
@@ -69,7 +72,7 @@ func AviPoolCacheAdd(pool_cache *AviCache, rest_op *RestOp) error {
 
     resp, ok := rest_op.Response.(map[string]string)
     if !ok {
-        AviLog.Warning.Printf("Response has unknown type %t", resp)
+        AviLog.Warning.Printf("Response has unknown type %T", rest_op.Response)
         return errors.New("Malformed response")
     }
 
@@ -108,6 +111,8 @@ func AviPoolCacheAdd(pool_cache *AviCache, rest_op *RestOp) error {
 
     k := NamespaceName{Namespace: rest_op.Tenant, Name: name}
     pool_cache.AviCacheAdd(k, pool_cache_obj)
+
+    AviLog.Info.Print(spew.Sprintf("Pool cache k %v val %v\n", k, pool_cache_obj))
 
     return nil
 }
