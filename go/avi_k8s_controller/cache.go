@@ -35,11 +35,11 @@ func NewAviCache() *AviCache {
     return &c
 }
 
-func (c *AviCache) AviCacheGet(k interface{}) (*interface{}, bool) {
+func (c *AviCache) AviCacheGet(k interface{}) (interface{}, bool) {
     c.cache_lock.RLock()
     defer c.cache_lock.RUnlock()
     val, ok := c.cache[k]
-    return &val, ok
+    return val, ok
 }
 
 func (c *AviCache) AviCacheAdd(k interface{}, val interface{}) {

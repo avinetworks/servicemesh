@@ -47,3 +47,17 @@ func IsSvcHttp(svc_name string, port int32) bool {
         return false
     }
 }
+
+func SvcMdataMapToObj(svc_mdata_map *map[string]interface{}, svc_mdata *ServiceMetadataObj) {
+    for k, val := range *svc_mdata_map {
+        switch k {
+        case "crud_hash_key":
+            crkhey, ok := val.(string)
+            if ok {
+                svc_mdata.CrudHashKey = crkhey
+            } else {
+                AviLog.Warning.Print("Incorrect type %T in svc_mdata_map %v", val, *svc_mdata_map)
+            }
+        }
+    }
+}

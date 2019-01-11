@@ -52,6 +52,26 @@ func (s *K8sSvc) K8sObjCrUpd(shard uint32, svc *corev1.Service) ([]*RestOp, erro
                                 svc.Namespace, svc.Name)
     }
 
+    vs_cache_key := NamespaceName{Namespace: svc.Namespace, Name: svc.Name}
+    vs_cache, found := s.avi_obj_cache.VsCache.AviCacheGet(vs_cache_key)
+    if found {
+        vs_cache_obj, ok := vs_cache.(*AviVsCache)
+        if ok {
+            if vs_cache_obj.CloudConfigCksum == svc.ResourceVersion {
+                AviLog.Info.Printf("Svc namespace %s name %s has same resourceversion %s",
+                        svc.Namespace, svc.Name, svc.ResourceVersion)
+                return nil, nil
+            } else {
+                AviLog.Info.Printf("Svc namespace %s name %s resourceversion %s different from cksum %s",
+                        svc.Namespace, svc.Name, svc.ResourceVersion, 
+                        vs_cache_obj.CloudConfigCksum)
+            }
+        } else {
+            AviLog.Info.Printf("Svc namespace %s name %s not found in cache",
+                               svc.Namespace, svc.Name)
+        }
+    }
+
     crud_hash_key := svc.Namespace + ":" + svc.Name
     svc_mdata := ServiceMetadataObj{CrudHashKey: crud_hash_key}
 
@@ -59,7 +79,9 @@ func (s *K8sSvc) K8sObjCrUpd(shard uint32, svc *corev1.Service) ([]*RestOp, erro
 
     // Build PG/Pool with Endpoints
     pool_rest_ops, err := s.k8s_ep.K8sObjCrUpd(shard, ep, svc.Name, crud_hash_key)
-    rest_ops = append(rest_ops, pool_rest_ops...)
+    if pool_rest_ops != nil {
+        rest_ops = append(rest_ops, pool_rest_ops...)
+    }
 
     avi_vs_meta := K8sAviVsMeta{Name: svc.Name, Tenant: svc.Namespace,
         CloudConfigCksum: svc.ResourceVersion, ServiceMetadata: svc_mdata,
@@ -130,9 +152,19 @@ func (s *K8sSvc) K8sObjCrUpd(shard uint32, svc *corev1.Service) ([]*RestOp, erro
         // Iterate over rest_ops in reverse and delete created objs
         for i := len(rest_ops)-1; i >= 0; i-- {
             if rest_ops[i].Err == nil {
-                resp, ok := rest_ops[i].Response.(map[string]string)
+                resp_arr, ok := rest_ops[i].Response.([]interface{})
+                if !ok {
+                    AviLog.Warning.Printf("Invalid resp type for rest_op %v", rest_ops[i])
+                    continue
+                }
+                resp, ok := resp_arr[0].(map[string]interface{})
                 if ok {
-                    uuid := resp["UUID"]
+                    uuid, ok := resp["uuid"].(string)
+                    if !ok {
+                        AviLog.Warning.Printf("Invalid resp type for uuid %v", 
+                                              resp)
+                        continue
+                    }
                     url := AviModelToUrl(rest_ops[i].Model) + "/" + uuid
                     err := aviClient.AviSession.Delete(url)
                     if err != nil {
@@ -150,9 +182,9 @@ func (s *K8sSvc) K8sObjCrUpd(shard uint32, svc *corev1.Service) ([]*RestOp, erro
         for _, rest_op := range(rest_ops) {
             if rest_op.Err == nil {
                 if rest_op.Model == "Pool" {
-                    AviPoolCacheAdd(s.avi_obj_cache.pool_cache, rest_op)
+                    AviPoolCacheAdd(s.avi_obj_cache.PoolCache, rest_op)
                 } else if rest_op.Model == "VirtualService" {
-                    AviVsCacheAdd(s.avi_obj_cache.pool_cache, rest_op)
+                    AviVsCacheAdd(s.avi_obj_cache.VsCache, rest_op)
                 }
             }
         }

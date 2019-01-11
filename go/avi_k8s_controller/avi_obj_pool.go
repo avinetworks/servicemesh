@@ -70,38 +70,47 @@ func AviPoolCacheAdd(pool_cache *AviCache, rest_op *RestOp) error {
         return errors.New("Errored rest_op")
     }
 
-    resp, ok := rest_op.Response.(map[string]string)
+    resp_arr, ok := rest_op.Response.([]interface{})
     if !ok {
         AviLog.Warning.Printf("Response has unknown type %T", rest_op.Response)
         return errors.New("Malformed response")
     }
 
-    name, ok := resp["Name"]
+    resp, ok := resp_arr[0].(map[string]interface{})
+    if !ok {
+        AviLog.Warning.Printf("Response has unknown type %T", resp_arr[0])
+        return errors.New("Malformed response")
+    }
+
+    name, ok := resp["name"].(string)
     if !ok {
         AviLog.Warning.Printf("Name not present in response %v", resp)
         return errors.New("Name not present in response")
     }
 
-    uuid, ok := resp["UUID"]
+    uuid, ok := resp["uuid"].(string)
     if !ok {
         AviLog.Warning.Printf("Uuid not present in response %v", resp)
         return errors.New("Uuid not present in response")
     }
 
-    lb := resp["LbAlgorithm"]
-    cksum := resp["CloudConfigCksum"]
+    lb := resp["lb_algorithm"].(string)
+    cksum := resp["cloud_config_cksum"].(string)
 
     var svc_mdata interface{}
+    var svc_mdata_map map[string]interface{}
     var svc_mdata_obj ServiceMetadataObj
 
-    if err := json.Unmarshal([]byte(resp["ServiceMetadata"]), &svc_mdata); err != nil {
-        svc_mdata_obj, ok = svc_mdata.(ServiceMetadataObj)
+    if err := json.Unmarshal([]byte(resp["service_metadata"].(string)), &svc_mdata); err == nil {
+        svc_mdata_map, ok = svc_mdata.(map[string]interface{})
         if !ok {
-            AviLog.Warning.Printf("resp %v has invalid ServiceMetadata type", resp)
+            AviLog.Warning.Printf("resp %v svc_mdata %T has invalid service_metadata type", resp, svc_mdata)
             svc_mdata_obj = ServiceMetadataObj{}
+        } else {
+            SvcMdataMapToObj(&svc_mdata_map, &svc_mdata_obj)
         }
     } else {
-        AviLog.Warning.Printf("resp %v has invalid ServiceMetadata value", resp)
+        AviLog.Warning.Printf("resp %v has invalid service_metadata value err %v", resp, err)
         svc_mdata_obj = ServiceMetadataObj{}
     }
 
@@ -110,7 +119,7 @@ func AviPoolCacheAdd(pool_cache *AviCache, rest_op *RestOp) error {
                     CloudConfigCksum: cksum, ServiceMetadata: svc_mdata_obj}
 
     k := NamespaceName{Namespace: rest_op.Tenant, Name: name}
-    pool_cache.AviCacheAdd(k, pool_cache_obj)
+    pool_cache.AviCacheAdd(k, &pool_cache_obj)
 
     AviLog.Info.Print(spew.Sprintf("Pool cache k %v val %v\n", k, pool_cache_obj))
 

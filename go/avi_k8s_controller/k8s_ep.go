@@ -78,6 +78,8 @@ func (p *K8sEp) K8sObjCrUpd(shard uint32, ep *corev1.Endpoints,
                    ep.Namespace, ep.Name)
         return nil, nil
     }
+
+    tenant := ep.Namespace
     for _, ss := range ep.Subsets {
         if len(ss.Addresses) > 0 {
             for _, ep_port := range ss.Ports {
@@ -130,7 +132,8 @@ func (p *K8sEp) K8sObjCrUpd(shard uint32, ep *corev1.Endpoints,
             for pool_name := range *pools {
                 pool_names = append(pool_names, pool_name)
                 var pool_cache interface{}
-                pool_cache, ok := p.avi_obj_cache.pool_cache.AviCacheGet(pool_name)
+                pool_key := NamespaceName{Namespace: tenant, Name: pool_name}
+                pool_cache, ok := p.avi_obj_cache.PoolCache.AviCacheGet(pool_key)
                 if !ok {
                     AviLog.Warning.Printf("Pool %s not present in Obj cache but present in Pool cache", pool_name)
                 } else {
@@ -161,8 +164,30 @@ func (p *K8sEp) K8sObjCrUpd(shard uint32, ep *corev1.Endpoints,
     var rest_ops []*RestOp
 
     for _, pool_name := range pool_names {
+        // Check if resourceVersion is same as cksum from cache. If so, skip upd
+        pool_key := NamespaceName{Namespace: tenant, Name: pool_name}
+        pool_cache, ok := p.avi_obj_cache.PoolCache.AviCacheGet(pool_key)
+        if !ok {
+            AviLog.Info.Printf("Namespace %s Pool %s not present in Pool cache",
+                               tenant, pool_name)
+        } else {
+            pool_cache_obj, ok := pool_cache.(*AviPoolCache)
+            if ok {
+                if ep.ResourceVersion == pool_cache_obj.CloudConfigCksum {
+                    AviLog.Info.Printf("Pool namespace %s name %s has same cksum %s",
+                            tenant, pool_name, ep.ResourceVersion)
+                    continue
+                } else {
+                    AviLog.Info.Printf("Pool namespace %s name %s has diff cksum %s resourceVersion %s",
+                            tenant, pool_name, pool_cache_obj.CloudConfigCksum, 
+                            ep.ResourceVersion)
+                }
+            } else {
+                AviLog.Warning.Printf("Pool %s cache incorrect type", pool_name)
+            }
+        }
         pool_meta := K8sAviPoolMeta{Name: pool_name,
-            Tenant: ep.Namespace,
+            Tenant: tenant,
             ServiceMetadata: service_metadata,
             CloudConfigCksum: ep.ResourceVersion}
         s := strings.Split(pool_name, "-pool-")
@@ -209,7 +234,7 @@ func (p *K8sEp) K8sObjCrUpd(shard uint32, ep *corev1.Endpoints,
         p.avi_rest_client_pool.AviRestOperate(p.avi_rest_client_pool.AviClient[shard], rest_ops)
         for _, rest_op := range(rest_ops) {
             if rest_op.Err == nil {
-                AviPoolCacheAdd(p.avi_obj_cache.pool_cache, rest_op)
+                AviPoolCacheAdd(p.avi_obj_cache.PoolCache, rest_op)
             }
         }
         return nil, nil

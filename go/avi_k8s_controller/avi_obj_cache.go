@@ -15,16 +15,16 @@
 package main
 
 type AviObjCache struct {
-    vs_cache *AviCache
-    pg_cache *AviCache
-    pool_cache *AviCache
+    VsCache *AviCache
+    PgCache *AviCache
+    PoolCache *AviCache
 }
 
 func NewAviObjCache() *AviObjCache {
     c := AviObjCache{}
-    c.vs_cache = NewAviCache()
-    c.pg_cache = NewAviCache()
-    c.pool_cache = NewAviCache()
+    c.VsCache = NewAviCache()
+    c.PgCache = NewAviCache()
+    c.PoolCache = NewAviCache()
     // TODO Populate cache
     return &c
 }
