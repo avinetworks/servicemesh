@@ -1,0 +1,20 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: go-controller--deployment
+  labels:
+    app: avi-controller
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: avi-controller
+  template:
+    metadata:
+      labels:
+        app: avi-controller
+    spec:
+      containers:
+      - name: avi-controller
+        image: avi_k8s_controller_go:latest
+        imagePullPolicy: IfNotPresent
