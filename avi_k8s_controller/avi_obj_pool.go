@@ -60,7 +60,8 @@ func AviPoolBuild(pool_meta *K8sAviPoolMeta) *RestOp {
     rest_op := RestOp{Path: "/api/macro", Method: RestPost, Obj: macro,
         Tenant: pool_meta.Tenant, Model: "Pool", Version: "18.1.5"}
 
-    AviLog.Info.Print(spew.Sprintf("Pool Restop %v\n", rest_op))
+    AviLog.Info.Print(spew.Sprintf("Pool Restop %v K8sAviPoolMeta %v\n", 
+                                   rest_op, *pool_meta))
     return &rest_op
 }
 

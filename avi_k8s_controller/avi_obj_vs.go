@@ -43,8 +43,6 @@ func AviVsBuild(vs_meta *K8sAviVsMeta) *RestOp {
     network_prof := "/api/networkprofile/?name=" + vs_meta.NetworkProfile
     app_prof := "/api/applicationprofile/?name=" + vs_meta.ApplicationProfile
     // TODO use PoolGroup and use policies if there are > 1 pool, etc.
-    pool_ref := "/api/pool/?name=" + vs_meta.DefaultPool
-
     name := vs_meta.Name
     cksum := vs_meta.CloudConfigCksum
     cr := OSHIFT_K8S_CLOUD_CONNECTOR
@@ -52,10 +50,14 @@ func AviVsBuild(vs_meta *K8sAviVsMeta) *RestOp {
     vs := avimodels.VirtualService{Name: &name,
           NetworkProfileRef: &network_prof,
           ApplicationProfileRef: &app_prof,
-          PoolRef: &pool_ref,
           CloudConfigCksum: &cksum,
           CreatedBy: &cr,
           EastWestPlacement: &east_west}
+
+    if vs_meta.DefaultPool != "" {
+        pool_ref := "/api/pool/?name=" + vs_meta.DefaultPool
+        vs.PoolRef = &pool_ref
+    }
 
     vs.Vip = append(vs.Vip, &vip)
 
@@ -79,7 +81,8 @@ func AviVsBuild(vs_meta *K8sAviVsMeta) *RestOp {
     rest_op := RestOp{Path: "/api/macro", Method: RestPost, Obj: macro,
         Tenant: vs_meta.Tenant, Model: "VirtualService", Version: "18.1.5"}
 
-    AviLog.Info.Print(spew.Sprintf("VS Restop %v\n", rest_op))
+    AviLog.Info.Print(spew.Sprintf("VS Restop %v K8sAviVsMeta %v\n", rest_op,
+                                   *vs_meta))
     return &rest_op
 }
 
