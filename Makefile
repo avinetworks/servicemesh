@@ -6,7 +6,7 @@ BINARY_NAME=avi_k8s_controller_go
 REL_PATH=github.com/avinetworks/avi_k8s_controller
 
 .PHONY:all
-all: deps build
+all: deps build docker
 
 .PHONY: build
 build: 
@@ -20,4 +20,8 @@ clean:
 .PHONY: deps
 deps:
 		$(GOGET) -v $(REL_PATH)
+
+.PHONY: docker
+docker:
+	docker build -t $(BINARY_NAME):latest -f Dockerfile .
 

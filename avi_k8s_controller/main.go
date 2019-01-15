@@ -15,82 +15,99 @@
 package main
 
 import (
-           "log"
-           "flag"
-           "io/ioutil"
-           "os"
-           "k8s.io/client-go/tools/clientcmd"
-           "k8s.io/client-go/kubernetes"
-       )
+	"flag"
+	"io/ioutil"
+	"log"
+	"os"
+
+	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/rest"
+	"k8s.io/client-go/tools/clientcmd"
+)
 
 var (
-    masterURL  string
-    kubeconfig string
+	masterURL  string
+	kubeconfig string
 )
 
 var AviLog AviLogger
 
 func AviLogInit() {
-    // Change from ioutil.Discard for log to appear
-    AviLog.Trace = log.New(ioutil.Discard,
-        "TRACE: ",
-        log.Ldate|log.Ltime|log.Lshortfile)
+	// Change from ioutil.Discard for log to appear
+	AviLog.Trace = log.New(ioutil.Discard,
+		"TRACE: ",
+		log.Ldate|log.Ltime|log.Lshortfile)
 
-    AviLog.Info = log.New(os.Stdout,
-        "INFO: ",
-        log.Ldate|log.Ltime|log.Lshortfile)
+	AviLog.Info = log.New(os.Stdout,
+		"INFO: ",
+		log.Ldate|log.Ltime|log.Lshortfile)
 
-    AviLog.Warning = log.New(os.Stdout,
-        "WARNING: ",
-        log.Ldate|log.Ltime|log.Lshortfile)
+	AviLog.Warning = log.New(os.Stdout,
+		"WARNING: ",
+		log.Ldate|log.Ltime|log.Lshortfile)
 
-    AviLog.Error = log.New(os.Stdout,
-        "ERROR: ",
-        log.Ldate|log.Ltime|log.Lshortfile)
+	AviLog.Error = log.New(os.Stdout,
+		"ERROR: ",
+		log.Ldate|log.Ltime|log.Lshortfile)
 }
 
 func main() {
-    flag.Parse()
+	flag.Parse()
 
-    flag.Lookup("logtostderr").Value.Set("true")
+	flag.Lookup("logtostderr").Value.Set("true")
 
-    AviLogInit()
+	AviLogInit()
 
-    // set up signals so we handle the first shutdown signal gracefully
-    stopCh := SetupSignalHandler()
+	// set up signals so we handle the first shutdown signal gracefully
+	stopCh := SetupSignalHandler()
+	kubeCluster := false
+	// Check if we are running inside kubernetes. Hence try authenticating with service token
+	cfg, err := rest.InClusterConfig()
+	if err != nil {
 
-    cfg, err := clientcmd.BuildConfigFromFlags(masterURL, kubeconfig)
-    if err != nil {
-        AviLog.Error.Fatalf("Error building kubeconfig: %s", err.Error())
-    }
+		AviLog.Warning.Printf("We are not running inside kubernetes cluster. %s", err.Error())
 
-    kubeClient, err := kubernetes.NewForConfig(cfg)
-    if err != nil {
-        AviLog.Error.Fatalf("Error building kubernetes clientset: %s", err.Error())
-    }
+	} else {
 
-    informers := NewInformers(kubeClient)
+		AviLog.Info.Println("We are running inside kubernetes cluster. Won't use kubeconfig files.")
+		kubeCluster = true
 
-    avi_obj_cache := NewAviObjCache()
+	}
 
-    // TODO get API endpoint/username/password from configmap and track configmap
-    // for changes and update rest client
+	if kubeCluster == false {
+		cfg, err = clientcmd.BuildConfigFromFlags(masterURL, kubeconfig)
+		if err != nil {
+			AviLog.Error.Fatalf("Error building kubeconfig: %s", err.Error())
+		}
+	}
 
-    avi_rest_client_pool, err := NewAviRestClientPool(NumWorkers,
-                "10.70.119.34:9443", "admin", "avi123$%")
+	kubeClient, err := kubernetes.NewForConfig(cfg)
+	if err != nil {
+		AviLog.Error.Fatalf("Error building kubernetes clientset: %s", err.Error())
+	}
 
-    k8s_ep := NewK8sEp(avi_obj_cache, avi_rest_client_pool, informers)
-    k8s_svc := NewK8sSvc(avi_obj_cache, avi_rest_client_pool, informers, k8s_ep)
+	informers := NewInformers(kubeClient)
 
-    c := NewAviController(NumWorkers, informers, kubeClient, k8s_ep, k8s_svc)
+	avi_obj_cache := NewAviObjCache()
 
-    c.Start(stopCh)
+	// TODO get API endpoint/username/password from configmap and track configmap
+	// for changes and update rest client
 
-    c.Run(stopCh)
+	avi_rest_client_pool, err := NewAviRestClientPool(NumWorkers,
+		"10.70.119.34:9443", "admin", "avi123$%")
+
+	k8s_ep := NewK8sEp(avi_obj_cache, avi_rest_client_pool, informers)
+	k8s_svc := NewK8sSvc(avi_obj_cache, avi_rest_client_pool, informers, k8s_ep)
+
+	c := NewAviController(NumWorkers, informers, kubeClient, k8s_ep, k8s_svc)
+
+	c.Start(stopCh)
+
+	c.Run(stopCh)
 }
 
 func init() {
-    def_kube_config := os.Getenv("HOME") + "/.kube/config"
-    flag.StringVar(&kubeconfig, "kubeconfig", def_kube_config, "Path to a kubeconfig. Only required if out-of-cluster.")
-    flag.StringVar(&masterURL, "master", "", "The address of the Kubernetes API server. Overrides any value in kubeconfig. Only required if out-of-cluster.")
+	def_kube_config := os.Getenv("HOME") + "/.kube/config"
+	flag.StringVar(&kubeconfig, "kubeconfig", def_kube_config, "Path to a kubeconfig. Only required if out-of-cluster.")
+	flag.StringVar(&masterURL, "master", "", "The address of the Kubernetes API server. Overrides any value in kubeconfig. Only required if out-of-cluster.")
 }
