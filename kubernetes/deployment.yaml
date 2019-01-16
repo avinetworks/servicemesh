@@ -18,3 +18,19 @@ spec:
       - name: avi-controller
         image: avi_k8s_controller_go:latest
         imagePullPolicy: IfNotPresent
+        env:
+        - name: CTRL_USERNAME
+          valueFrom:
+            secretKeyRef:
+              name: avi-secret
+              key: username
+        - name: CTRL_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: avi-secret
+              key: password
+        - name: CTRL_IPADDRESS
+          valueFrom:
+            secretKeyRef:
+              name: avi-secret
+              key: controller_ip
