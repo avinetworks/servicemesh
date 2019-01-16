@@ -93,8 +93,14 @@ func main() {
 	// TODO get API endpoint/username/password from configmap and track configmap
 	// for changes and update rest client
 
+	ctrlUsername := os.Getenv("CTRL_USERNAME")
+	ctrlPassword := os.Getenv("CTRL_PASSWORD")
+	ctrlIpAddress := os.Getenv("CTRL_IPADDRESS")
+	if ctrlUsername == "" || ctrlPassword == "" || ctrlIpAddress == "" {
+		AviLog.Error.Panic("AVI controller information missing. Update them in kubernetes secret or via environment variables.")
+	}
 	avi_rest_client_pool, err := NewAviRestClientPool(NumWorkers,
-		"10.70.119.34:9443", "admin", "avi123$%")
+		ctrlIpAddress, ctrlUsername, ctrlPassword)
 
 	k8s_ep := NewK8sEp(avi_obj_cache, avi_rest_client_pool, informers)
 	k8s_svc := NewK8sSvc(avi_obj_cache, avi_rest_client_pool, informers, k8s_ep)
