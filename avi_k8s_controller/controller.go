@@ -64,28 +64,6 @@ func Bkt(key string, num_workers uint32) uint32 {
     return bkt
 }
 
-func CrudHashKey(obj_type string, obj interface{}) (string, error) {
-    var ns, name string
-    switch obj_type {
-        case "Endpoints":
-            ep := obj.(*corev1.Endpoints)
-            ns = ep.Namespace
-            name = ep.Name
-        case "Service":
-            svc := obj.(*corev1.Service)
-            ns = svc.Namespace
-            name = svc.Name
-        case "Ingress":
-            ing := obj.(*extensions.Ingress)
-            ns = ing.Namespace
-            name = ing.Name
-        default:
-            AviLog.Error.Printf("Unknown obj_type %s obj %v", obj_type, obj)
-            return "", errors.New(fmt.Sprintf("Unknown obj_type %s", obj_type))
-        }
-        return ns + "/" + name, nil
-}
-
 func NewInformers(cs *kubernetes.Clientset) *Informers {
     kubeInformerFactory := kubeinformers.NewSharedInformerFactory(cs, time.Second*30)
     informers := Informers{
@@ -121,7 +99,7 @@ func NewAviController(num_workers uint32, inf *Informers, cs *kubernetes.Clients
     ep_event_handler := cache.ResourceEventHandlerFuncs{
         AddFunc: func(obj interface{}) {
             ep := obj.(*corev1.Endpoints)
-            key := "Endpoints/" + ObjKey(ep)
+            key := "Endpoints/" + CrudHashKey("Endpoints", ep) + "/" + ObjKey(ep)
             bkt := Bkt(key, num_workers)
             c.workqueue[bkt].AddRateLimited(key)
         },
@@ -141,7 +119,7 @@ func NewAviController(num_workers uint32, inf *Informers, cs *kubernetes.Clients
                 }
             }
             ep = obj.(*corev1.Endpoints)
-            key := "Endpoints/" + ObjKey(ep)
+            key := "Endpoints/" + CrudHashKey("Endpoints", ep) + "/" + ObjKey(ep)
             bkt := Bkt(key, num_workers)
             c.workqueue[bkt].AddRateLimited(key)
         },
@@ -149,7 +127,7 @@ func NewAviController(num_workers uint32, inf *Informers, cs *kubernetes.Clients
             oep := old.(*corev1.Endpoints)
             cep := cur.(*corev1.Endpoints)
             if !reflect.DeepEqual(cep.Subsets, oep.Subsets) {
-                key := "Endpoints/" + ObjKey(cep)
+                key := "Endpoints/" + CrudHashKey("Endpoints", cep) + "/" + ObjKey(cep)
                 bkt := Bkt(key, num_workers)
                 c.workqueue[bkt].AddRateLimited(key)
             }
@@ -159,7 +137,7 @@ func NewAviController(num_workers uint32, inf *Informers, cs *kubernetes.Clients
     svc_event_handler := cache.ResourceEventHandlerFuncs{
         AddFunc: func(obj interface{}) {
             svc := obj.(*corev1.Service)
-            key := "Service/" + ObjKey(svc)
+            key := "Service/" + CrudHashKey("Service", svc) + "/" + ObjKey(svc)
             bkt := Bkt(key, num_workers)
             c.workqueue[bkt].AddRateLimited(key)
         },
@@ -179,14 +157,14 @@ func NewAviController(num_workers uint32, inf *Informers, cs *kubernetes.Clients
                 }
             }
             svc = obj.(*corev1.Service)
-            key := "Service/" + ObjKey(svc)
+            key := "Service/" + CrudHashKey("Service", svc) + "/" + ObjKey(svc)
             bkt := Bkt(key, num_workers)
             c.workqueue[bkt].AddRateLimited(key)
         },
         UpdateFunc: func(old, cur interface{}) {
             // TODO Check if anything has changed here ?
             svc := cur.(*corev1.Service)
-            key := "Service/" + ObjKey(svc)
+            key := "Service/" + CrudHashKey("Service", svc) + "/" + ObjKey(svc)
             bkt := Bkt(key, num_workers)
             c.workqueue[bkt].AddRateLimited(key)
         },
@@ -195,7 +173,7 @@ func NewAviController(num_workers uint32, inf *Informers, cs *kubernetes.Clients
     ing_event_handler := cache.ResourceEventHandlerFuncs{
         AddFunc: func(obj interface{}) {
             ing := obj.(*extensions.Ingress)
-            key := "Ingress/" + ObjKey(ing)
+            key := "Ingress/" + CrudHashKey("Ingress", ing) + "/" + ObjKey(ing)
             bkt := Bkt(key, num_workers)
             c.workqueue[bkt].AddRateLimited(key)
         },
@@ -215,14 +193,14 @@ func NewAviController(num_workers uint32, inf *Informers, cs *kubernetes.Clients
                 }
             }
             ing = obj.(*extensions.Ingress)
-            key := "Ingress/" + ObjKey(ing)
+            key := "Ingress/" + CrudHashKey("Ingress", ing) + "/" + ObjKey(ing)
             bkt := Bkt(key, num_workers)
             c.workqueue[bkt].AddRateLimited(key)
         },
         UpdateFunc: func(old, cur interface{}) {
             // TODO Check if anything has changed here ?
             ing := cur.(*extensions.Ingress)
-            key := "Ingress/" + ObjKey(ing)
+            key := "Ingress/" + CrudHashKey("Ingress", ing) + "/" + ObjKey(ing)
             bkt := Bkt(key, num_workers)
             c.workqueue[bkt].AddRateLimited(key)
         },
@@ -357,13 +335,13 @@ func (c *AviController) processNextWorkItem(worker_id uint32) bool {
 // converge the two. It then updates the Status block of the Foo resource
 // with the current status of the resource.
 func (c *AviController) syncHandler(key string, worker_id uint32) error {
-    obj_type_ns := strings.SplitN(key, "/", 2)
-	if len(obj_type_ns) != 2 {
+    obj_type_ns := strings.SplitN(key, "/", 3)
+	if len(obj_type_ns) != 3 {
         runtime.HandleError(fmt.Errorf("invalid resource key: %s", key))
         return nil
 	}
 	// Convert the namespace/name string into a distinct namespace and name
-	namespace, name, err := cache.SplitMetaNamespaceKey(obj_type_ns[1])
+	namespace, name, err := cache.SplitMetaNamespaceKey(obj_type_ns[2])
 	if err != nil {
         runtime.HandleError(fmt.Errorf("invalid resource key: %s", key))
         return nil
@@ -387,6 +365,7 @@ func (c *AviController) syncHandler(key string, worker_id uint32) error {
         // The Obj may no longer exist, in which case we process deletion
         if k8s_errors.IsNotFound(err) {
             runtime.HandleError(fmt.Errorf("obj '%s' in work queue no longer exists", key))
+            AviLog.Info.Printf("Obj key NotFound %v obj type %T value %v", key, obj, obj)
             evt = DeleteEv
         } else {
             return err
@@ -395,24 +374,18 @@ func (c *AviController) syncHandler(key string, worker_id uint32) error {
         evt = UpdateEv
     }
 
-    var k string
-    k, err = CrudHashKey(obj_type_ns[0], obj)
-    if err != nil {
-        AviLog.Error.Printf("Unable to hash obj_type %s obj %v", obj_type_ns[0],
-                obj)
-        return err
-    }
     if obj_type_ns[0] == "Endpoints" {
         if evt == UpdateEv {
-            _, err = c.k8s_ep.K8sObjCrUpd(worker_id, obj.(*corev1.Endpoints), "", k)
+            _, err = c.k8s_ep.K8sObjCrUpd(worker_id, obj.(*corev1.Endpoints),
+                        "", obj_type_ns[1])
         } else {
-            _, err = c.k8s_ep.K8sObjDelete(worker_id, obj.(*corev1.Endpoints))
+            _, err = c.k8s_ep.K8sObjDelete(worker_id, key)
         }
     } else if obj_type_ns[0] == "Service" {
         if evt == UpdateEv {
             _, err = c.k8s_svc.K8sObjCrUpd(worker_id, obj.(*corev1.Service))
         } else {
-            _, err = c.k8s_svc.K8sObjDelete(worker_id, obj.(*corev1.Service))
+            _, err = c.k8s_svc.K8sObjDelete(worker_id, key)
         }
     }
 

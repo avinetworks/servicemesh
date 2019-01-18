@@ -19,6 +19,8 @@ import (
         "net/url"
         "strings"
         "errors"
+        corev1 "k8s.io/api/core/v1"
+        extensions "k8s.io/api/extensions/v1beta1"
        )
 
 func IsV4(addr string) bool {
@@ -106,4 +108,33 @@ func RestRespArrToObjByType(rest_op *RestOp, obj_type string) ([]map[string]inte
     }
 
     return resp_elems, nil
+}
+
+/*
+ * Hash key to pick workqueue & GoRoutine. Hash needs to ensure that K8S
+ * objects that map to the same Avi objects hash to the same wq. E.g.
+ * Routes that share the same "host" should hash to the same wq, so "host"
+ * is the hash key for Routes. For objects like Service, it can be ns:name
+ */
+
+func CrudHashKey(obj_type string, obj interface{}) string {
+    var ns, name string
+    switch obj_type {
+        case "Endpoints":
+            ep := obj.(*corev1.Endpoints)
+            ns = ep.Namespace
+            name = ep.Name
+        case "Service":
+            svc := obj.(*corev1.Service)
+            ns = svc.Namespace
+            name = svc.Name
+        case "Ingress":
+            ing := obj.(*extensions.Ingress)
+            ns = ing.Namespace
+            name = ing.Name
+        default:
+            AviLog.Error.Printf("Unknown obj_type %s obj %v", obj_type, obj)
+            return ":"
+        }
+        return ns + ":" + name
 }
