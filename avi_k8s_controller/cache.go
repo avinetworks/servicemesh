@@ -74,18 +74,18 @@ func NewAviMultiCache() *AviMultiCache {
     return &c
 }
 
-func (c *AviMultiCache) AviMultiCacheGetKey(k interface{}) (*map[interface{}]bool, bool) {
+func (c *AviMultiCache) AviMultiCacheGetKey(k interface{}) (map[interface{}]bool, bool) {
     c.cache_lock.RLock()
     defer c.cache_lock.RUnlock()
     val, ok := c.cache[k]
-    return &val, ok
+    return val, ok
 }
 
 func (c *AviMultiCache) AviMultiCacheLookup(k interface{}, lval interface{}) bool {
     c.cache_lock.RLock()
     defer c.cache_lock.RUnlock()
     val, ok := c.cache[k]
-    if ok != true {
+    if !ok {
         return ok
     } else {
         _, ok := val[lval]
@@ -97,7 +97,7 @@ func (c *AviMultiCache) AviMultiCacheAdd(k interface{}, val interface{}) {
     c.cache_lock.Lock()
     defer c.cache_lock.Unlock()
     l1val, ok := c.cache[k]
-    if ok == true {
+    if ok {
         l1val[val] = true
     } else {
         c.cache[k] = make(map[interface{}]bool)
@@ -109,7 +109,7 @@ func (c *AviMultiCache) AviMultiCacheDeleteVal(k interface{}, dval interface{}) 
     c.cache_lock.Lock()
     defer c.cache_lock.Unlock()
     l1val, ok := c.cache[k]
-    if ok == true {
+    if ok {
         delete(l1val, dval)
         if len(l1val) == 0 {
             delete(c.cache, k)

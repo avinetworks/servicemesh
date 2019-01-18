@@ -118,6 +118,14 @@ type AviPortStrProtocol struct {
     Protocol string
 }
 
+type AviHostPathPortPoolPG struct {
+    Host string
+    Path string
+    Port uint32
+    Pool string
+    PoolGroup string
+}
+
 type K8sAviVsMeta struct {
     Name string
     Tenant string
@@ -125,7 +133,7 @@ type K8sAviVsMeta struct {
     ApplicationProfile string
     NetworkProfile string
     PortProto []AviPortProtocol // for listeners
-    PortStrProto []AviPortStrProtocol // for mapping listener to Pools
+    PoolMap map[AviPortProtocol]string // for mapping listener to Pools
     DefaultPool string
     EastWest bool
     CloudConfigCksum string
@@ -150,4 +158,11 @@ type AviVsCache struct {
     Uuid string
     ServiceMetadata ServiceMetadataObj
     CloudConfigCksum string
+}
+
+type AviHttpPolicySetMeta struct {
+    Name string
+    Tenant string
+    CloudConfigCksum string
+    HppMap []AviHostPathPortPoolPG
 }

@@ -74,40 +74,50 @@ func (p *K8sEp) K8sObjCrUpd(shard uint32, ep *corev1.Endpoints,
     port_protocols := make(map[AviPortStrProtocol]bool)
     svc, err := p.informers.ServiceInformer.Lister().Services(ep.Namespace).Get(ep.Name)
     if err != nil {
-        AviLog.Warning.Printf("Service for Endpoint Namespace %v Name %v doesn't exist",
-                   ep.Namespace, ep.Name)
+        AviLog.Warning.Printf(`Service for Endpoint Namespace %v Name %v 
+            doesn't exist`, ep.Namespace, ep.Name)
         return nil, nil
     }
 
     tenant := ep.Namespace
     for _, ss := range ep.Subsets {
         if len(ss.Addresses) > 0 {
+            /*
+             * If name is present in EndpointPort, try to match with name in
+             * ServicePort and return corresponding targetPort. If name is
+             * absent, there's just a single port. Return that targetPort
+             */
             for _, ep_port := range ss.Ports {
-                /*
-                 * Use the value in TargetPort field of Service. It can be the
-                 * port name or value
-                 */
-                tgt_port := func(svc *corev1.Service, port int32, name string) string {
-                        for _, pp := range(svc.Spec.Ports) {
-                            if pp.Port == port {
-                                return strconv.Itoa(int(port))
-                            } else if  pp.Name == name {
-                                return name
+                var tgt_port string
+                if ep_port.Name != "" {
+                    tgt_port = func(svc *corev1.Service, name string) string {
+                            for _, pp := range(svc.Spec.Ports) {
+                                if  pp.Name == name {
+                                    return pp.TargetPort.String()
+                                }
                             }
-                        }
-                        AviLog.Warning.Printf("Matching port %v name %v not found in Svc namespace %s name %s",
-                                   port, name, svc.Namespace, svc.Name)
-                        return ""
-                    }(svc, ep_port.Port, ep_port.Name)
+                            AviLog.Warning.Printf(`Matching name %v not found 
+                                in Svc namespace %s name %s Ports %v`, name,
+                                svc.Namespace, svc.Name, svc.Spec.Ports)
+                            return ""
+                        }(svc, ep_port.Name)
 
-                if tgt_port == "" {
-                    AviLog.Warning.Printf("Matching port %v name %v not found in Svc",
-                                   ep_port.Port, ep_port.Name)
-                    return nil, nil
+                    if tgt_port == "" {
+                        AviLog.Warning.Printf(`Matching port %v name %v not 
+                                found in Svc`, ep_port.Port, ep_port.Name)
+                        return nil, nil
+                    }
+                } else {
+                    tgt_port = svc.Spec.Ports[0].TargetPort.String()
                 }
 
-                pp := AviPortStrProtocol{Port: tgt_port,
-                        Protocol: strings.ToLower(string(ep_port.Protocol))}
+                var prot string
+                if string(ep_port.Protocol) == "" {
+                    prot = "tcp" // Default
+                } else {
+                    prot = strings.ToLower(string(ep_port.Protocol))
+                }
+                pp := AviPortStrProtocol{Port: tgt_port, Protocol: prot}
                 port_protocols[pp] = true
             }
         }
@@ -124,24 +134,35 @@ func (p *K8sEp) K8sObjCrUpd(shard uint32, ep *corev1.Endpoints,
      */
     if name_prefix == "" {
         var pools_cache interface{}
-        var pools *map[string]bool
+        var pools map[interface{}]bool
         var ok bool
         pools_cache, process_pool = p.svc_to_pool_cache.AviMultiCacheGetKey(k)
-        pools, ok = pools_cache.(*map[string]bool)
+        pools, ok = pools_cache.(map[interface{}]bool)
         if process_pool && ok {
-            for pool_name := range *pools {
+            // ppool_name is of the form service/name-pool-http-tcp, ingress/name-pool-http-tcp
+            for ppool_name_intf := range pools {
+                ppool_name, ok := ppool_name_intf.(string)
+                if !ok {
+                    AviLog.Warning.Printf("ppool_name_intf %T not string",
+                                          ppool_name_intf)
+                    continue
+                }
+                elems := strings.Split(ppool_name, "/")
+                pool_name := elems[1]
                 pool_names = append(pool_names, pool_name)
                 var pool_cache interface{}
                 pool_key := NamespaceName{Namespace: tenant, Name: pool_name}
-                pool_cache, ok := p.avi_obj_cache.PoolCache.AviCacheGet(pool_key)
-                if !ok {
-                    AviLog.Warning.Printf("Pool %s not present in Obj cache but present in Pool cache", pool_name)
+                pool_cache, ok1 := p.avi_obj_cache.PoolCache.AviCacheGet(pool_key)
+                if !ok1 {
+                    AviLog.Warning.Printf(`Pool %s not present in Obj cache but
+                                           present in Pool cache`, pool_name)
                 } else {
                     pool_cache_obj, ok := pool_cache.(*AviPoolCache)
                     if ok {
                         service_metadata = pool_cache_obj.ServiceMetadata
                     } else {
-                        AviLog.Warning.Printf("Pool %s cache incorrect type", pool_name)
+                        AviLog.Warning.Printf("Pool %s cache incorrect type",
+                                              pool_name)
                         service_metadata = ServiceMetadataObj{}
                     }
                 }
@@ -168,7 +189,7 @@ func (p *K8sEp) K8sObjCrUpd(shard uint32, ep *corev1.Endpoints,
         pool_key := NamespaceName{Namespace: tenant, Name: pool_name}
         pool_cache, ok := p.avi_obj_cache.PoolCache.AviCacheGet(pool_key)
         if !ok {
-            AviLog.Info.Printf("Namespace %s Pool %s not present in Pool cache",
+            AviLog.Warning.Printf("Namespace %s Pool %s not present in Pool cache",
                                tenant, pool_name)
         } else {
             pool_cache_obj, ok := pool_cache.(*AviPoolCache)
@@ -178,9 +199,9 @@ func (p *K8sEp) K8sObjCrUpd(shard uint32, ep *corev1.Endpoints,
                             tenant, pool_name, ep.ResourceVersion)
                     continue
                 } else {
-                    AviLog.Info.Printf("Pool namespace %s name %s has diff cksum %s resourceVersion %s",
-                            tenant, pool_name, pool_cache_obj.CloudConfigCksum, 
-                            ep.ResourceVersion)
+                    AviLog.Info.Printf(`Pool namespace %s name %s has diff 
+                            cksum %s resourceVersion %s`, tenant, pool_name,
+                            pool_cache_obj.CloudConfigCksum, ep.ResourceVersion)
                 }
             } else {
                 AviLog.Warning.Printf("Pool %s cache incorrect type", pool_name)
@@ -200,7 +221,8 @@ func (p *K8sEp) K8sObjCrUpd(shard uint32, ep *corev1.Endpoints,
             var epp_port int32
             port_match := false
             for _, epp := range ss.Ports {
-                if ((int32(port_num) == epp.Port) || (port == epp.Name)) && (protocol == strings.ToLower(string(epp.Protocol))) {
+                if ((int32(port_num) == epp.Port) || (port == epp.Name)) &&
+                    (protocol == strings.ToLower(string(epp.Protocol))) {
                     port_match = true
                     epp_port = epp.Port
                     break
@@ -245,4 +267,21 @@ func (p *K8sEp) K8sObjCrUpd(shard uint32, ep *corev1.Endpoints,
 
 func (p *K8sEp) K8sObjDelete(shard uint32, ep *corev1.Endpoints) ([]*RestOp, error) {
     return nil, nil
+}
+
+func (p *K8sEp) K8sEpSvcToPoolCacheAdd(key NamespaceName,
+                prefix string, rest_op *RestOp) error {
+    err := AviSvcToPoolCacheAdd(p.svc_to_pool_cache, rest_op, prefix, key)
+
+    return err
+}
+
+func (p *K8sEp) K8sEpSvcToPoolCacheGet(key NamespaceName) (map[interface{}]bool, bool) {
+    return p.svc_to_pool_cache.AviMultiCacheGetKey(key)
+}
+
+func (p *K8sEp) K8sEpSvcToPoolCacheDel(key NamespaceName, prefix string) error {
+    err := AviSvcToPoolCacheDel(p.svc_to_pool_cache, prefix, key)
+
+    return err
 }
