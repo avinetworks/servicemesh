@@ -16,7 +16,9 @@ package main
 
 import (
         "net"
+        "net/url"
         "strings"
+        "errors"
        )
 
 func IsV4(addr string) bool {
@@ -60,4 +62,48 @@ func SvcMdataMapToObj(svc_mdata_map *map[string]interface{}, svc_mdata *ServiceM
             }
         }
     }
+}
+
+func AviUrlToObjType(aviurl string) (string, error) {
+    url, err := url.Parse(aviurl)
+    if err != nil {
+        AviLog.Warning.Print("aviurl %v parse error", aviurl)
+        return "", err
+    }
+
+    path := url.EscapedPath()
+
+    elems := strings.Split(path, "/")
+    return elems[2], nil
+}
+
+func RestRespArrToObjByType(rest_op *RestOp, obj_type string) ([]map[string]interface{}, error) {
+    var resp_elems []map[string]interface{}
+
+    resp_arr, ok := rest_op.Response.([]interface{})
+    if !ok {
+        AviLog.Warning.Printf("Response has unknown type %T", rest_op.Response)
+        return nil, errors.New("Malformed response")
+    }
+
+    for _, resp_elem := range resp_arr {
+        resp, ok := resp_elem.(map[string]interface{})
+        if !ok {
+            AviLog.Warning.Printf("Response has unknown type %T", resp_elem)
+            continue
+        }
+
+        avi_url, ok := resp["url"].(string)
+        if !ok {
+            AviLog.Warning.Printf("url not present in response %v", resp)
+            continue
+        }
+
+        avi_obj_type, err := AviUrlToObjType(avi_url)
+        if err == nil && avi_obj_type == obj_type {
+            resp_elems = append(resp_elems, resp)
+        }
+    }
+
+    return resp_elems, nil
 }

@@ -19,6 +19,7 @@ import (
         "errors"
         "github.com/avinetworks/sdk/go/session"
         "github.com/avinetworks/sdk/go/clients"
+        "github.com/davecgh/go-spew/spew"
     )
 
 type AviRestClientPool struct {
@@ -66,8 +67,8 @@ func (p *AviRestClientPool) AviRestOperate(c *clients.AviClient, rest_ops []*Res
             op.Err = fmt.Errorf("Unknown RestOp %v", op.Method)
         }
         if op.Err != nil {
-            AviLog.Warning.Printf("RestOp method %v path %v tenant %v returned err %v",
-                       op.Method, op.Path, op.Tenant, op.Err)
+            AviLog.Warning.Printf("RestOp method %v path %v tenant %v Obj %s returned err %v",
+                       op.Method, op.Path, op.Tenant, spew.Sprint(op.Obj), op.Err)
             for j := i+1; j < len(rest_ops); j++ {
                 rest_ops[j].Err = errors.New("Aborted due to prev error")
             }

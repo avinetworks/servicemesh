@@ -87,22 +87,35 @@ func (s *K8sSvc) K8sObjCrUpd(shard uint32, svc *corev1.Service) ([]*RestOp, erro
         CloudConfigCksum: svc.ResourceVersion, ServiceMetadata: svc_mdata,
         EastWest: true}
 
-    is_http := true
-    is_tcp := false
-    for _, svc_port := range svc.Spec.Ports {
-        // Listener is based on Port
-        pp := AviPortProtocol{Port: svc_port.Port, 
-                Protocol: strings.ToLower(string(svc_port.Protocol))}
-        avi_vs_meta.PortProto = append(avi_vs_meta.PortProto, pp)
+    if len(svc.Spec.Ports) > 1 {
+        avi_vs_meta.PoolMap = make(map[AviPortProtocol]string)
+    }
 
-        if pp.Protocol == "tcp" {
-            is_tcp = true
+    is_http := true
+    is_udp := true
+    for _, svc_port := range svc.Spec.Ports {
+        var prot string
+        if string(svc_port.Protocol) == "" {
+            prot = "tcp" // Default
+        } else {
+            prot = strings.ToLower(string(svc_port.Protocol))
         }
 
-        // Switching policy is based on TargetPort
-        psp := AviPortStrProtocol{Port: svc_port.TargetPort.String(),
-                          Protocol: string(svc_port.Protocol)}
-        avi_vs_meta.PortStrProto = append(avi_vs_meta.PortStrProto, psp)
+        // Listener is based on Port
+        pp := AviPortProtocol{Port: svc_port.Port, Protocol: prot}
+        avi_vs_meta.PortProto = append(avi_vs_meta.PortProto, pp)
+
+        if prot != "tcp" {
+            is_http = false
+        } else {
+            is_udp = false
+        }
+
+        if len(svc.Spec.Ports) > 1 {
+            pool_name := fmt.Sprintf("%s-pool-%v-%s", svc.Name,
+                svc_port.TargetPort.String(), prot)
+            avi_vs_meta.PoolMap[pp] = pool_name
+        }
 
         if IsSvcHttp(svc_port.Name, svc_port.Port) == false {
             is_http = false
@@ -136,14 +149,14 @@ func (s *K8sSvc) K8sObjCrUpd(shard uint32, svc *corev1.Service) ([]*RestOp, erro
         avi_vs_meta.ApplicationProfile = "System-L4-Application"
     }
 
-    if is_tcp {
-        avi_vs_meta.NetworkProfile = "System-TCP-Proxy"
+    if is_udp {
+        avi_vs_meta.NetworkProfile = "System-UDP-Fast-Path"
     } else {
-        avi_vs_meta.NetworkProfile = "System-UDP-Per-Pkt"
+        avi_vs_meta.NetworkProfile = "System-TCP-Proxy"
     }
 
-    rop := AviVsBuild(&avi_vs_meta)
-    rest_ops = append(rest_ops, rop)
+    rops := AviVsBuild(&avi_vs_meta)
+    rest_ops = append(rest_ops, rops...)
 
     aviClient := s.avi_rest_client_pool.AviClient[shard]
     err = s.avi_rest_client_pool.AviRestOperate(aviClient, rest_ops)
@@ -178,11 +191,13 @@ func (s *K8sSvc) K8sObjCrUpd(shard uint32, svc *corev1.Service) ([]*RestOp, erro
             }
         }
     } else {
-        // Add to local obj cache
+        // Add to local obj caches
         for _, rest_op := range(rest_ops) {
             if rest_op.Err == nil {
                 if rest_op.Model == "Pool" {
                     AviPoolCacheAdd(s.avi_obj_cache.PoolCache, rest_op)
+                    s.k8s_ep.K8sEpSvcToPoolCacheAdd(vs_cache_key, "service",
+                                                    rest_op)
                 } else if rest_op.Model == "VirtualService" {
                     AviVsCacheAdd(s.avi_obj_cache.VsCache, rest_op)
                 }
@@ -209,18 +224,53 @@ func (s *K8sSvc) K8sObjDelete(shard uint32, svc *corev1.Service) ([]*RestOp, err
         AviLog.Info.Printf("Tenant %s name %s VS %v", svc.Namespace, svc.Name, obj)
     }
 
-
     payload := AviRestObjMacro{ModelName: "VirtualService", Data: obj}
     path := fmt.Sprintf("/api/macro/?created_by=%s", OSHIFT_K8S_CLOUD_CONNECTOR)
 
     _, rerror := aviClient.AviSession.DeleteRaw(path, payload)
     if rerror != nil {
-        AviLog.Warning.Printf("VS tenant %s name %s delete returned %v", svc.Namespace, 
-                   svc.Name, rerror)
+        AviLog.Warning.Printf("VS tenant %s name %s delete returned %v", 
+                              svc.Namespace, svc.Name, rerror)
     } else {
         AviLog.Info.Printf("VS tenant %s name %s delete success", svc.Namespace,
                    svc.Name)
     }
+
+    // Delete all service related objs in Avi cache
+
+    cache_key := NamespaceName{Namespace: svc.Namespace, Name: svc.Name}
+
+    /*
+     * ppool_map is of the form:
+     * [service/name-pool-http-tcp] = true
+     * [ingress/name-pool-http-tcp] = true
+     */
+    ppool_map, ok := s.k8s_ep.K8sEpSvcToPoolCacheGet(cache_key)
+    if !ok {
+        AviLog.Info.Printf("Key %v not found in SvcToPoolCache", cache_key)
+    } else {
+        for ppool_name_intf := range ppool_map {
+            ppool_name, ok := ppool_name_intf.(string)
+            if !ok {
+                AviLog.Warning.Printf("ppool_name_intf %T is not type string",
+                                  ppool_name_intf)
+                continue
+            }
+            elems := strings.Split(ppool_name, "/")
+            if elems[0] == "service" {
+                // PoolCache key is of the form {ns, pool_name}
+                pcache_key := NamespaceName{Namespace: svc.Namespace, Name: elems[1]}
+                AviLog.Info.Printf("Delete pool %v in PoolCache", pcache_key)
+                AviPoolCacheDel(s.avi_obj_cache.PoolCache, pcache_key)
+            }
+        }
+    }
+
+    AviLog.Info.Printf("Delete key %v service in SvcToPoolCache", cache_key)
+    s.k8s_ep.K8sEpSvcToPoolCacheDel(cache_key, "service")
+
+    AviLog.Info.Printf("Delete VS %v in VsCache", cache_key)
+    AviVsCacheDel(s.avi_obj_cache.VsCache, cache_key)
 
     return nil, nil
 }

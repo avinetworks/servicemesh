@@ -22,7 +22,7 @@ import (
         avimodels "github.com/avinetworks/sdk/go/models"
        )
 
-func AviVsBuild(vs_meta *K8sAviVsMeta) *RestOp {
+func AviVsBuild(vs_meta *K8sAviVsMeta) []*RestOp {
     auto_alloc := true
     vip := avimodels.Vip{AutoAllocateIP: &auto_alloc}
 
@@ -43,8 +43,6 @@ func AviVsBuild(vs_meta *K8sAviVsMeta) *RestOp {
     network_prof := "/api/networkprofile/?name=" + vs_meta.NetworkProfile
     app_prof := "/api/applicationprofile/?name=" + vs_meta.ApplicationProfile
     // TODO use PoolGroup and use policies if there are > 1 pool, etc.
-    pool_ref := "/api/pool/?name=" + vs_meta.DefaultPool
-
     name := vs_meta.Name
     cksum := vs_meta.CloudConfigCksum
     cr := OSHIFT_K8S_CLOUD_CONNECTOR
@@ -52,10 +50,14 @@ func AviVsBuild(vs_meta *K8sAviVsMeta) *RestOp {
     vs := avimodels.VirtualService{Name: &name,
           NetworkProfileRef: &network_prof,
           ApplicationProfileRef: &app_prof,
-          PoolRef: &pool_ref,
           CloudConfigCksum: &cksum,
           CreatedBy: &cr,
           EastWestPlacement: &east_west}
+
+    if vs_meta.DefaultPool != "" {
+        pool_ref := "/api/pool/?name=" + vs_meta.DefaultPool
+        vs.PoolRef = &pool_ref
+    }
 
     vs.Vip = append(vs.Vip, &vip)
 
@@ -70,7 +72,45 @@ func AviVsBuild(vs_meta *K8sAviVsMeta) *RestOp {
     for _, pp := range vs_meta.PortProto {
         port := pp.Port
         svc := avimodels.Service{Port: &port}
+        if pp.Protocol == "tcp" && vs_meta.NetworkProfile == "System-UDP-Fast-Path" {
+            onw_profile := "/api/networkprofile/?name=System-TCP-Proxy"
+            svc.OverrideNetworkProfileRef = &onw_profile
+        } else if pp.Protocol == "udp" && vs_meta.NetworkProfile == "System-TCP-Proxy" {
+            onw_profile := "/api/networkprofile/?name=System-UDP-Fast-Path"
+            svc.OverrideNetworkProfileRef = &onw_profile
+        }
         vs.Services = append(vs.Services, &svc)
+    }
+
+    var rest_ops []*RestOp
+
+    if len(vs_meta.PortProto) > 1 {
+        if vs_meta.ApplicationProfile == "System-L4-Application" {
+            // TODO Change to PG
+            for pp, pool_name := range vs_meta.PoolMap {
+                pool_ref := "/api/pool/?name=" + pool_name
+                port := pp.Port
+                var sproto string
+                if pp.Protocol == "tcp" {
+                    sproto = "PROTOCOL_TYPE_TCP_PROXY"
+                } else {
+                    sproto = "PROTOCOL_TYPE_UDP_PROXY"
+                }
+                sps := avimodels.ServicePoolSelector{ServicePoolRef: &pool_ref,
+                         ServicePort: &port, ServiceProtocol: &sproto}
+                vs.ServicePoolSelect = append(vs.ServicePoolSelect, &sps)
+            }
+        } else if vs_meta.ApplicationProfile == "System-HTTP" {
+            https_meta := AviHttpPolicySetMeta{Name: fmt.Sprintf("%s-httppolicyset", vs_meta.Name),
+                Tenant: vs_meta.Tenant, CloudConfigCksum: vs_meta.CloudConfigCksum}
+            // TODO Change to PG
+            for pp, pool_name := range vs_meta.PoolMap {
+                hpp_sw := AviHostPathPortPoolPG{Port: uint32(pp.Port), Pool: pool_name}
+                https_meta.HppMap = append(https_meta.HppMap, hpp_sw)
+            }
+            hps_rest_op := AviHttpPSBuild(&https_meta)
+            rest_ops = append(rest_ops, hps_rest_op)
+        }
     }
 
     macro := AviRestObjMacro{ModelName: "VirtualService", Data: vs}
@@ -79,8 +119,11 @@ func AviVsBuild(vs_meta *K8sAviVsMeta) *RestOp {
     rest_op := RestOp{Path: "/api/macro", Method: RestPost, Obj: macro,
         Tenant: vs_meta.Tenant, Model: "VirtualService", Version: "18.1.5"}
 
-    AviLog.Info.Print(spew.Sprintf("VS Restop %v\n", rest_op))
-    return &rest_op
+    rest_ops = append(rest_ops, &rest_op)
+
+    AviLog.Info.Print(spew.Sprintf("VS Restop %v K8sAviVsMeta %v\n", rest_op,
+                                   *vs_meta))
+    return rest_ops
 }
 
 func AviVsCacheAdd(vs_cache *AviCache, rest_op *RestOp) error {
@@ -89,58 +132,61 @@ func AviVsCacheAdd(vs_cache *AviCache, rest_op *RestOp) error {
         return errors.New("Errored rest_op")
     }
 
-    resp_arr, ok := rest_op.Response.([]interface{})
-    if !ok {
-        AviLog.Warning.Printf("Response has unknown type %T", rest_op.Response)
-        return errors.New("Malformed response")
+    resp_elems, ok := RestRespArrToObjByType(rest_op, "virtualservice")
+    if ok != nil || resp_elems == nil {
+        AviLog.Warning.Printf("Unable to find pool obj in resp %v", rest_op.Response)
+        return errors.New("pool not found")
     }
 
-    resp, ok := resp_arr[0].(map[string]interface{})
-    if !ok {
-        AviLog.Warning.Printf("Response has unknown type %T", resp_arr[0])
-        return errors.New("Malformed response")
-    }
-
-    name, ok := resp["name"].(string)
-    if !ok {
-        AviLog.Warning.Printf("Name not present in response %v", resp)
-        return errors.New("Name not present in response")
-    }
-
-    uuid, ok := resp["uuid"].(string)
-    if !ok {
-        AviLog.Warning.Printf("Uuid not present in response %v", resp)
-        return errors.New("Uuid not present in response")
-    }
-
-    cksum := resp["cloud_config_cksum"].(string)
-
-    var svc_mdata interface{}
-    var svc_mdata_map map[string]interface{}
-    var svc_mdata_obj ServiceMetadataObj
-
-    if err := json.Unmarshal([]byte(resp["service_metadata"].(string)), &svc_mdata); err == nil {
-        svc_mdata_map, ok = svc_mdata.(map[string]interface{})
+    for _, resp := range resp_elems {
+        name, ok := resp["name"].(string)
         if !ok {
-            AviLog.Warning.Printf("resp %v svc_mdata %T has invalid service_metadata type", resp, svc_mdata)
-            svc_mdata_obj = ServiceMetadataObj{}
-        } else {
-            SvcMdataMapToObj(&svc_mdata_map, &svc_mdata_obj)
+            AviLog.Warning.Printf("Name not present in response %v", resp)
+            return errors.New("Name not present in response")
         }
-    } else {
-        AviLog.Warning.Printf("resp %v has invalid service_metadata value", resp)
-        svc_mdata_obj = ServiceMetadataObj{}
-    }
 
-    vs_cache_obj := AviVsCache{Name: name, Tenant: rest_op.Tenant,
+        uuid, ok := resp["uuid"].(string)
+        if !ok {
+            AviLog.Warning.Printf("Uuid not present in response %v", resp)
+            return errors.New("Uuid not present in response")
+        }
+
+        cksum := resp["cloud_config_cksum"].(string)
+
+        var svc_mdata interface{}
+        var svc_mdata_map map[string]interface{}
+        var svc_mdata_obj ServiceMetadataObj
+
+        if err := json.Unmarshal([]byte(resp["service_metadata"].(string)),
+                             &svc_mdata); err == nil {
+            svc_mdata_map, ok = svc_mdata.(map[string]interface{})
+            if !ok {
+                AviLog.Warning.Printf(`resp %v svc_mdata %T has invalid 
+                                  service_metadata type`, resp, svc_mdata)
+                svc_mdata_obj = ServiceMetadataObj{}
+            } else {
+                SvcMdataMapToObj(&svc_mdata_map, &svc_mdata_obj)
+            }
+        } else {
+            AviLog.Warning.Printf("resp %v has invalid service_metadata value",
+                                  resp)
+            svc_mdata_obj = ServiceMetadataObj{}
+        }
+
+        vs_cache_obj := AviVsCache{Name: name, Tenant: rest_op.Tenant,
                     Uuid: uuid, CloudConfigCksum: cksum,
                     ServiceMetadata: svc_mdata_obj}
 
-    k := NamespaceName{Namespace: rest_op.Tenant, Name: name}
-    vs_cache.AviCacheAdd(k, &vs_cache_obj)
+        k := NamespaceName{Namespace: rest_op.Tenant, Name: name}
+        vs_cache.AviCacheAdd(k, &vs_cache_obj)
 
-    AviLog.Info.Print(spew.Sprintf("VS cache key %v val %v\n", k, vs_cache_obj))
+        AviLog.Info.Print(spew.Sprintf("Added VS cache key %v val %v\n", k, 
+                                       vs_cache_obj))
+    }
 
     return nil
 }
 
+func AviVsCacheDel(vs_cache *AviCache, key NamespaceName) {
+    vs_cache.AviCacheDelete(key)
+}
