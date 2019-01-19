@@ -265,7 +265,11 @@ func (p *K8sEp) K8sObjCrUpd(shard uint32, ep *corev1.Endpoints,
     }
 }
 
-func (p *K8sEp) K8sObjDelete(shard uint32, ep *corev1.Endpoints) ([]*RestOp, error) {
+/*
+ * key is of the form Service/crud_hash_key/Namespace/Name
+ */
+
+func (p *K8sEp) K8sObjDelete(shard uint32, key string) ([]*RestOp, error) {
     return nil, nil
 }
 

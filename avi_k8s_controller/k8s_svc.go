@@ -17,6 +17,7 @@ package main
 import (
         "strings"
         "fmt"
+        "k8s.io/client-go/tools/cache"
         corev1 "k8s.io/api/core/v1"
         "github.com/avinetworks/sdk/go/session"
         avimodels "github.com/avinetworks/sdk/go/models"
@@ -72,7 +73,7 @@ func (s *K8sSvc) K8sObjCrUpd(shard uint32, svc *corev1.Service) ([]*RestOp, erro
         }
     }
 
-    crud_hash_key := svc.Namespace + ":" + svc.Name
+    crud_hash_key := CrudHashKey("Service", svc)
     svc_mdata := ServiceMetadataObj{CrudHashKey: crud_hash_key}
 
     var rest_ops []*RestOp
@@ -208,20 +209,32 @@ func (s *K8sSvc) K8sObjCrUpd(shard uint32, svc *corev1.Service) ([]*RestOp, erro
     return nil, err
 }
 
-func (s *K8sSvc) K8sObjDelete(shard uint32, svc *corev1.Service) ([]*RestOp, error) {
+/*
+ * key is of the form Service/crud_hash_key/Namespace/Name
+ */
+
+func (s *K8sSvc) K8sObjDelete(shard uint32, key string) ([]*RestOp, error) {
     var obj interface{}
+    var err error
+    var ns, name string
+
+    key_elems := strings.SplitN(key, "/", 3)
+
+    ns, name, err = cache.SplitMetaNamespaceKey(key_elems[2])
+    if err != nil {
+        AviLog.Warning.Printf("Unable to extract ns name from key %v", key)
+        return nil, err
+    }
 
     aviClient := s.avi_rest_client_pool.AviClient[shard]
-    SetTenant := session.SetTenant(svc.Namespace)
-    err := SetTenant(aviClient.AviSession)
-    err = aviClient.AviSession.GetObjectByName("virtualservice",
-                                        svc.Name, &obj)
+    SetTenant := session.SetTenant(ns)
+    err = SetTenant(aviClient.AviSession)
+    err = aviClient.AviSession.GetObjectByName("virtualservice", name, &obj)
     if err != nil {
-        AviLog.Warning.Printf("Unable to retrieve VS tenant %s name %s", svc.Namespace,
-                   svc.Name)
-        return nil, nil
+        AviLog.Warning.Printf("Unable to retrieve VS tenant %s name %s", ns, name)
+        return nil, err
     } else {
-        AviLog.Info.Printf("Tenant %s name %s VS %v", svc.Namespace, svc.Name, obj)
+        AviLog.Info.Printf("Tenant %s name %s VS %v", ns, name, obj)
     }
 
     payload := AviRestObjMacro{ModelName: "VirtualService", Data: obj}
@@ -229,16 +242,15 @@ func (s *K8sSvc) K8sObjDelete(shard uint32, svc *corev1.Service) ([]*RestOp, err
 
     _, rerror := aviClient.AviSession.DeleteRaw(path, payload)
     if rerror != nil {
-        AviLog.Warning.Printf("VS tenant %s name %s delete returned %v", 
-                              svc.Namespace, svc.Name, rerror)
+        AviLog.Warning.Printf("VS tenant %s name %s delete returned %v",
+                              ns, name, rerror)
     } else {
-        AviLog.Info.Printf("VS tenant %s name %s delete success", svc.Namespace,
-                   svc.Name)
+        AviLog.Info.Printf("VS tenant %s name %s delete success", ns, name)
     }
 
     // Delete all service related objs in Avi cache
 
-    cache_key := NamespaceName{Namespace: svc.Namespace, Name: svc.Name}
+    cache_key := NamespaceName{Namespace: ns, Name: name}
 
     /*
      * ppool_map is of the form:
@@ -259,7 +271,7 @@ func (s *K8sSvc) K8sObjDelete(shard uint32, svc *corev1.Service) ([]*RestOp, err
             elems := strings.Split(ppool_name, "/")
             if elems[0] == "service" {
                 // PoolCache key is of the form {ns, pool_name}
-                pcache_key := NamespaceName{Namespace: svc.Namespace, Name: elems[1]}
+                pcache_key := NamespaceName{Namespace: ns, Name: elems[1]}
                 AviLog.Info.Printf("Delete pool %v in PoolCache", pcache_key)
                 AviPoolCacheDel(s.avi_obj_cache.PoolCache, pcache_key)
             }
