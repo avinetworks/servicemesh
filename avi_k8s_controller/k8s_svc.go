@@ -59,13 +59,14 @@ func (s *K8sSvc) K8sObjCrUpd(shard uint32, svc *corev1.Service) ([]*RestOp, erro
         vs_cache_obj, ok := vs_cache.(*AviVsCache)
         if ok {
             if vs_cache_obj.CloudConfigCksum == svc.ResourceVersion {
-                AviLog.Info.Printf("Svc namespace %s name %s has same resourceversion %s",
-                        svc.Namespace, svc.Name, svc.ResourceVersion)
+                AviLog.Info.Printf(`Svc namespace %s name %s has same 
+                    resourceversion %s`, svc.Namespace, svc.Name, 
+                    svc.ResourceVersion)
                 return nil, nil
             } else {
-                AviLog.Info.Printf("Svc namespace %s name %s resourceversion %s different from cksum %s",
-                        svc.Namespace, svc.Name, svc.ResourceVersion, 
-                        vs_cache_obj.CloudConfigCksum)
+                AviLog.Info.Printf(`Svc namespace %s name %s resourceversion 
+                        %s different from cksum %s`, svc.Namespace, svc.Name, 
+                        svc.ResourceVersion, vs_cache_obj.CloudConfigCksum)
             }
         } else {
             AviLog.Info.Printf("Svc namespace %s name %s not found in cache",
@@ -240,7 +241,7 @@ func (s *K8sSvc) K8sObjDelete(shard uint32, key string) ([]*RestOp, error) {
     payload := AviRestObjMacro{ModelName: "VirtualService", Data: obj}
     path := fmt.Sprintf("/api/macro/?created_by=%s", OSHIFT_K8S_CLOUD_CONNECTOR)
 
-    _, rerror := aviClient.AviSession.DeleteRaw(path, payload)
+    rerror := aviClient.AviSession.Delete(path, payload)
     if rerror != nil {
         AviLog.Warning.Printf("VS tenant %s name %s delete returned %v",
                               ns, name, rerror)
