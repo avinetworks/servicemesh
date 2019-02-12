@@ -20,6 +20,7 @@ import (
 	"log"
 	"os"
 
+	"github.com/avinetworks/avi_k8s_controller/pkg/mcp"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
@@ -57,7 +58,6 @@ func main() {
 	flag.Lookup("logtostderr").Value.Set("true")
 
 	AviLogInit()
-
 	// set up signals so we handle the first shutdown signal gracefully
 	stopCh := SetupSignalHandler()
 	kubeCluster := false
@@ -68,7 +68,13 @@ func main() {
 		AviLog.Warning.Printf("We are not running inside kubernetes cluster. %s", err.Error())
 
 	} else {
-
+		// TODO (sudswas): Remove the hard coding later.
+		stop := make(chan struct{})
+		mcpServers := []string{"mcp://istio-galley.istio-system.svc:9901"}
+		mcpClient := mcp.MCPClient{MCPServerAddrs: mcpServers}
+		_ = mcpClient.InitMCPClient()
+		// TODO (sudswas): Need to handle the stop signal
+		mcpClient.Start(stop)
 		AviLog.Info.Println("We are running inside kubernetes cluster. Won't use kubeconfig files.")
 		kubeCluster = true
 
