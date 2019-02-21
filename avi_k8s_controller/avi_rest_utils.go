@@ -15,81 +15,84 @@
 package main
 
 import (
-        "fmt"
-        "errors"
-        "github.com/avinetworks/sdk/go/session"
-        "github.com/avinetworks/sdk/go/clients"
-        "github.com/davecgh/go-spew/spew"
-    )
+	"errors"
+	"fmt"
+
+	"github.com/avinetworks/avi_k8s_controller/pkg/utils"
+
+	"github.com/avinetworks/sdk/go/clients"
+	"github.com/avinetworks/sdk/go/session"
+	"github.com/davecgh/go-spew/spew"
+)
 
 type AviRestClientPool struct {
-    AviClient []*clients.AviClient
+	AviClient []*clients.AviClient
 }
 
-func NewAviRestClientPool(num uint32, api_ep string, username string, 
-                          password string) (*AviRestClientPool, error) {
-    var p AviRestClientPool
+func NewAviRestClientPool(num uint32, api_ep string, username string,
+	password string) (*AviRestClientPool, error) {
+	var p AviRestClientPool
 
-    for i := uint32(0); i < num; i++ {
-        aviClient, err := clients.NewAviClient(api_ep, username,
-                        session.SetPassword(password), session.SetInsecure)
-        if err != nil {
-            AviLog.Warning.Printf("NewAviClient returned err %v", err)
-            return &p, err
-        }
+	for i := uint32(0); i < num; i++ {
+		aviClient, err := clients.NewAviClient(api_ep, username,
+			session.SetPassword(password), session.SetInsecure)
+		if err != nil {
+			utils.AviLog.Warning.Printf("NewAviClient returned err %v", err)
+			return &p, err
+		}
 
-        p.AviClient = append(p.AviClient, aviClient)
-    }
+		p.AviClient = append(p.AviClient, aviClient)
+	}
 
-    return &p, nil
+	return &p, nil
 }
 
 func (p *AviRestClientPool) AviRestOperate(c *clients.AviClient, rest_ops []*RestOp) error {
-    for i, op := range rest_ops {
-        SetTenant := session.SetTenant(op.Tenant)
-        SetTenant(c.AviSession)
-        SetVersion := session.SetVersion(op.Version)
-        SetVersion(c.AviSession)
-        switch op.Method {
-        case RestPost:
-            op.Err = c.AviSession.Post(op.Path, op.Obj, &op.Response)
-        case RestPut:
-            op.Err = c.AviSession.Put(op.Path, op.Obj, &op.Response)
-        case RestGet:
-            op.Err = c.AviSession.Get(op.Path, &op.Response)
-        case RestPatch:
-            op.Err = c.AviSession.Patch(op.Path, op.Obj, op.PatchOp,
-                                               &op.Response)
-        case RestDelete:
-            op.Err = c.AviSession.Delete(op.Path)
-        default:
-            AviLog.Error.Printf("Unknown RestOp %v", op.Method)
-            op.Err = fmt.Errorf("Unknown RestOp %v", op.Method)
-        }
-        if op.Err != nil {
-            AviLog.Warning.Printf(`RestOp method %v path %v tenant %v Obj %s 
-                    returned err %v`, op.Method, op.Path, op.Tenant, 
-                    spew.Sprint(op.Obj), op.Err)
-            for j := i+1; j < len(rest_ops); j++ {
-                rest_ops[j].Err = errors.New("Aborted due to prev error")
-            }
-            return op.Err
-        } else {
-            AviLog.Info.Printf(`RestOp method %v path %v tenant %v response %v`,
-                    op.Method, op.Path, op.Tenant, op.Response)
-        }
-    }
-    return nil
+	for i, op := range rest_ops {
+		SetTenant := session.SetTenant(op.Tenant)
+		SetTenant(c.AviSession)
+		SetVersion := session.SetVersion(op.Version)
+		SetVersion(c.AviSession)
+		switch op.Method {
+		case RestPost:
+			op.Err = c.AviSession.Post(op.Path, op.Obj, &op.Response)
+		case RestPut:
+			op.Err = c.AviSession.Put(op.Path, op.Obj, &op.Response)
+		case RestGet:
+			op.Err = c.AviSession.Get(op.Path, &op.Response)
+		case RestPatch:
+			op.Err = c.AviSession.Patch(op.Path, op.Obj, op.PatchOp,
+				&op.Response)
+		case RestDelete:
+			op.Err = c.AviSession.Delete(op.Path)
+		default:
+			utils.AviLog.Error.Printf("Unknown RestOp %v", op.Method)
+			op.Err = fmt.Errorf("Unknown RestOp %v", op.Method)
+		}
+		if op.Err != nil {
+			utils.AviLog.Warning.Printf(`RestOp method %v path %v tenant %v Obj %s 
+                    returned err %v`, op.Method, op.Path, op.Tenant,
+				spew.Sprint(op.Obj), op.Err)
+			for j := i + 1; j < len(rest_ops); j++ {
+				rest_ops[j].Err = errors.New("Aborted due to prev error")
+			}
+			return op.Err
+		} else {
+			utils.AviLog.Info.Printf(`RestOp method %v path %v tenant %v response %v`,
+				op.Method, op.Path, op.Tenant, op.Response)
+		}
+	}
+	return nil
 }
 
 func AviModelToUrl(model string) string {
-    switch model {
-        case "Pool":
-            return "/api/pool"
-        case "VirtualService":
-            return "/api/virtualservice"
-        default:
-            AviLog.Warning.Printf("Unknown model %v", model)
-            return ""
-    }
+	switch model {
+	case "Pool":
+		return "/api/pool"
+	case "VirtualService":
+		return "/api/virtualservice"
+	default:
+		utils.AviLog.Warning.Printf("Unknown model %v", model)
+		return ""
+	}
 }

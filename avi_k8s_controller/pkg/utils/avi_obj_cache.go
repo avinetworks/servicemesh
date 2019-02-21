@@ -12,19 +12,19 @@
  * limitations under the License.
  */
 
-package main
+package utils
 
 type AviObjCache struct {
-    VsCache *AviCache
-    PgCache *AviCache
-    PoolCache *AviCache
+	VsCache   *AviCache
+	PgCache   *AviCache
+	PoolCache *AviCache
 }
 
 func NewAviObjCache() *AviObjCache {
-    c := AviObjCache{}
-    c.VsCache = NewAviCache()
-    c.PgCache = NewAviCache()
-    c.PoolCache = NewAviCache()
-    // TODO Populate cache
-    return &c
+	c := AviObjCache{}
+	c.VsCache = NewAviCache()
+	c.PgCache = NewAviCache()
+	c.PoolCache = NewAviCache()
+	// TODO Populate cache
+	return &c
 }
