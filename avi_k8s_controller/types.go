@@ -158,3 +158,9 @@ type AviHttpPolicySetMeta struct {
 	CloudConfigCksum string
 	HppMap           []AviHostPathPortPoolPG
 }
+
+type SkipSyncError struct {
+	msg string
+}
+
+func (e *SkipSyncError) Error() string { return e.msg }

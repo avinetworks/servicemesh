@@ -312,9 +312,20 @@ func (c *AviController) processNextWorkItem(worker_id uint32) bool {
 		}
 		// Run the syncHandler, passing it the ev resource to be synced.
 		if err := c.syncHandler(ev, worker_id); err != nil {
-			// Put the item back on the workqueue to handle any transient errors.
-			c.workqueue[worker_id].AddRateLimited(obj)
-			return fmt.Errorf("error syncing '%v': %s, requeuing", ev, err.Error())
+			// If it's a sync error, let's not re-queue the object.
+			_, ok := err.(*SkipSyncError)
+			if !ok {
+				// Put the item back on the workqueue to handle any transient errors.
+				c.workqueue[worker_id].AddRateLimited(obj)
+
+				return fmt.Errorf("error syncing '%v': %s, requeuing", ev, err.Error())
+			} else {
+				// No need to put the item back
+				utils.AviLog.Info.Printf("Skip sync of '%s'", ev)
+				c.workqueue[worker_id].Forget(obj)
+				return nil
+			}
+
 		}
 		// Finally, if no error occurs we Forget this item so it does not
 		// get queued again until another change happens.

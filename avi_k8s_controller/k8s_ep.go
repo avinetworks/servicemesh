@@ -78,7 +78,7 @@ func (p *K8sEp) K8sObjCrUpd(shard uint32, ep *corev1.Endpoints,
 	if err != nil {
 		utils.AviLog.Warning.Printf(`Service for Endpoint Namespace %v Name %v 
             doesn't exist`, ep.Namespace, ep.Name)
-		return nil, nil
+		return nil, &SkipSyncError{"Skip sync"}
 	}
 
 	tenant := ep.Namespace
