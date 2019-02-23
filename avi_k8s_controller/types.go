@@ -158,3 +158,8 @@ type AviHttpPolicySetMeta struct {
 	CloudConfigCksum string
 	HppMap           []AviHostPathPortPoolPG
 }
+
+type ChannelData struct {
+	key      string
+	workerId uint32
+}

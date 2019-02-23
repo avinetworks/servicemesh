@@ -35,8 +35,6 @@ func main() {
 
 	flag.Lookup("logtostderr").Value.Set("true")
 
-	// set up signals so we handle the first shutdown signal gracefully
-	stopCh := SetupSignalHandler()
 	kubeCluster := false
 	// Check if we are running inside kubernetes. Hence try authenticating with service token
 	cfg, err := rest.InClusterConfig()
@@ -92,9 +90,9 @@ func main() {
 
 	c := NewAviController(NumWorkers, informers, kubeClient, k8s_ep, k8s_svc)
 
-	c.Start(stopCh)
+	c.Start()
 
-	c.Run(stopCh)
+	c.Run()
 }
 
 func init() {

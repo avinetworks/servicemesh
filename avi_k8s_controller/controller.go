@@ -47,6 +47,9 @@ type AviController struct {
 	workqueue       []workqueue.RateLimitingInterface
 	k8s_ep          *K8sEp
 	k8s_svc         *K8sSvc
+	epChannel       chan ChannelData
+	svcChannel      chan ChannelData
+	stopCh          <-chan struct{}
 }
 
 func ObjKey(obj interface{}) string {
@@ -82,7 +85,12 @@ func NewAviController(num_workers uint32, inf *Informers, cs *kubernetes.Clients
 	eventBroadcaster.StartLogging(utils.AviLog.Info.Printf)
 	eventBroadcaster.StartRecordingToSink(&typedcorev1.EventSinkImpl{Interface: cs.CoreV1().Events("")})
 	recorder := eventBroadcaster.NewRecorder(scheme.Scheme, corev1.EventSource{Component: "avi-k8s-controller"})
+	stopCh := SetupSignalHandler()
 
+	// Initialize bufferred channels per object type. Right now assuming the size of 100 as good enough.
+	endpoint_chan := make(chan ChannelData, 100)
+	service_chan := make(chan ChannelData, 100)
+	// initialize go routines
 	c := &AviController{
 		num_workers: num_workers,
 		worker_id:   (uint32(1) << num_workers) - 1,
@@ -90,8 +98,13 @@ func NewAviController(num_workers uint32, inf *Informers, cs *kubernetes.Clients
 		informers:   inf,
 		k8s_ep:      k8s_ep,
 		k8s_svc:     k8s_svc,
+		epChannel:   endpoint_chan,
+		svcChannel:  service_chan,
+		stopCh:      stopCh,
 	}
 
+	go c.handleUpdates(endpoint_chan)
+	go c.handleUpdates(service_chan)
 	c.workqueue = make([]workqueue.RateLimitingInterface, num_workers)
 	for i := uint32(0); i < num_workers; i++ {
 		c.workqueue[i] = workqueue.NewNamedRateLimitingQueue(workqueue.DefaultControllerRateLimiter(), fmt.Sprintf("avi-%d", i))
@@ -213,12 +226,12 @@ func NewAviController(num_workers uint32, inf *Informers, cs *kubernetes.Clients
 	return c
 }
 
-func (c *AviController) Start(stopCh <-chan struct{}) {
-	go c.informers.ServiceInformer.Informer().Run(stopCh)
-	go c.informers.EpInformer.Informer().Run(stopCh)
-	go c.informers.IngInformer.Informer().Run(stopCh)
+func (c *AviController) Start() {
+	go c.informers.ServiceInformer.Informer().Run(c.stopCh)
+	go c.informers.EpInformer.Informer().Run(c.stopCh)
+	go c.informers.IngInformer.Informer().Run(c.stopCh)
 
-	if !cache.WaitForCacheSync(stopCh,
+	if !cache.WaitForCacheSync(c.stopCh,
 		c.informers.EpInformer.Informer().HasSynced,
 		c.informers.ServiceInformer.Informer().HasSynced,
 		c.informers.IngInformer.Informer().HasSynced,
@@ -233,7 +246,7 @@ func (c *AviController) Start(stopCh <-chan struct{}) {
 // as syncing informer caches and starting workers. It will block until stopCh
 // is closed, at which point it will shutdown the workqueue and wait for
 // workers to finish processing their current work items.
-func (c *AviController) Run(stopCh <-chan struct{}) error {
+func (c *AviController) Run() error {
 	defer runtime.HandleCrash()
 	for i := uint32(0); i < c.num_workers; i++ {
 		defer c.workqueue[i].ShutDown()
@@ -245,11 +258,11 @@ func (c *AviController) Run(stopCh <-chan struct{}) error {
 	utils.AviLog.Info.Print("Starting workers")
 	// Launch two workers to process Foo resources
 	for i := uint32(0); i < c.num_workers; i++ {
-		go wait.Until(c.runWorker, time.Second, stopCh)
+		go wait.Until(c.runWorker, time.Second, c.stopCh)
 	}
 
 	utils.AviLog.Info.Print("Started workers")
-	<-stopCh
+	<-c.stopCh
 	utils.AviLog.Info.Print("Shutting down workers")
 
 	return nil
@@ -340,56 +353,79 @@ func (c *AviController) syncHandler(key string, worker_id uint32) error {
 		runtime.HandleError(fmt.Errorf("invalid resource key: %s", key))
 		return nil
 	}
-	// Convert the namespace/name string into a distinct namespace and name
-	namespace, name, err := cache.SplitMetaNamespaceKey(obj_type_ns[2])
-	if err != nil {
-		runtime.HandleError(fmt.Errorf("invalid resource key: %s", key))
-		return nil
-	}
-
-	var obj interface{}
-	var evt EvType
-	// Get the latest Service resource with this namespace/name
+	// Write it to a channel
 	if obj_type_ns[0] == "Service" {
-		obj, err = c.informers.ServiceInformer.Lister().Services(namespace).Get(name)
+		utils.AviLog.Info.Printf("Got an update for Service Object '%s' will push this to the channel", obj_type_ns)
+		c.svcChannel <- ChannelData{key: key, workerId: worker_id}
 	} else if obj_type_ns[0] == "Endpoints" {
-		obj, err = c.informers.EpInformer.Lister().Endpoints(namespace).Get(name)
-	} else if obj_type_ns[0] == "Ingress" {
-		obj, err = c.informers.IngInformer.Lister().Ingresses(namespace).Get(name)
-	} else {
-		utils.AviLog.Error.Printf("Unable to handle unknown obj type %v", key)
-		return errors.New("Unable to handle unknown obj type")
+		utils.AviLog.Info.Printf("Got an update for Endpoint Object '%s' will push this to the channel", obj_type_ns)
+		c.epChannel <- ChannelData{key: key, workerId: worker_id}
 	}
 
-	if err != nil {
-		// The Obj may no longer exist, in which case we process deletion
-		if k8s_errors.IsNotFound(err) {
-			runtime.HandleError(fmt.Errorf("obj '%s' in work queue no longer exists", key))
-			utils.AviLog.Info.Printf("Obj key NotFound %v obj type %T value %v", key, obj, obj)
-			evt = DeleteEv
-		} else {
+	return nil
+}
+
+// This method should get executed inside a go routine.
+func (c *AviController) handleUpdates(channelData <-chan ChannelData) error {
+	for {
+		select {
+		case <-c.stopCh:
+			utils.AviLog.Info.Printf("Received a SIGTERM, will terminate")
+			return nil
+		default:
+			data := <-channelData
+			utils.AviLog.Info.Printf("Just received an update: '%s'", data.key)
+			obj_type_ns := strings.SplitN(data.key, "/", 3)
+			namespace, name, err := cache.SplitMetaNamespaceKey(obj_type_ns[2])
+			if err != nil {
+				runtime.HandleError(fmt.Errorf("invalid resource key: %s", data.key))
+				return nil
+			}
+			var obj interface{}
+			var evt EvType
+			// Get the latest Service resource with this namespace/name
+			if obj_type_ns[0] == "Service" {
+				obj, err = c.informers.ServiceInformer.Lister().Services(namespace).Get(name)
+			} else if obj_type_ns[0] == "Endpoints" {
+				obj, err = c.informers.EpInformer.Lister().Endpoints(namespace).Get(name)
+			} else if obj_type_ns[0] == "Ingress" {
+				obj, err = c.informers.IngInformer.Lister().Ingresses(namespace).Get(name)
+			} else {
+				utils.AviLog.Error.Printf("Unable to handle unknown obj type %v", data.key)
+				return errors.New("Unable to handle unknown obj type")
+			}
+
+			if err != nil {
+				// The Obj may no longer exist, in which case we process deletion
+				if k8s_errors.IsNotFound(err) {
+					runtime.HandleError(fmt.Errorf("obj '%s' in work queue no longer exists", data.key))
+					utils.AviLog.Info.Printf("Obj key NotFound %v obj type %T value %v", data.key, obj, obj)
+					evt = DeleteEv
+				} else {
+					return err
+				}
+			} else {
+				evt = UpdateEv
+			}
+
+			if obj_type_ns[0] == "Endpoints" {
+				if evt == UpdateEv {
+					_, err = c.k8s_ep.K8sObjCrUpd(data.workerId, obj.(*corev1.Endpoints),
+						"", obj_type_ns[1])
+				} else {
+					_, err = c.k8s_ep.K8sObjDelete(data.workerId, data.key)
+				}
+			} else if obj_type_ns[0] == "Service" {
+				if evt == UpdateEv {
+					_, err = c.k8s_svc.K8sObjCrUpd(data.workerId, obj.(*corev1.Service))
+				} else {
+					_, err = c.k8s_svc.K8sObjDelete(data.workerId, data.key)
+				}
+			}
+
+			// TODO
+			// c.recorder.Event(foo, corev1.EventTypeNormal, SuccessSynced, MessageResourceSynced)
 			return err
 		}
-	} else {
-		evt = UpdateEv
 	}
-
-	if obj_type_ns[0] == "Endpoints" {
-		if evt == UpdateEv {
-			_, err = c.k8s_ep.K8sObjCrUpd(worker_id, obj.(*corev1.Endpoints),
-				"", obj_type_ns[1])
-		} else {
-			_, err = c.k8s_ep.K8sObjDelete(worker_id, key)
-		}
-	} else if obj_type_ns[0] == "Service" {
-		if evt == UpdateEv {
-			_, err = c.k8s_svc.K8sObjCrUpd(worker_id, obj.(*corev1.Service))
-		} else {
-			_, err = c.k8s_svc.K8sObjDelete(worker_id, key)
-		}
-	}
-
-	// TODO
-	// c.recorder.Event(foo, corev1.EventTypeNormal, SuccessSynced, MessageResourceSynced)
-	return err
 }
