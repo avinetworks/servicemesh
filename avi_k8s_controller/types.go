@@ -15,78 +15,70 @@
 package main
 
 import (
-        "log"
-        avimodels "github.com/avinetworks/sdk/go/models"
-        coreinformers "k8s.io/client-go/informers/core/v1"
-        extinformers "k8s.io/client-go/informers/extensions/v1beta1"
-       )
+	avimodels "github.com/avinetworks/sdk/go/models"
+	coreinformers "k8s.io/client-go/informers/core/v1"
+	extinformers "k8s.io/client-go/informers/extensions/v1beta1"
+)
 
 type EvType string
 
 const NumWorkers uint32 = 2
 
 const (
-    CreateEv EvType = "CREATE"
-    UpdateEv EvType = "UPDATE"
-    DeleteEv EvType = "DELETE"
+	CreateEv EvType = "CREATE"
+	UpdateEv EvType = "UPDATE"
+	DeleteEv EvType = "DELETE"
 )
 
 const (
-       OSHIFT_K8S_CLOUD_CONNECTOR string = "oshift-k8s-cloud-connector"
+	OSHIFT_K8S_CLOUD_CONNECTOR string = "oshift-k8s-cloud-connector"
 )
 
 const (
-       AVI_DEFAULT_TCP_HM string = "System-TCP"
-       AVI_DEFAULT_UDP_HM string = "System-UDP"
+	AVI_DEFAULT_TCP_HM string = "System-TCP"
+	AVI_DEFAULT_UDP_HM string = "System-UDP"
 )
-
-type AviLogger struct {
-    Trace   *log.Logger
-    Info    *log.Logger
-    Warning *log.Logger
-    Error   *log.Logger
-}
 
 type Informers struct {
-    ServiceInformer coreinformers.ServiceInformer
-    EpInformer coreinformers.EndpointsInformer
-    IngInformer extinformers.IngressInformer
+	ServiceInformer coreinformers.ServiceInformer
+	EpInformer      coreinformers.EndpointsInformer
+	IngInformer     extinformers.IngressInformer
 }
 
 type AviRestObjMacro struct {
-    ModelName string `json:"model_name"`
-    Data interface{} `json:"data"`
+	ModelName string      `json:"model_name"`
+	Data      interface{} `json:"data"`
 }
 
 type RestMethod string
 
 const (
-       RestPost RestMethod = "POST"
-       RestPut RestMethod = "PUT"
-       RestDelete RestMethod = "DELETE"
-       RestPatch RestMethod = "PATCH"
-       RestGet RestMethod = "GET"
-      )
+	RestPost   RestMethod = "POST"
+	RestPut    RestMethod = "PUT"
+	RestDelete RestMethod = "DELETE"
+	RestPatch  RestMethod = "PATCH"
+	RestGet    RestMethod = "GET"
+)
 
 type RestOp struct {
-    Path string
-    Method RestMethod
-    Obj interface{}
-    Tenant string
-    PatchOp string
-    Response interface{}
-    Err error
-    Model string
-    Version string
+	Path     string
+	Method   RestMethod
+	Obj      interface{}
+	Tenant   string
+	PatchOp  string
+	Response interface{}
+	Err      error
+	Model    string
+	Version  string
 }
 
 type ServiceMetadataObj struct {
-    CrudHashKey string  `json:"crud_hash_key"`
+	CrudHashKey string `json:"crud_hash_key"`
 }
 
 type NamespaceName struct {
-    Namespace string
-    Name string
+	Namespace string
+	Name      string
 }
 
 /*
@@ -94,49 +86,49 @@ type NamespaceName struct {
  */
 
 type AviPoolMetaServer struct {
-    Ip avimodels.IPAddr
-    ServerNode string
+	Ip         avimodels.IPAddr
+	ServerNode string
 }
 
 type K8sAviPoolMeta struct {
-    Name string
-    Tenant string
-    ServiceMetadata ServiceMetadataObj
-    CloudConfigCksum string
-    Port int32
-    Servers []AviPoolMetaServer
-    Protocol string
+	Name             string
+	Tenant           string
+	ServiceMetadata  ServiceMetadataObj
+	CloudConfigCksum string
+	Port             int32
+	Servers          []AviPoolMetaServer
+	Protocol         string
 }
 
 type AviPortProtocol struct {
-    Port int32
-    Protocol string
+	Port     int32
+	Protocol string
 }
 
 type AviPortStrProtocol struct {
-    Port string // Can be Port name or int32 string
-    Protocol string
+	Port     string // Can be Port name or int32 string
+	Protocol string
 }
 
 type AviHostPathPortPoolPG struct {
-    Host string
-    Path string
-    Port uint32
-    Pool string
-    PoolGroup string
+	Host      string
+	Path      string
+	Port      uint32
+	Pool      string
+	PoolGroup string
 }
 
 type K8sAviVsMeta struct {
-    Name string
-    Tenant string
-    ServiceMetadata ServiceMetadataObj
-    ApplicationProfile string
-    NetworkProfile string
-    PortProto []AviPortProtocol // for listeners
-    PoolMap map[AviPortProtocol]string // for mapping listener to Pools
-    DefaultPool string
-    EastWest bool
-    CloudConfigCksum string
+	Name               string
+	Tenant             string
+	ServiceMetadata    ServiceMetadataObj
+	ApplicationProfile string
+	NetworkProfile     string
+	PortProto          []AviPortProtocol          // for listeners
+	PoolMap            map[AviPortProtocol]string // for mapping listener to Pools
+	DefaultPool        string
+	EastWest           bool
+	CloudConfigCksum   string
 }
 
 /*
@@ -144,25 +136,25 @@ type K8sAviVsMeta struct {
  */
 
 type AviPoolCache struct {
-    Name string
-    Tenant string
-    Uuid string
-    LbAlgorithm string
-    ServiceMetadata ServiceMetadataObj
-    CloudConfigCksum string
+	Name             string
+	Tenant           string
+	Uuid             string
+	LbAlgorithm      string
+	ServiceMetadata  ServiceMetadataObj
+	CloudConfigCksum string
 }
 
 type AviVsCache struct {
-    Name string
-    Tenant string
-    Uuid string
-    ServiceMetadata ServiceMetadataObj
-    CloudConfigCksum string
+	Name             string
+	Tenant           string
+	Uuid             string
+	ServiceMetadata  ServiceMetadataObj
+	CloudConfigCksum string
 }
 
 type AviHttpPolicySetMeta struct {
-    Name string
-    Tenant string
-    CloudConfigCksum string
-    HppMap []AviHostPathPortPoolPG
+	Name             string
+	Tenant           string
+	CloudConfigCksum string
+	HppMap           []AviHostPathPortPoolPG
 }

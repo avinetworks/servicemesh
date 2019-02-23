@@ -12,11 +12,11 @@
  * limitations under the License.
  */
 
-package main
+package utils
 
 import (
-        "sync"
-       )
+	"sync"
+)
 
 /*
  * AviCache provides a one to one cache
@@ -25,33 +25,33 @@ import (
  */
 
 type AviCache struct {
-    cache_lock sync.RWMutex
-    cache map[interface{}]interface{}
+	cache_lock sync.RWMutex
+	cache      map[interface{}]interface{}
 }
 
 func NewAviCache() *AviCache {
-    c := AviCache{}
-    c.cache = make(map[interface{}]interface{})
-    return &c
+	c := AviCache{}
+	c.cache = make(map[interface{}]interface{})
+	return &c
 }
 
 func (c *AviCache) AviCacheGet(k interface{}) (interface{}, bool) {
-    c.cache_lock.RLock()
-    defer c.cache_lock.RUnlock()
-    val, ok := c.cache[k]
-    return val, ok
+	c.cache_lock.RLock()
+	defer c.cache_lock.RUnlock()
+	val, ok := c.cache[k]
+	return val, ok
 }
 
 func (c *AviCache) AviCacheAdd(k interface{}, val interface{}) {
-    c.cache_lock.Lock()
-    defer c.cache_lock.Unlock()
-    c.cache[k] = val
+	c.cache_lock.Lock()
+	defer c.cache_lock.Unlock()
+	c.cache[k] = val
 }
 
 func (c *AviCache) AviCacheDelete(k interface{}) {
-    c.cache_lock.Lock()
-    defer c.cache_lock.Unlock()
-    delete(c.cache, k)
+	c.cache_lock.Lock()
+	defer c.cache_lock.Unlock()
+	delete(c.cache, k)
 }
 
 /*
@@ -64,61 +64,61 @@ func (c *AviCache) AviCacheDelete(k interface{}) {
  */
 
 type AviMultiCache struct {
-    cache_lock sync.RWMutex
-    cache map[interface{}]map[interface{}]bool
+	cache_lock sync.RWMutex
+	cache      map[interface{}]map[interface{}]bool
 }
 
 func NewAviMultiCache() *AviMultiCache {
-    c := AviMultiCache{}
-    c.cache = make(map[interface{}]map[interface{}]bool)
-    return &c
+	c := AviMultiCache{}
+	c.cache = make(map[interface{}]map[interface{}]bool)
+	return &c
 }
 
 func (c *AviMultiCache) AviMultiCacheGetKey(k interface{}) (map[interface{}]bool, bool) {
-    c.cache_lock.RLock()
-    defer c.cache_lock.RUnlock()
-    val, ok := c.cache[k]
-    return val, ok
+	c.cache_lock.RLock()
+	defer c.cache_lock.RUnlock()
+	val, ok := c.cache[k]
+	return val, ok
 }
 
 func (c *AviMultiCache) AviMultiCacheLookup(k interface{}, lval interface{}) bool {
-    c.cache_lock.RLock()
-    defer c.cache_lock.RUnlock()
-    val, ok := c.cache[k]
-    if !ok {
-        return ok
-    } else {
-        _, ok := val[lval]
-        return ok
-    }
+	c.cache_lock.RLock()
+	defer c.cache_lock.RUnlock()
+	val, ok := c.cache[k]
+	if !ok {
+		return ok
+	} else {
+		_, ok := val[lval]
+		return ok
+	}
 }
 
 func (c *AviMultiCache) AviMultiCacheAdd(k interface{}, val interface{}) {
-    c.cache_lock.Lock()
-    defer c.cache_lock.Unlock()
-    l1val, ok := c.cache[k]
-    if ok {
-        l1val[val] = true
-    } else {
-        c.cache[k] = make(map[interface{}]bool)
-        c.cache[k][val] = true
-    }
+	c.cache_lock.Lock()
+	defer c.cache_lock.Unlock()
+	l1val, ok := c.cache[k]
+	if ok {
+		l1val[val] = true
+	} else {
+		c.cache[k] = make(map[interface{}]bool)
+		c.cache[k][val] = true
+	}
 }
 
 func (c *AviMultiCache) AviMultiCacheDeleteVal(k interface{}, dval interface{}) {
-    c.cache_lock.Lock()
-    defer c.cache_lock.Unlock()
-    l1val, ok := c.cache[k]
-    if ok {
-        delete(l1val, dval)
-        if len(l1val) == 0 {
-            delete(c.cache, k)
-        }
-    }
+	c.cache_lock.Lock()
+	defer c.cache_lock.Unlock()
+	l1val, ok := c.cache[k]
+	if ok {
+		delete(l1val, dval)
+		if len(l1val) == 0 {
+			delete(c.cache, k)
+		}
+	}
 }
 
 func (c *AviMultiCache) AviMultiCacheDeleteKey(k interface{}) {
-    c.cache_lock.Lock()
-    defer c.cache_lock.Unlock()
-    delete(c.cache, k)
+	c.cache_lock.Lock()
+	defer c.cache_lock.Unlock()
+	delete(c.cache, k)
 }
