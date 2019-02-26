@@ -1,18 +1,50 @@
-# servicemesh
+# AVI Servicemesh
 
-## Quick Start (Older)
-[Click to deploy using Cloud Formation](https://us-west-2.console.aws.amazon.com/cloudformation/home?region=us-west-2#/stacks/new?stackName=AviK8SQuickstart&templateURL=https://s3-us-west-2.amazonaws.com/aviservicemesh/kubernetes-cluster-with-new-vpc.template)
+##  Architecture
 
-Or use S3 url of the template: https://s3-us-west-2.amazonaws.com/aviservicemesh/kubernetes-cluster-with-new-vpc.template
+##  Project structure
 
-[Video Tutorial](https://youtu.be/k8tjLTihnzE)
+The project has a specific rule with respect to packaging. The dependency should be followed by every developer in order to maintain sanity.
+
+- [servicemesh/pkg](https://github.com/avinetworks/servicemesh/pkg) -- This contains pure library go code. This also hosts code that can be imported by other places. Ensure none of these packages are importing anything outside of this directory.
+
+- [servicemesh/aviobjects](https://github.com/avinetworks/servicemesh/aviobjects) -- This package should contain all information related to AVI objects.
+
+- [servicemesh/k8s_tmpl](https://github.com/avinetworks/servicemesh/k8s_tmpl) -- This folder contains kubernetes related artifacts. These are not part of the build process right now and should be edited before use as per the deployment requirement.
 
 
-## Quick Start (avi_k8s_controller)
+##  Build process
 
-In order to build the project do the following:
+The project can be built in a couple of ways:
 
-    - mkdir -R $(GOPATH)/src/github.com/avinetworks
-    - cd $(GOPATH)/src/github.com/avinetworks
+- [Go Build](#native-go-build)
+- [Docker Build](#docker-build)
+
+
+## Native Go Build
+
+Steps:
+
+    - Configure GOPATH in your machine.
+    - mkdir -p $(GOPATH)/src/github/avinetworks/
+    - cd $(GOPATH)/src/github/avinetworks/
     - git clone https://github.com/avinetworks/servicemesh
-    - make all
+    - cd servicemesh
+    - make deps build
+
+This will generate a binary called: `$(GOPATH)/src/github/avinetworks/sevicemesh/servicemesh`
+
+## Docker build
+
+Steps:
+
+    - Ensure you have docker 17.3 or above that supports docker multi-stage build.
+    - git clone https://github.com/avinetworks/servicemesh
+    - cd servicemesh
+    - make docker
+
+This will generate a docker image by name of `servicemesh:latest`
+
+## How to contribute
+
+## Running tests
