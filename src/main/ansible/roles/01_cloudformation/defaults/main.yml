@@ -1,6 +1,0 @@
----
-# defaults file for 01_cloudformation
-
-ec2_region: "us-west-2"
-ec2_key_name: "avi-web-stage"
-r53_hosted_zone: "avisandbox.com"

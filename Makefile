@@ -2,8 +2,8 @@ GOCMD=go
 GOBUILD=$(GOCMD) build
 GOCLEAN=$(GOCMD) clean
 GOGET=$(GOCMD) get
-BINARY_NAME=avi_k8s_controller_go
-REL_PATH=github.com/avinetworks/avi_k8s_controller
+BINARY_NAME=servicemesh
+REL_PATH=github.com/avinetworks/servicemesh
 
 .PHONY:all
 all: deps build docker
@@ -19,9 +19,11 @@ clean:
 
 .PHONY: deps
 deps:
-		$(GOGET) -v $(REL_PATH)
+		-$(GOGET) -v $(REL_PATH)
+		rm -rf $(GOPATH)/src/istio.io/istio/vendor/github.com/gogo/googleapis/google/rpc
+		rm -rf $(GOPATH)/src/istio.io/istio/vendor/github.com/gogo/protobuf/types
+		rm -rf $(GOPATH)/src/istio.io/istio/vendor/istio.io/api/mcp/v1alpha1
 
 .PHONY: docker
 docker:
 	docker build -t $(BINARY_NAME):latest -f Dockerfile .
-
