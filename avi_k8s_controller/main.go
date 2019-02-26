@@ -46,13 +46,16 @@ func main() {
 
 	} else {
 		// TODO (sudswas): Remove the hard coding later.
-		stop := make(chan struct{})
-		mcpServers := []string{"mcp://istio-galley.istio-system.svc:9901"}
-		mcpClient := mcp.MCPClient{MCPServerAddrs: mcpServers}
-		_ = mcpClient.InitMCPClient()
-		// TODO (sudswas): Need to handle the stop signal
-		mcpClient.Start(stop)
-
+		istioEnabled := "False"
+		istioEnabled = os.Getenv("ISTIO_ENABLED")
+		if istioEnabled == "True" {
+			stop := make(chan struct{})
+			mcpServers := []string{"mcp://istio-galley.istio-system.svc:9901"}
+			mcpClient := mcp.MCPClient{MCPServerAddrs: mcpServers}
+			_ = mcpClient.InitMCPClient()
+			// TODO (sudswas): Need to handle the stop signal
+			mcpClient.Start(stop)
+		}
 		utils.AviLog.Info.Println("We are running inside kubernetes cluster. Won't use kubeconfig files.")
 		kubeCluster = true
 
