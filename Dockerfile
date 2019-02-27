@@ -6,6 +6,6 @@ WORKDIR $GOPATH/src/$BUILD_PATH
 
 RUN GOARCH=amd64 CGO_ENABLED=0 GOOS=linux go build -o $GOPATH/bin/servicemesh $BUILD_PATH
 
-FROM scratch
-COPY --from=build $GOPATH/bin/servicemesh $GOPATH/bin/servicemesh
-ENTRYPOINT ["/go/bin/servicemesh"]
+FROM alpine:latest
+COPY --from=build /go/bin/servicemesh .
+ENTRYPOINT ["./servicemesh"]

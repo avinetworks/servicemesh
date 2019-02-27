@@ -41,7 +41,6 @@ func AviVsBuild(vs_meta *utils.K8sAviVsMeta) []*utils.RestOp {
 	} else {
 		east_west = false
 	}
-
 	network_prof := "/api/networkprofile/?name=" + vs_meta.NetworkProfile
 	app_prof := "/api/applicationprofile/?name=" + vs_meta.ApplicationProfile
 	// TODO use PoolGroup and use policies if there are > 1 pool, etc.
@@ -56,9 +55,9 @@ func AviVsBuild(vs_meta *utils.K8sAviVsMeta) []*utils.RestOp {
 		CreatedBy:             &cr,
 		EastWestPlacement:     &east_west}
 
-	if vs_meta.DefaultPool != "" {
-		pool_ref := "/api/pool/?name=" + vs_meta.DefaultPool
-		vs.PoolRef = &pool_ref
+	if vs_meta.DefaultPoolGroup != "" {
+		pool_ref := "/api/poolgroup/?name=" + vs_meta.DefaultPoolGroup
+		vs.PoolGroupRef = &pool_ref
 	}
 
 	vs.Vip = append(vs.Vip, &vip)
@@ -89,8 +88,8 @@ func AviVsBuild(vs_meta *utils.K8sAviVsMeta) []*utils.RestOp {
 	if len(vs_meta.PortProto) > 1 {
 		if vs_meta.ApplicationProfile == "System-L4-Application" {
 			// TODO Change to PG
-			for pp, pool_name := range vs_meta.PoolMap {
-				pool_ref := "/api/pool/?name=" + pool_name
+			for pp, pg_name := range vs_meta.PoolGroupMap {
+				pg_ref := "/api/poolgroup/?name=" + pg_name
 				port := pp.Port
 				var sproto string
 				if pp.Protocol == "tcp" {
@@ -98,7 +97,7 @@ func AviVsBuild(vs_meta *utils.K8sAviVsMeta) []*utils.RestOp {
 				} else {
 					sproto = "PROTOCOL_TYPE_UDP_PROXY"
 				}
-				sps := avimodels.ServicePoolSelector{ServicePoolRef: &pool_ref,
+				sps := avimodels.ServicePoolSelector{ServicePoolGroupRef: &pg_ref,
 					ServicePort: &port, ServiceProtocol: &sproto}
 				vs.ServicePoolSelect = append(vs.ServicePoolSelect, &sps)
 			}
@@ -106,8 +105,8 @@ func AviVsBuild(vs_meta *utils.K8sAviVsMeta) []*utils.RestOp {
 			https_meta := utils.AviHttpPolicySetMeta{Name: fmt.Sprintf("%s-httppolicyset", vs_meta.Name),
 				Tenant: vs_meta.Tenant, CloudConfigCksum: vs_meta.CloudConfigCksum}
 			// TODO Change to PG
-			for pp, pool_name := range vs_meta.PoolMap {
-				hpp_sw := utils.AviHostPathPortPoolPG{Port: uint32(pp.Port), Pool: pool_name}
+			for pp, pg_name := range vs_meta.PoolGroupMap {
+				hpp_sw := utils.AviHostPathPortPoolPG{Port: uint32(pp.Port), PoolGroup: pg_name}
 				https_meta.HppMap = append(https_meta.HppMap, hpp_sw)
 			}
 			hps_rest_op := AviHttpPSBuild(&https_meta)
@@ -123,7 +122,7 @@ func AviVsBuild(vs_meta *utils.K8sAviVsMeta) []*utils.RestOp {
 
 	rest_ops = append(rest_ops, &rest_op)
 
-	utils.AviLog.Info.Print(spew.Sprintf("VS Restop %v K8sAviVsMeta %v\n", rest_op,
+	utils.AviLog.Info.Print(spew.Sprintf("VS Restop %v K8sAviVsMeta %v\n", utils.Stringify(rest_op),
 		*vs_meta))
 	return rest_ops
 }
@@ -164,7 +163,7 @@ func AviVsCacheAdd(vs_cache *utils.AviCache, rest_op *utils.RestOp) error {
 			svc_mdata_map, ok = svc_mdata.(map[string]interface{})
 			if !ok {
 				utils.AviLog.Warning.Printf(`resp %v svc_mdata %T has invalid 
-                                  service_metadata type`, resp, svc_mdata)
+								   service_metadata type`, resp, svc_mdata)
 				svc_mdata_obj = utils.ServiceMetadataObj{}
 			} else {
 				SvcMdataMapToObj(&svc_mdata_map, &svc_mdata_obj)

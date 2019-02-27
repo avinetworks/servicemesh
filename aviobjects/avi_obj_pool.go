@@ -64,7 +64,7 @@ func AviPoolBuild(pool_meta *utils.K8sAviPoolMeta) *utils.RestOp {
 		Tenant: pool_meta.Tenant, Model: "Pool", Version: CtrlVersion}
 
 	utils.AviLog.Info.Print(spew.Sprintf("Pool Restop %v K8sAviPoolMeta %v\n",
-		rest_op, *pool_meta))
+		utils.Stringify(rest_op), *pool_meta))
 	return &rest_op
 }
 

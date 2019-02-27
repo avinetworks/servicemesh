@@ -93,7 +93,7 @@ func (s *K8sSvc) K8sObjCrUpd(shard uint32, svc *corev1.Service) ([]*utils.RestOp
 		EastWest: true}
 
 	if len(svc.Spec.Ports) > 1 {
-		avi_vs_meta.PoolMap = make(map[utils.AviPortProtocol]string)
+		avi_vs_meta.PoolGroupMap = make(map[utils.AviPortProtocol]string)
 	}
 
 	is_http := true
@@ -117,9 +117,9 @@ func (s *K8sSvc) K8sObjCrUpd(shard uint32, svc *corev1.Service) ([]*utils.RestOp
 		}
 
 		if len(svc.Spec.Ports) > 1 {
-			pool_name := fmt.Sprintf("%s-pool-%v-%s", svc.Name,
+			pg_name := fmt.Sprintf("%s-poolgroup-%v-%s", svc.Name,
 				svc_port.TargetPort.String(), prot)
-			avi_vs_meta.PoolMap[pp] = pool_name
+			avi_vs_meta.PoolGroupMap[pp] = pg_name
 		}
 
 		if utils.IsSvcHttp(svc_port.Name, svc_port.Port) == false {
@@ -129,19 +129,22 @@ func (s *K8sSvc) K8sObjCrUpd(shard uint32, svc *corev1.Service) ([]*utils.RestOp
 
 	if len(svc.Spec.Ports) == 1 {
 		for _, pool_rest_op := range pool_rest_ops {
-			if pool_rest_op.Model == "Pool" {
+			// TODO (sudswas): What if a pool was created before and the service was created later?
+			// We will find it in the cache and hence rest_op won't have it.
+			// So we won't patch it.
+			if pool_rest_op.Model == "PoolGroup" {
 				macro, ok := pool_rest_op.Obj.(utils.AviRestObjMacro)
 				if !ok {
 					utils.AviLog.Warning.Printf("pool_rest_op %v has unknown Obj type",
 						pool_rest_op)
 					break
 				}
-				pool, ok := macro.Data.(avimodels.Pool)
+				poolgroup, ok := macro.Data.(avimodels.PoolGroup)
 				if !ok {
 					utils.AviLog.Warning.Printf("pool_rest_op %v has unknown macro type",
 						pool_rest_op)
 				} else {
-					avi_vs_meta.DefaultPool = *pool.Name
+					avi_vs_meta.DefaultPoolGroup = *poolgroup.Name
 				}
 				break
 			}

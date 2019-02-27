@@ -1,6 +1,7 @@
 package utils
 
 import (
+	"encoding/json"
 	"io/ioutil"
 	"log"
 	"os"
@@ -33,4 +34,9 @@ func init() {
 	AviLog.Error = log.New(os.Stdout,
 		"ERROR: ",
 		log.Ldate|log.Ltime|log.Lshortfile)
+}
+
+func Stringify(serialize interface{}) string {
+	json_marshalled, _ := json.Marshal(serialize)
+	return string(json_marshalled)
 }

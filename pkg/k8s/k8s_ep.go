@@ -123,7 +123,7 @@ func (p *K8sEp) K8sObjCrUpd(shard uint32, ep *corev1.Endpoints,
 	}
 
 	var pool_names []string
-	var service_metadata utils.ServiceMetadataObj
+	var pools_service_metadata utils.ServiceMetadataObj
 
 	process_pool := true
 	k := utils.NamespaceName{Namespace: ep.Namespace, Name: ep.Name}
@@ -158,11 +158,11 @@ func (p *K8sEp) K8sObjCrUpd(shard uint32, ep *corev1.Endpoints,
 				} else {
 					pool_cache_obj, ok := pool_cache.(*utils.AviPoolCache)
 					if ok {
-						service_metadata = pool_cache_obj.ServiceMetadata
+						pools_service_metadata = pool_cache_obj.ServiceMetadata
 					} else {
 						utils.AviLog.Warning.Printf("Pool %s cache incorrect type",
 							pool_name)
-						service_metadata = utils.ServiceMetadataObj{}
+						pools_service_metadata = utils.ServiceMetadataObj{}
 					}
 				}
 			}
@@ -173,9 +173,11 @@ func (p *K8sEp) K8sObjCrUpd(shard uint32, ep *corev1.Endpoints,
 				pp.Protocol)
 			pool_names = append(pool_names, pool_name)
 		}
-		service_metadata = utils.ServiceMetadataObj{CrudHashKey: crud_hash_key}
+		pools_service_metadata = utils.ServiceMetadataObj{CrudHashKey: crud_hash_key}
 	}
-
+	// TODO (sudswas): We always assume that endpoints would be there in the cache if it's an endpoint event.
+	// This may not be the case, if initially the service didn't have pods - and hence the ep.Subsets was empty.
+	// Fix this by creating a pool/poolgroup for every service even if the endpoint subset is empty but the targetPorts are present.
 	if !process_pool {
 		utils.AviLog.Info.Printf("Endpoint %v is not present in Pool/Pg cache.", k)
 		return nil, nil
@@ -208,7 +210,7 @@ func (p *K8sEp) K8sObjCrUpd(shard uint32, ep *corev1.Endpoints,
 		}
 		pool_meta := utils.K8sAviPoolMeta{Name: pool_name,
 			Tenant:           tenant,
-			ServiceMetadata:  service_metadata,
+			ServiceMetadata:  pools_service_metadata,
 			CloudConfigCksum: ep.ResourceVersion}
 		s := strings.Split(pool_name, "-pool-")
 		s1 := strings.Split(s[1], "-")
@@ -216,6 +218,11 @@ func (p *K8sEp) K8sObjCrUpd(shard uint32, ep *corev1.Endpoints,
 		port_num, _ := strconv.Atoi(port)
 		protocol := s1[1]
 		pool_meta.Protocol = protocol
+		if len(ep.Subsets) == 0 {
+			// If this is an update on existing pool that had servers earlier but now the endpoint
+			// update has made the subsets to 0, we must set all the servers to 0 for all the pools for this service.
+			pool_meta.Servers = pool_meta.Servers[:0]
+		}
 		for _, ss := range ep.Subsets {
 			var epp_port int32
 			port_match := false
@@ -246,16 +253,19 @@ func (p *K8sEp) K8sObjCrUpd(shard uint32, ep *corev1.Endpoints,
 				}
 			}
 		}
-
 		rest_op := aviobjects.AviPoolBuild(&pool_meta)
 		rest_ops = append(rest_ops, rest_op)
 	}
-
+	rest_ops = p.CreatePoolGroup(name_prefix, port_protocols, tenant, rest_ops, ep, crud_hash_key)
 	if name_prefix == "" {
 		p.avi_rest_client_pool.AviRestOperate(p.avi_rest_client_pool.AviClient[shard], rest_ops)
 		for _, rest_op := range rest_ops {
-			if rest_op.Err == nil {
+			if rest_op.Err == nil && rest_op.Model == "Pool" {
 				aviobjects.AviPoolCacheAdd(p.avi_obj_cache.PoolCache, rest_op)
+			} else if rest_op.Err == nil && rest_op.Model == "PoolGroup" {
+				if rest_op.Err == nil && rest_op.Model == "PoolGroup" {
+					aviobjects.AviPGCacheAdd(p.avi_obj_cache.PgCache, rest_op)
+				}
 			}
 		}
 		return nil, nil
@@ -264,10 +274,101 @@ func (p *K8sEp) K8sObjCrUpd(shard uint32, ep *corev1.Endpoints,
 	}
 }
 
+func (p *K8sEp) CreatePoolGroup(name_prefix string, port_protocols map[utils.AviPortStrProtocol]bool, tenant string, rest_ops []*utils.RestOp, ep *corev1.Endpoints, crud_hash_key string) []*utils.RestOp {
+	key := utils.NamespaceName{Namespace: ep.Namespace, Name: ep.Name}
+	var pg_names []string
+	var pgs map[interface{}]bool
+	var pg_cache interface{}
+	var pgs_service_metadata utils.ServiceMetadataObj
+	process_pg := true
+	var ok bool
+	if name_prefix == "" {
+		pg_cache, process_pg = p.avi_obj_cache.SvcToPgCache.AviMultiCacheGetKey(key)
+		pgs, ok = pg_cache.(map[interface{}]bool)
+		if process_pg && ok {
+			for pg_name_intf := range pgs {
+				ppg_name, ok := pg_name_intf.(string)
+				if !ok {
+					utils.AviLog.Warning.Printf("pg_name_intf %T not string",
+						pg_name_intf)
+					continue
+				}
+				elems := strings.Split(ppg_name, "/")
+				pg_name := elems[1]
+				pg_names = append(pg_names, pg_name)
+				var pg_cache interface{}
+				pg_key := utils.NamespaceName{Namespace: tenant, Name: pg_name}
+				pg_cache, ok1 := p.avi_obj_cache.PgCache.AviCacheGet(pg_key)
+				if !ok1 {
+					utils.AviLog.Warning.Printf(`PG %s not present in Obj cache but
+										present in PG cache`, pg_name)
+				} else {
+					pg_cache_obj, ok := pg_cache.(*utils.AviPGCache)
+					if ok {
+						pgs_service_metadata = pg_cache_obj.ServiceMetadata
+					} else {
+						utils.AviLog.Warning.Printf("PG %s cache incorrect type",
+							pg_name)
+						pgs_service_metadata = utils.ServiceMetadataObj{}
+					}
+				}
+			}
+		}
+	} else {
+		for pp, _ := range port_protocols {
+			pg_name := fmt.Sprintf("%s-poolgroup-%v-%s", name_prefix, pp.Port,
+				pp.Protocol)
+			pg_names = append(pg_names, pg_name)
+		}
+		pgs_service_metadata = utils.ServiceMetadataObj{CrudHashKey: crud_hash_key}
+	}
+	for _, pg_name := range pg_names {
+		// Check if resourceVersion is same as cksum from cache. If so, skip upd
+		pg_key := utils.NamespaceName{Namespace: tenant, Name: pg_name}
+		pg_cache, ok := p.avi_obj_cache.PgCache.AviCacheGet(pg_key)
+		if !ok {
+			utils.AviLog.Warning.Printf("Namespace %s PG %s not present in PG cache",
+				tenant, pg_name)
+		} else {
+			pg_cache_obj, ok := pg_cache.(*utils.AviPGCache)
+			if ok {
+				if ep.ResourceVersion == pg_cache_obj.CloudConfigCksum {
+					utils.AviLog.Info.Printf("PG namespace %s name %s has same cksum %s",
+						tenant, pg_name, ep.ResourceVersion)
+					continue
+				} else {
+					utils.AviLog.Info.Printf(`PG namespace %s name %s has diff
+                            cksum %s resourceVersion %s`, tenant, pg_name,
+						pg_cache_obj.CloudConfigCksum, ep.ResourceVersion)
+				}
+			} else {
+				utils.AviLog.Warning.Printf("PG %s cache incorrect type", pg_name)
+			}
+		}
+		s := strings.Split(pg_name, "-poolgroup-")
+		s1 := strings.Split(s[1], "-")
+		port := s1[0]
+		protocol := s1[1]
+		pg_name := fmt.Sprintf("%s-poolgroup-%v-%s", s[0], port,
+			protocol)
+		pool_name := fmt.Sprintf("%s-pool-%v-%s", s[0], port,
+			protocol)
+		pg_meta := utils.K8sAviPoolGroupMeta{Name: pg_name,
+			Tenant:           tenant,
+			ServiceMetadata:  pgs_service_metadata,
+			CloudConfigCksum: ep.ResourceVersion}
+		pool_ref := fmt.Sprintf("/api/pool?name=%s", pool_name)
+		// TODO (sudswas): Add priority label, Ratio
+		pg_meta.Members = append(pg_meta.Members, &avimodels.PoolGroupMember{PoolRef: &pool_ref})
+		rest_op := aviobjects.AviPoolGroupBuild(&pg_meta)
+		rest_ops = append(rest_ops, rest_op)
+	}
+	return rest_ops
+}
+
 /*
  * key is of the form Service/crud_hash_key/Namespace/Name
  */
-
 func (p *K8sEp) K8sObjDelete(shard uint32, key string) ([]*utils.RestOp, error) {
 	return nil, nil
 }
