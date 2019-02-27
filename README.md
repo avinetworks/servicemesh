@@ -30,7 +30,7 @@ Steps:
     - cd $(GOPATH)/src/github/avinetworks/
     - git clone https://github.com/avinetworks/servicemesh
     - cd servicemesh
-    - make deps build
+    - make build
 
 This will generate a binary called: `$(GOPATH)/src/github/avinetworks/sevicemesh/servicemesh`
 

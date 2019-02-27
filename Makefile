@@ -6,7 +6,7 @@ BINARY_NAME=servicemesh
 REL_PATH=github.com/avinetworks/servicemesh
 
 .PHONY:all
-all: deps build docker
+all: build docker
 
 .PHONY: build
 build: 
@@ -19,10 +19,7 @@ clean:
 
 .PHONY: deps
 deps:
-		-$(GOGET) -v $(REL_PATH)
-		rm -rf $(GOPATH)/src/istio.io/istio/vendor/github.com/gogo/googleapis/google/rpc
-		rm -rf $(GOPATH)/src/istio.io/istio/vendor/github.com/gogo/protobuf/types
-		rm -rf $(GOPATH)/src/istio.io/istio/vendor/istio.io/api/mcp/v1alpha1
+	dep ensure -v
 
 .PHONY: docker
 docker:
