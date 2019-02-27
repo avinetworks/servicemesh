@@ -55,7 +55,7 @@ func IsSvcHttp(svc_name string, port int32) bool {
 func AviUrlToObjType(aviurl string) (string, error) {
 	url, err := url.Parse(aviurl)
 	if err != nil {
-		AviLog.Warning.Print("aviurl %v parse error", aviurl)
+		AviLog.Warning.Printf("aviurl %v parse error", aviurl)
 		return "", err
 	}
 
