@@ -34,3 +34,8 @@ spec:
             secretKeyRef:
               name: avi-secret
               key: controller_ip
+        - name: CTRL_VERSION
+          valueFrom:
+            secretKeyRef:
+              name: avi-secret
+              key: controller_version

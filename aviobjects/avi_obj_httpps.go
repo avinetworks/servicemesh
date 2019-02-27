@@ -16,12 +16,23 @@ package aviobjects
 
 import (
 	"fmt"
+	"os"
 
 	"github.com/avinetworks/servicemesh/pkg/utils"
 
 	avimodels "github.com/avinetworks/sdk/go/models"
 	"github.com/davecgh/go-spew/spew"
 )
+
+var CtrlVersion string
+
+func init() {
+	//Setting the package-wide version
+	CtrlVersion = os.Getenv("CTRL_VERSION")
+	if CtrlVersion == "" {
+		CtrlVersion = "19.1.1"
+	}
+}
 
 func AviHttpPSBuild(hps_meta *utils.AviHttpPolicySetMeta) *utils.RestOp {
 	name := hps_meta.Name
@@ -79,7 +90,7 @@ func AviHttpPSBuild(hps_meta *utils.AviHttpPolicySetMeta) *utils.RestOp {
 
 	// TODO Version should be latest from configmap
 	rest_op := utils.RestOp{Path: "/api/macro", Method: utils.RestPost, Obj: macro,
-		Tenant: hps_meta.Tenant, Model: "HTTPRequestPolicy", Version: "18.1.5"}
+		Tenant: hps_meta.Tenant, Model: "HTTPRequestPolicy", Version: CtrlVersion}
 
 	utils.AviLog.Info.Print(spew.Sprintf("HTTPRequestPolicy Restop %v AviHttpPolicySetMeta %v\n",
 		rest_op, *hps_meta))

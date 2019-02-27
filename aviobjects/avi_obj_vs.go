@@ -119,7 +119,7 @@ func AviVsBuild(vs_meta *utils.K8sAviVsMeta) []*utils.RestOp {
 
 	// TODO Version from configmap
 	rest_op := utils.RestOp{Path: "/api/macro", Method: utils.RestPost, Obj: macro,
-		Tenant: vs_meta.Tenant, Model: "VirtualService", Version: "18.1.5"}
+		Tenant: vs_meta.Tenant, Model: "VirtualService", Version: CtrlVersion}
 
 	rest_ops = append(rest_ops, &rest_op)
 

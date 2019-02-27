@@ -61,7 +61,7 @@ func AviPoolBuild(pool_meta *utils.K8sAviPoolMeta) *utils.RestOp {
 
 	// TODO Version should be latest from configmap
 	rest_op := utils.RestOp{Path: "/api/macro", Method: utils.RestPost, Obj: macro,
-		Tenant: pool_meta.Tenant, Model: "Pool", Version: "18.1.5"}
+		Tenant: pool_meta.Tenant, Model: "Pool", Version: CtrlVersion}
 
 	utils.AviLog.Info.Print(spew.Sprintf("Pool Restop %v K8sAviPoolMeta %v\n",
 		rest_op, *pool_meta))
