@@ -15,6 +15,8 @@
 package utils
 
 import (
+	"fmt"
+
 	avimodels "github.com/avinetworks/sdk/go/models"
 	coreinformers "k8s.io/client-go/informers/core/v1"
 	extinformers "k8s.io/client-go/informers/extensions/v1beta1"
@@ -163,4 +165,10 @@ type SkipSyncError struct {
 	Msg string
 }
 
+type WebSyncError struct {
+	err       error
+	operation string
+}
+
+func (e *WebSyncError) Error() string  { return fmt.Sprintf("Error during %s: %v", e.operation, e.err) }
 func (e *SkipSyncError) Error() string { return e.Msg }

@@ -18,9 +18,9 @@ import (
 	"fmt"
 	"os"
 
+	avimodels "github.com/avinetworks/sdk/go/models"
 	"github.com/avinetworks/servicemesh/pkg/utils"
 
-	avimodels "github.com/avinetworks/sdk/go/models"
 	"github.com/davecgh/go-spew/spew"
 )
 
@@ -30,7 +30,7 @@ func init() {
 	//Setting the package-wide version
 	CtrlVersion = os.Getenv("CTRL_VERSION")
 	if CtrlVersion == "" {
-		CtrlVersion = "19.1.1"
+		CtrlVersion = "18.2.2"
 	}
 }
 

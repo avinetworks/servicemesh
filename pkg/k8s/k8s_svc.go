@@ -129,6 +129,9 @@ func (s *K8sSvc) K8sObjCrUpd(shard uint32, svc *corev1.Service) ([]*utils.RestOp
 
 	if len(svc.Spec.Ports) == 1 {
 		for _, pool_rest_op := range pool_rest_ops {
+			// TODO (sudswas): What if a pool was created before and the service was created later?
+			// We will find it in the cache and hence rest_op won't have it.
+			// So we won't patch it.
 			if pool_rest_op.Model == "Pool" {
 				macro, ok := pool_rest_op.Obj.(utils.AviRestObjMacro)
 				if !ok {

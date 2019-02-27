@@ -70,14 +70,16 @@ func (p *AviRestClientPool) AviRestOperate(c *clients.AviClient, rest_ops []*Res
 		if op.Err != nil {
 			AviLog.Warning.Printf(`RestOp method %v path %v tenant %v Obj %s 
                     returned err %v`, op.Method, op.Path, op.Tenant,
-				spew.Sprint(op.Obj), op.Err)
+				spew.Sprint(op.Obj), Stringify(op.Err))
 			for j := i + 1; j < len(rest_ops); j++ {
 				rest_ops[j].Err = errors.New("Aborted due to prev error")
 			}
-			return op.Err
+			// Wrap the error into a websync error.
+			err := &WebSyncError{err: op.Err, operation: string(op.Method)}
+			return err
 		} else {
 			AviLog.Info.Printf(`RestOp method %v path %v tenant %v response %v`,
-				op.Method, op.Path, op.Tenant, op.Response)
+				op.Method, op.Path, op.Tenant, Stringify(op.Response))
 		}
 	}
 	return nil

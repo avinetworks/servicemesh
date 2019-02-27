@@ -220,6 +220,11 @@ func (p *K8sEp) K8sObjCrUpd(shard uint32, ep *corev1.Endpoints,
 		port_num, _ := strconv.Atoi(port)
 		protocol := s1[1]
 		pool_meta.Protocol = protocol
+		if len(ep.Subsets) == 0 {
+			// If this is an update on existing pool that had servers earlier but now the endpoint
+			// update has made the subsets to 0, we must set all the servers to 0 for all the pools for this service.
+			pool_meta.Servers = pool_meta.Servers[:0]
+		}
 		for _, ss := range ep.Subsets {
 			var epp_port int32
 			port_match := false

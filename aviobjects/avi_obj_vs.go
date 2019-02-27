@@ -41,7 +41,6 @@ func AviVsBuild(vs_meta *utils.K8sAviVsMeta) []*utils.RestOp {
 	} else {
 		east_west = false
 	}
-
 	network_prof := "/api/networkprofile/?name=" + vs_meta.NetworkProfile
 	app_prof := "/api/applicationprofile/?name=" + vs_meta.ApplicationProfile
 	// TODO use PoolGroup and use policies if there are > 1 pool, etc.
@@ -123,7 +122,7 @@ func AviVsBuild(vs_meta *utils.K8sAviVsMeta) []*utils.RestOp {
 
 	rest_ops = append(rest_ops, &rest_op)
 
-	utils.AviLog.Info.Print(spew.Sprintf("VS Restop %v K8sAviVsMeta %v\n", rest_op,
+	utils.AviLog.Info.Print(spew.Sprintf("VS Restop %v K8sAviVsMeta %v\n", utils.Stringify(rest_op),
 		*vs_meta))
 	return rest_ops
 }

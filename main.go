@@ -33,7 +33,6 @@ var (
 
 func main() {
 	flag.Parse()
-
 	flag.Lookup("logtostderr").Value.Set("true")
 
 	// set up signals so we handle the first shutdown signal gracefully
