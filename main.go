@@ -18,6 +18,7 @@ import (
 	"flag"
 	"os"
 
+	"github.com/avinetworks/servicemesh/aviobjects"
 	"github.com/avinetworks/servicemesh/pkg/k8s"
 	"github.com/avinetworks/servicemesh/pkg/mcp"
 	"github.com/avinetworks/servicemesh/pkg/utils"
@@ -76,7 +77,7 @@ func main() {
 
 	informers := NewInformers(kubeClient)
 
-	avi_obj_cache := utils.NewAviObjCache()
+	avi_obj_cache := utils.NewAviObjCache(kubeClient, informers)
 
 	// TODO get API endpoint/username/password from configmap and track configmap
 	// for changes and update rest client
@@ -85,11 +86,13 @@ func main() {
 	ctrlPassword := os.Getenv("CTRL_PASSWORD")
 	ctrlIpAddress := os.Getenv("CTRL_IPADDRESS")
 	if ctrlUsername == "" || ctrlPassword == "" || ctrlIpAddress == "" {
-		utils.AviLog.Error.Panic("AVI controller information missing. Update them in kubernetes secret or via environment variables.")
+		utils.AviLog.Error.Panic(`AVI controller information missing. Update them in kubernetes secret or via environment variables.`)
 	}
 	avi_rest_client_pool, err := utils.NewAviRestClientPool(utils.NumWorkers,
 		ctrlIpAddress, ctrlUsername, ctrlPassword)
 
+	avi_obj_cache.AviObjCachePopulate(avi_rest_client_pool.AviClient[0],
+		aviobjects.CtrlVersion, "Default-Cloud")
 	k8s_ep := k8s.NewK8sEp(avi_obj_cache, avi_rest_client_pool, informers)
 	//k8s_ingr = kube.NewK8sIng(avi_obj_cache, avi_rest_client_pool, informers, k8s_ep)
 	k8s_svc := k8s.NewK8sSvc(avi_obj_cache, avi_rest_client_pool, informers, k8s_ep)
