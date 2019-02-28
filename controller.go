@@ -163,11 +163,14 @@ func NewAviController(num_workers uint32, inf *utils.Informers, cs *kubernetes.C
 			c.workqueue[bkt].AddRateLimited(key)
 		},
 		UpdateFunc: func(old, cur interface{}) {
-			// TODO Check if anything has changed here ?
+			oldobj := old.(*corev1.Service)
 			svc := cur.(*corev1.Service)
-			key := "Service/" + utils.CrudHashKey("Service", svc) + "/" + ObjKey(svc)
-			bkt := Bkt(key, num_workers)
-			c.workqueue[bkt].AddRateLimited(key)
+			if oldobj.ResourceVersion != svc.ResourceVersion {
+				// Only add the key if the resource versions have changed.
+				key := "Service/" + utils.CrudHashKey("Service", svc) + "/" + ObjKey(svc)
+				bkt := Bkt(key, num_workers)
+				c.workqueue[bkt].AddRateLimited(key)
+			}
 		},
 	}
 

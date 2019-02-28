@@ -33,16 +33,12 @@ import (
 type K8sEp struct {
 	avi_obj_cache        *utils.AviObjCache
 	avi_rest_client_pool *utils.AviRestClientPool
-	svc_to_pool_cache    *utils.AviMultiCache
-	svc_to_pg_cache      *utils.AviMultiCache
 	informers            *utils.Informers
 }
 
 func NewK8sEp(avi_obj_cache *utils.AviObjCache, avi_rest_client_pool *utils.AviRestClientPool,
 	inf *utils.Informers) *K8sEp {
 	p := K8sEp{}
-	p.svc_to_pool_cache = utils.NewAviMultiCache()
-	p.svc_to_pg_cache = utils.NewAviMultiCache()
 	p.avi_obj_cache = avi_obj_cache
 	p.avi_rest_client_pool = avi_rest_client_pool
 	p.informers = inf
@@ -139,7 +135,7 @@ func (p *K8sEp) K8sObjCrUpd(shard uint32, ep *corev1.Endpoints,
 		var pools_cache interface{}
 		var pools map[interface{}]bool
 		var ok bool
-		pools_cache, process_pool = p.svc_to_pool_cache.AviMultiCacheGetKey(k)
+		pools_cache, process_pool = p.avi_obj_cache.SvcToPoolCache.AviMultiCacheGetKey(k)
 		pools, ok = pools_cache.(map[interface{}]bool)
 		if process_pool && ok {
 			// ppool_name is of the form service/name-pool-http-tcp, ingress/name-pool-http-tcp
@@ -274,21 +270,4 @@ func (p *K8sEp) K8sObjCrUpd(shard uint32, ep *corev1.Endpoints,
 
 func (p *K8sEp) K8sObjDelete(shard uint32, key string) ([]*utils.RestOp, error) {
 	return nil, nil
-}
-
-func (p *K8sEp) K8sEpSvcToPoolCacheAdd(key utils.NamespaceName,
-	prefix string, rest_op *utils.RestOp) error {
-	err := aviobjects.AviSvcToPoolCacheAdd(p.svc_to_pool_cache, rest_op, prefix, key)
-
-	return err
-}
-
-func (p *K8sEp) K8sEpSvcToPoolCacheGet(key utils.NamespaceName) (map[interface{}]bool, bool) {
-	return p.svc_to_pool_cache.AviMultiCacheGetKey(key)
-}
-
-func (p *K8sEp) K8sEpSvcToPoolCacheDel(key utils.NamespaceName, prefix string) error {
-	err := aviobjects.AviSvcToPoolCacheDel(p.svc_to_pool_cache, prefix, key)
-
-	return err
 }
