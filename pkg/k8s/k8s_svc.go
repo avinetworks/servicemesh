@@ -82,12 +82,17 @@ func (s *K8sSvc) K8sObjCrUpd(shard uint32, svc *corev1.Service) ([]*utils.RestOp
 
 	var rest_ops []*utils.RestOp
 
-	// Build PG/Pool with Endpoints
+	// Build Pool with Endpoints
 	pool_rest_ops, err := s.k8s_ep.K8sObjCrUpd(shard, ep, svc.Name, crud_hash_key)
 	if pool_rest_ops != nil {
 		rest_ops = append(rest_ops, pool_rest_ops...)
 	}
-
+	_, port_protocols := s.k8s_ep.GetValidPorts(ep)
+	// Populate poolgroups
+	pg_rest_ops := s.CreatePoolGroups(port_protocols, svc, crud_hash_key)
+	if pg_rest_ops != nil {
+		rest_ops = append(rest_ops, pg_rest_ops...)
+	}
 	avi_vs_meta := utils.K8sAviVsMeta{Name: svc.Name, Tenant: svc.Namespace,
 		CloudConfigCksum: svc.ResourceVersion, ServiceMetadata: svc_mdata,
 		EastWest: true}
@@ -128,21 +133,21 @@ func (s *K8sSvc) K8sObjCrUpd(shard uint32, svc *corev1.Service) ([]*utils.RestOp
 	}
 
 	if len(svc.Spec.Ports) == 1 {
-		for _, pool_rest_op := range pool_rest_ops {
-			// TODO (sudswas): What if a pool was created before and the service was created later?
+		for _, pg_rest_ops := range pg_rest_ops {
+			// TODO (sudswas): What if a poolgroup was created before and the service was created later?
 			// We will find it in the cache and hence rest_op won't have it.
 			// So we won't patch it.
-			if pool_rest_op.Model == "PoolGroup" {
-				macro, ok := pool_rest_op.Obj.(utils.AviRestObjMacro)
+			if pg_rest_ops.Model == "PoolGroup" {
+				macro, ok := pg_rest_ops.Obj.(utils.AviRestObjMacro)
 				if !ok {
-					utils.AviLog.Warning.Printf("pool_rest_op %v has unknown Obj type",
-						pool_rest_op)
+					utils.AviLog.Warning.Printf("pg_rest_ops %v has unknown Obj type",
+						pg_rest_ops)
 					break
 				}
 				poolgroup, ok := macro.Data.(avimodels.PoolGroup)
 				if !ok {
-					utils.AviLog.Warning.Printf("pool_rest_op %v has unknown macro type",
-						pool_rest_op)
+					utils.AviLog.Warning.Printf("pg_rest_ops %v has unknown macro type",
+						pg_rest_ops)
 				} else {
 					avi_vs_meta.DefaultPoolGroup = *poolgroup.Name
 				}
@@ -208,6 +213,8 @@ func (s *K8sSvc) K8sObjCrUpd(shard uint32, svc *corev1.Service) ([]*utils.RestOp
 						"service", vs_cache_key)
 				} else if rest_op.Model == "VirtualService" {
 					aviobjects.AviVsCacheAdd(s.avi_obj_cache.VsCache, rest_op)
+				} else if rest_op.Model == "PoolGroup" {
+					aviobjects.AviPGCacheAdd(s.avi_obj_cache.PgCache, rest_op)
 				}
 			}
 		}
@@ -292,4 +299,56 @@ func (s *K8sSvc) K8sObjDelete(shard uint32, key string) ([]*utils.RestOp, error)
 	aviobjects.AviVsCacheDel(s.avi_obj_cache.VsCache, cache_key)
 
 	return nil, nil
+}
+
+func (p *K8sSvc) CreatePoolGroups(port_protocols map[utils.AviPortStrProtocol]bool, svc *corev1.Service, crud_hash_key string) []*utils.RestOp {
+	var pg_names []string
+	var rest_ops []*utils.RestOp
+	var pg_service_metadata utils.ServiceMetadataObj
+	for pp, _ := range port_protocols {
+		pg_name := fmt.Sprintf("%s-poolgroup-%v-%s", svc.Name, pp.Port,
+			pp.Protocol)
+		pg_names = append(pg_names, pg_name)
+	}
+	pg_service_metadata = utils.ServiceMetadataObj{CrudHashKey: crud_hash_key}
+	for _, pg_name := range pg_names {
+		// Check if resourceVersion is same as cksum from cache. If so, skip upd
+		pg_key := utils.NamespaceName{Namespace: svc.Namespace, Name: pg_name}
+		pg_cache, ok := p.avi_obj_cache.PgCache.AviCacheGet(pg_key)
+		if !ok {
+			utils.AviLog.Warning.Printf("Namespace %s PG %s not present in PG cache",
+				svc.Namespace, pg_name)
+		} else {
+			pg_cache_obj, ok := pg_cache.(*utils.AviPGCache)
+			if ok {
+				if svc.ResourceVersion == pg_cache_obj.CloudConfigCksum {
+					utils.AviLog.Info.Printf("PG namespace %s name %s has same cksum %s",
+						svc.Namespace, pg_name, svc.ResourceVersion)
+					continue
+				} else {
+					utils.AviLog.Info.Printf(`PG namespace %s name %s has diff
+                            cksum %s resourceVersion %s`, svc.Namespace, pg_name,
+						pg_cache_obj.CloudConfigCksum, svc.ResourceVersion)
+				}
+			} else {
+				utils.AviLog.Warning.Printf("PG %s cache incorrect type", pg_name)
+			}
+		}
+		s := strings.Split(pg_name, "-poolgroup-")
+		s1 := strings.Split(s[1], "-")
+		port := s1[0]
+		protocol := s1[1]
+		pool_name := fmt.Sprintf("%s-pool-%v-%s", s[0], port,
+			protocol)
+		pg_meta := utils.K8sAviPoolGroupMeta{Name: pg_name,
+			Tenant:           svc.Namespace,
+			ServiceMetadata:  pg_service_metadata,
+			CloudConfigCksum: svc.ResourceVersion}
+		pool_ref := fmt.Sprintf("/api/pool?name=%s", pool_name)
+		// TODO (sudswas): Add priority label, Ratio
+		pg_meta.Members = append(pg_meta.Members, &avimodels.PoolGroupMember{PoolRef: &pool_ref})
+		rest_op := aviobjects.AviPoolGroupBuild(&pg_meta)
+		rest_ops = append(rest_ops, rest_op)
+	}
+	return rest_ops
 }

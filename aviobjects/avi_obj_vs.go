@@ -163,7 +163,7 @@ func AviVsCacheAdd(vs_cache *utils.AviCache, rest_op *utils.RestOp) error {
 			svc_mdata_map, ok = svc_mdata.(map[string]interface{})
 			if !ok {
 				utils.AviLog.Warning.Printf(`resp %v svc_mdata %T has invalid 
-								   service_metadata type`, resp, svc_mdata)
+								service_metadata type`, resp, svc_mdata)
 				svc_mdata_obj = utils.ServiceMetadataObj{}
 			} else {
 				SvcMdataMapToObj(&svc_mdata_map, &svc_mdata_obj)
