@@ -222,47 +222,15 @@ func (p *K8sEp) GetValidPorts(ep *corev1.Endpoints) (error, map[utils.AviPortStr
 		return &utils.SkipSyncError{"Skip sync"}, nil
 	}
 	port_protocols := make(map[utils.AviPortStrProtocol]bool)
-	for _, ss := range ep.Subsets {
-		if len(ss.Addresses) > 0 {
-			/*
-			 * If name is present in EndpointPort, try to match with name in
-			 * ServicePort and return corresponding targetPort. If name is
-			 * absent, there's just a single port. Return that targetPort
-			 */
-			for _, ep_port := range ss.Ports {
-				var tgt_port string
-				if ep_port.Name != "" {
-					tgt_port = func(svc *corev1.Service, name string) string {
-						for _, pp := range svc.Spec.Ports {
-							if pp.Name == name {
-								return pp.TargetPort.String()
-							}
-						}
-						utils.AviLog.Warning.Printf(`Matching name %v not found 
-                                in Svc namespace %s name %s Ports %v`, name,
-							svc.Namespace, svc.Name, svc.Spec.Ports)
-						return ""
-					}(svc, ep_port.Name)
-
-					if tgt_port == "" {
-						utils.AviLog.Warning.Printf(`Matching port %v name %v not 
-                                found in Svc`, ep_port.Port, ep_port.Name)
-						return nil, port_protocols
-					}
-				} else {
-					tgt_port = svc.Spec.Ports[0].TargetPort.String()
-				}
-
-				var prot string
-				if string(ep_port.Protocol) == "" {
-					prot = "tcp" // Default
-				} else {
-					prot = strings.ToLower(string(ep_port.Protocol))
-				}
-				pp := utils.AviPortStrProtocol{Port: tgt_port, Protocol: prot}
-				port_protocols[pp] = true
-			}
+	for _, svc_port := range svc.Spec.Ports {
+		var prot string
+		if string(svc_port.Protocol) == "" {
+			prot = "tcp" // Default
+		} else {
+			prot = strings.ToLower(string(svc_port.Protocol))
 		}
+		pp := utils.AviPortStrProtocol{Port: svc_port.TargetPort.String(), Protocol: prot}
+		port_protocols[pp] = true
 	}
 	return nil, port_protocols
 }

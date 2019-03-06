@@ -291,7 +291,8 @@ func (s *K8sSvc) K8sObjDelete(shard uint32, key string) ([]*utils.RestOp, error)
 			}
 		}
 	}
-
+	utils.AviLog.Info.Printf("Delete key %v PG in PG cache", cache_key)
+	aviobjects.AviPGCacheDel(s.avi_obj_cache.PgCache, cache_key)
 	utils.AviLog.Info.Printf("Delete key %v service in SvcToPoolCache", cache_key)
 	aviobjects.AviSvcToPoolCacheDel(s.avi_obj_cache.SvcToPoolCache, "service", cache_key)
 
@@ -316,7 +317,7 @@ func (p *K8sSvc) CreatePoolGroups(port_protocols map[utils.AviPortStrProtocol]bo
 		pg_key := utils.NamespaceName{Namespace: svc.Namespace, Name: pg_name}
 		pg_cache, ok := p.avi_obj_cache.PgCache.AviCacheGet(pg_key)
 		if !ok {
-			utils.AviLog.Warning.Printf("Namespace %s PG %s not present in PG cache",
+			utils.AviLog.Info.Printf("Namespace %s PG %s not present in PG cache",
 				svc.Namespace, pg_name)
 		} else {
 			pg_cache_obj, ok := pg_cache.(*utils.AviPGCache)

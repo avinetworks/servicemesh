@@ -180,6 +180,10 @@ func AviPoolCacheDel(pool_cache *utils.AviCache, key utils.NamespaceName) {
 	pool_cache.AviCacheDelete(key)
 }
 
+func AviPGCacheDel(pg_cache *utils.AviCache, key utils.NamespaceName) {
+	pg_cache.AviCacheDelete(key)
+}
+
 func AviSvcToPoolCacheAdd(svc_to_pool_cache *utils.AviMultiCache, rest_op *utils.RestOp,
 	prefix string, key utils.NamespaceName) error {
 	if (rest_op.Err != nil) || (rest_op.Response == nil) {

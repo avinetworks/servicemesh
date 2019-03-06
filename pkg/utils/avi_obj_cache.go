@@ -32,7 +32,6 @@ type AviObjCache struct {
 	PgCache        *AviCache
 	PoolCache      *AviCache
 	SvcToPoolCache *AviMultiCache
-	SvcToPgCache   *AviMultiCache
 	informers      *Informers
 }
 
@@ -42,7 +41,6 @@ func NewAviObjCache(client *kubernetes.Clientset, informers *Informers) *AviObjC
 	c.PgCache = NewAviCache()
 	c.PoolCache = NewAviCache()
 	c.SvcToPoolCache = NewAviMultiCache()
-	c.SvcToPgCache = NewAviMultiCache()
 	return &c
 }
 
@@ -59,7 +57,6 @@ func (c *AviObjCache) AviObjCachePopulate(client *clients.AviClient,
 	var svc_mdata_map map[string]interface{}
 	var err error
 	var pool_name string
-	var pg_name string
 
 	avi_pools := make(map[string]bool)
 	avi_pgs := make(map[string]bool)
@@ -163,11 +160,8 @@ func (c *AviObjCache) AviObjCachePopulate(client *clients.AviClient,
 				// For Service, name_prefix is the Service's name
 				pool_name = fmt.Sprintf("%s-pool-%v-%s", svc.Name,
 					pp.TargetPort.String(), prot)
-				pg_name = fmt.Sprintf("%s-poolgroup-%v-%s", svc.Name,
-					pp.TargetPort.String(), prot)
 			}
 			_, pool_pres := avi_pools[pool_name]
-			_, pg_pres := avi_pgs[pg_name]
 			if pool_pres {
 				key := NamespaceName{Namespace: svc.Namespace, Name: svc.Name}
 				pool_cache_entry := "service/" + pool_name
@@ -178,17 +172,6 @@ func (c *AviObjCache) AviObjCachePopulate(client *clients.AviClient,
 				AviLog.Warning.Printf(`Service namespace %v name %v pool %v
 					 has no corresponding pool`, svc.Namespace, svc.Name,
 					pool_name)
-			}
-			if pg_pres {
-				key := NamespaceName{Namespace: svc.Namespace, Name: svc.Name}
-				pg_cache_entry := "service/" + pg_name
-				c.SvcToPgCache.AviMultiCacheAdd(key, pg_cache_entry)
-				AviLog.Info.Printf(`key %v maps to PG %v in PG cache`,
-					key, pg_cache_entry)
-			} else {
-				AviLog.Warning.Printf(`Service namespace %v name %v PG %v
-					 has no corresponding PG`, svc.Namespace, svc.Name,
-					pg_name)
 			}
 		}
 	}
