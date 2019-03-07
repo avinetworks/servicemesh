@@ -32,7 +32,6 @@ type AviObjCache struct {
 	PgCache        *AviCache
 	PoolCache      *AviCache
 	SvcToPoolCache *AviMultiCache
-	SvcToPgCache   *AviMultiCache
 	informers      *Informers
 }
 
@@ -42,7 +41,6 @@ func NewAviObjCache(client *kubernetes.Clientset, informers *Informers) *AviObjC
 	c.PgCache = NewAviCache()
 	c.PoolCache = NewAviCache()
 	c.SvcToPoolCache = NewAviMultiCache()
-	c.SvcToPgCache = NewAviMultiCache()
 	return &c
 }
 
@@ -61,6 +59,7 @@ func (c *AviObjCache) AviObjCachePopulate(client *clients.AviClient,
 	var pool_name string
 
 	avi_pools := make(map[string]bool)
+	avi_pgs := make(map[string]bool)
 
 	// TODO Retrieve just fields we care about
 	uri := "/api/pool?include_name=true&cloud_ref.name=" + cloud
@@ -136,15 +135,59 @@ func (c *AviObjCache) AviObjCachePopulate(client *clients.AviClient,
 				k := NamespaceName{Namespace: tenant, Name: pool["name"].(string)}
 				c.PoolCache.AviCacheAdd(k, &pool_cache_obj)
 
-				AviLog.Info.Printf("Added Pool cache k %v val %v",
+				AviLog.Info.Printf("Added Pool cache key %v val %v",
 					k, pool_cache_obj)
 			}
 		}
 	}
+	// Populate the VS cache
+	c.AviObjVSCachePopulate(client, cloud)
+	c.AviPGCachePopulate(client, cloud, avi_pgs)
+	// svcs, err := c.informers.ServiceInformer.Lister().List(labels.Everything())
+	svcs, err := c.client.CoreV1().Services("").List(v1.ListOptions{})
+	if err != nil {
+		AviLog.Warning.Printf("Service Lister returned %v", err)
+	} else {
+		for _, svc := range svcs.Items {
+			for _, pp := range svc.Spec.Ports {
+				var prot string
+				if pp.Protocol == "" {
+					prot = "tcp"
+				} else {
+					prot = strings.ToLower(string(pp.Protocol))
+				}
+				// pool_name is of the form name_prefix-pool-port-protocol
+				// For Service, name_prefix is the Service's name
+				pool_name = fmt.Sprintf("%s-pool-%v-%s", svc.Name,
+					pp.TargetPort.String(), prot)
+			}
+			_, pool_pres := avi_pools[pool_name]
+			if pool_pres {
+				key := NamespaceName{Namespace: svc.Namespace, Name: svc.Name}
+				pool_cache_entry := "service/" + pool_name
+				c.SvcToPoolCache.AviMultiCacheAdd(key, pool_cache_entry)
+				AviLog.Info.Printf(`key %v maps to pool %v in pool cache`,
+					key, pool_cache_entry)
+			} else {
+				AviLog.Warning.Printf(`Service namespace %v name %v pool %v
+					 has no corresponding pool`, svc.Namespace, svc.Name,
+					pool_name)
+			}
+		}
+	}
+}
 
+// TODO (sudswas): Should this be run inside a go routine for parallel population
+// to reduce bootup time when the system is loaded. Variable duplication expected.
+func (c *AviObjCache) AviObjVSCachePopulate(client *clients.AviClient,
+	cloud string) {
+	var rest_response interface{}
+	var svc_mdata interface{}
+	var svc_mdata_map map[string]interface{}
+	var svc_mdata_obj ServiceMetadataObj
 	// TODO Retrieve just fields we care about
-	uri = "/api/virtualservice?include_name=true&cloud_ref.name=" + cloud
-	err = client.AviSession.Get(uri, &rest_response)
+	uri := "/api/virtualservice?include_name=true&cloud_ref.name=" + cloud
+	err := client.AviSession.Get(uri, &rest_response)
 
 	if err != nil {
 		AviLog.Warning.Printf(`Vs Get uri %v returned err %v`, uri, err)
@@ -216,36 +259,83 @@ func (c *AviObjCache) AviObjCachePopulate(client *clients.AviClient,
 			}
 		}
 	}
+}
 
-	// svcs, err := c.informers.ServiceInformer.Lister().List(labels.Everything())
-	svcs, err := c.client.CoreV1().Services("").List(v1.ListOptions{})
+//Design library methods to remove repeatation of code.
+func (c *AviObjCache) AviPGCachePopulate(client *clients.AviClient,
+	cloud string, avi_pgs map[string]bool) {
+	var rest_response interface{}
+	var svc_mdata interface{}
+	var svc_mdata_map map[string]interface{}
+	var svc_mdata_obj ServiceMetadataObj
+	uri := "/api/poolgroup?include_name=true&cloud_ref.name=" + cloud
+	err := client.AviSession.Get(uri, &rest_response)
 	if err != nil {
-		AviLog.Warning.Printf("Service Lister returned %v", err)
+		AviLog.Warning.Printf(`PG Get uri %v returned err %v`, uri, err)
 	} else {
-		for _, svc := range svcs.Items {
-			for _, pp := range svc.Spec.Ports {
-				var prot string
-				if pp.Protocol == "" {
-					prot = "tcp"
-				} else {
-					prot = strings.ToLower(string(pp.Protocol))
-				}
-				// pool_name is of the form name_prefix-pool-port-protocol
-				// For Service, name_prefix is the Service's name
-				pool_name = fmt.Sprintf("%s-pool-%v-%s", svc.Name,
-					pp.TargetPort.String(), prot)
+		resp, ok := rest_response.(map[string]interface{})
+		if !ok {
+			AviLog.Warning.Printf(`PG Get uri %v returned %v type %T`, uri,
+				rest_response, rest_response)
+		} else {
+			AviLog.Info.Printf("PG Get uri %v returned %v PGs", uri,
+				resp["count"])
+			results, ok := resp["results"].([]interface{})
+			if !ok {
+				AviLog.Warning.Printf(`results not of type []interface{}
+								 Instead of type %T for PGs`, resp["results"])
+				return
 			}
-			_, pool_pres := avi_pools[pool_name]
-			if pool_pres {
-				key := NamespaceName{Namespace: svc.Namespace, Name: svc.Name}
-				pool_cache_entry := "service/" + pool_name
-				c.SvcToPoolCache.AviMultiCacheAdd(key, pool_cache_entry)
-				AviLog.Info.Printf(`key %v maps to pool %v in pool cache`,
-					key, pool_cache_entry)
-			} else {
-				AviLog.Warning.Printf(`Service namespace %v name %v pool %v
-					 has no corresponding pool`, svc.Namespace, svc.Name,
-					pool_name)
+			for _, pg_intf := range results {
+				pg, ok := pg_intf.(map[string]interface{})
+				if !ok {
+					AviLog.Warning.Printf(`pg_intf not of type map[string]
+									 interface{}. Instead of type %T`, pg_intf)
+					continue
+				}
+				svc_mdata_intf, ok := pg["service_metadata"]
+				if ok {
+					if err := json.Unmarshal([]byte(svc_mdata_intf.(string)),
+						&svc_mdata); err == nil {
+						svc_mdata_map, ok = svc_mdata.(map[string]interface{})
+						if !ok {
+							AviLog.Warning.Printf(`resp %v svc_mdata %T has invalid
+									 service_metadata type for PGs`, pg, svc_mdata)
+						} else {
+							crkhey, ok := svc_mdata_map["crud_hash_key"]
+							if ok {
+								svc_mdata_obj.CrudHashKey = crkhey.(string)
+							} else {
+								AviLog.Warning.Printf(`service_metadata %v
+										  malformed`, svc_mdata_map)
+							}
+						}
+					}
+				}
+
+				var tenant string
+				url, err := url.Parse(pg["tenant_ref"].(string))
+				if err != nil {
+					AviLog.Warning.Printf(`Error parsing tenant_ref %v in
+											   PG %v`, pg["tenant_ref"], pg)
+					continue
+				} else if url.Fragment == "" {
+					AviLog.Warning.Printf(`Error extracting name tenant_ref %v
+										 in PG %v`, pg["tenant_ref"], pg)
+					continue
+				} else {
+					tenant = url.Fragment
+				}
+
+				pg_cache_obj := AviPGCache{Name: pg["name"].(string),
+					Tenant: tenant, Uuid: pg["uuid"].(string),
+					CloudConfigCksum: pg["cloud_config_cksum"].(string),
+					ServiceMetadata:  svc_mdata_obj}
+				k := NamespaceName{Namespace: tenant, Name: pg["name"].(string)}
+				c.PgCache.AviCacheAdd(k, &pg_cache_obj)
+				avi_pgs[pg_cache_obj.Name] = true
+				AviLog.Info.Printf("Added PG cache key %v val %v",
+					k, pg_cache_obj)
 			}
 		}
 	}

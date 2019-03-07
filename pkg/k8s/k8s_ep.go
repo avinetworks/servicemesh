@@ -69,61 +69,11 @@ func (p *K8sEp) K8sObjCrUpd(shard uint32, ep *corev1.Endpoints,
 	 * in cache and extract targetPort from Service Object. If Service isnt
 	 * present yet, wait for it to be synced
 	 */
-
-	port_protocols := make(map[utils.AviPortStrProtocol]bool)
-	svc, err := p.informers.ServiceInformer.Lister().Services(ep.Namespace).Get(ep.Name)
-	if err != nil {
-		utils.AviLog.Warning.Printf(`Service for Endpoint Namespace %v Name %v 
-            doesn't exist`, ep.Namespace, ep.Name)
-		return nil, &utils.SkipSyncError{"Skip sync"}
-	}
-
 	tenant := ep.Namespace
-	for _, ss := range ep.Subsets {
-		if len(ss.Addresses) > 0 {
-			/*
-			 * If name is present in EndpointPort, try to match with name in
-			 * ServicePort and return corresponding targetPort. If name is
-			 * absent, there's just a single port. Return that targetPort
-			 */
-			for _, ep_port := range ss.Ports {
-				var tgt_port string
-				if ep_port.Name != "" {
-					tgt_port = func(svc *corev1.Service, name string) string {
-						for _, pp := range svc.Spec.Ports {
-							if pp.Name == name {
-								return pp.TargetPort.String()
-							}
-						}
-						utils.AviLog.Warning.Printf(`Matching name %v not found 
-                                in Svc namespace %s name %s Ports %v`, name,
-							svc.Namespace, svc.Name, svc.Spec.Ports)
-						return ""
-					}(svc, ep_port.Name)
-
-					if tgt_port == "" {
-						utils.AviLog.Warning.Printf(`Matching port %v name %v not 
-                                found in Svc`, ep_port.Port, ep_port.Name)
-						return nil, nil
-					}
-				} else {
-					tgt_port = svc.Spec.Ports[0].TargetPort.String()
-				}
-
-				var prot string
-				if string(ep_port.Protocol) == "" {
-					prot = "tcp" // Default
-				} else {
-					prot = strings.ToLower(string(ep_port.Protocol))
-				}
-				pp := utils.AviPortStrProtocol{Port: tgt_port, Protocol: prot}
-				port_protocols[pp] = true
-			}
-		}
-	}
+	_, port_protocols := p.GetValidPorts(ep)
 
 	var pool_names []string
-	var service_metadata utils.ServiceMetadataObj
+	var pool_service_metadata utils.ServiceMetadataObj
 
 	process_pool := true
 	k := utils.NamespaceName{Namespace: ep.Namespace, Name: ep.Name}
@@ -158,11 +108,11 @@ func (p *K8sEp) K8sObjCrUpd(shard uint32, ep *corev1.Endpoints,
 				} else {
 					pool_cache_obj, ok := pool_cache.(*utils.AviPoolCache)
 					if ok {
-						service_metadata = pool_cache_obj.ServiceMetadata
+						pool_service_metadata = pool_cache_obj.ServiceMetadata
 					} else {
 						utils.AviLog.Warning.Printf("Pool %s cache incorrect type",
 							pool_name)
-						service_metadata = utils.ServiceMetadataObj{}
+						pool_service_metadata = utils.ServiceMetadataObj{}
 					}
 				}
 			}
@@ -173,9 +123,11 @@ func (p *K8sEp) K8sObjCrUpd(shard uint32, ep *corev1.Endpoints,
 				pp.Protocol)
 			pool_names = append(pool_names, pool_name)
 		}
-		service_metadata = utils.ServiceMetadataObj{CrudHashKey: crud_hash_key}
+		pool_service_metadata = utils.ServiceMetadataObj{CrudHashKey: crud_hash_key}
 	}
-
+	// TODO (sudswas): We always assume that endpoints would be there in the cache if it's an endpoint event.
+	// This may not be the case, if initially the service didn't have pods - and hence the ep.Subsets was empty.
+	// Fix this by creating a pool/poolgroup for every service even if the endpoint subset is empty but the targetPorts are present.
 	if !process_pool {
 		utils.AviLog.Info.Printf("Endpoint %v is not present in Pool/Pg cache.", k)
 		return nil, nil
@@ -208,7 +160,7 @@ func (p *K8sEp) K8sObjCrUpd(shard uint32, ep *corev1.Endpoints,
 		}
 		pool_meta := utils.K8sAviPoolMeta{Name: pool_name,
 			Tenant:           tenant,
-			ServiceMetadata:  service_metadata,
+			ServiceMetadata:  pool_service_metadata,
 			CloudConfigCksum: ep.ResourceVersion}
 		s := strings.Split(pool_name, "-pool-")
 		s1 := strings.Split(s[1], "-")
@@ -246,15 +198,13 @@ func (p *K8sEp) K8sObjCrUpd(shard uint32, ep *corev1.Endpoints,
 				}
 			}
 		}
-
 		rest_op := aviobjects.AviPoolBuild(&pool_meta)
 		rest_ops = append(rest_ops, rest_op)
 	}
-
 	if name_prefix == "" {
 		p.avi_rest_client_pool.AviRestOperate(p.avi_rest_client_pool.AviClient[shard], rest_ops)
 		for _, rest_op := range rest_ops {
-			if rest_op.Err == nil {
+			if rest_op.Err == nil && rest_op.Model == "Pool" {
 				aviobjects.AviPoolCacheAdd(p.avi_obj_cache.PoolCache, rest_op)
 			}
 		}
@@ -264,10 +214,30 @@ func (p *K8sEp) K8sObjCrUpd(shard uint32, ep *corev1.Endpoints,
 	}
 }
 
+func (p *K8sEp) GetValidPorts(ep *corev1.Endpoints) (error, map[utils.AviPortStrProtocol]bool) {
+	svc, err := p.informers.ServiceInformer.Lister().Services(ep.Namespace).Get(ep.Name)
+	if err != nil {
+		utils.AviLog.Warning.Printf(`Service for Endpoint Namespace %v Name %v
+            doesn't exist`, ep.Namespace, ep.Name)
+		return &utils.SkipSyncError{"Skip sync"}, nil
+	}
+	port_protocols := make(map[utils.AviPortStrProtocol]bool)
+	for _, svc_port := range svc.Spec.Ports {
+		var prot string
+		if string(svc_port.Protocol) == "" {
+			prot = "tcp" // Default
+		} else {
+			prot = strings.ToLower(string(svc_port.Protocol))
+		}
+		pp := utils.AviPortStrProtocol{Port: svc_port.TargetPort.String(), Protocol: prot}
+		port_protocols[pp] = true
+	}
+	return nil, port_protocols
+}
+
 /*
  * key is of the form Service/crud_hash_key/Namespace/Name
  */
-
 func (p *K8sEp) K8sObjDelete(shard uint32, key string) ([]*utils.RestOp, error) {
 	return nil, nil
 }

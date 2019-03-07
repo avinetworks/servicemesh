@@ -15,6 +15,8 @@
 package utils
 
 import (
+	"fmt"
+
 	avimodels "github.com/avinetworks/sdk/go/models"
 	coreinformers "k8s.io/client-go/informers/core/v1"
 	extinformers "k8s.io/client-go/informers/extensions/v1beta1"
@@ -100,6 +102,14 @@ type K8sAviPoolMeta struct {
 	Protocol         string
 }
 
+type K8sAviPoolGroupMeta struct {
+	Name             string
+	Tenant           string
+	ServiceMetadata  ServiceMetadataObj
+	CloudConfigCksum string
+	Members          []*avimodels.PoolGroupMember
+}
+
 type AviPortProtocol struct {
 	Port     int32
 	Protocol string
@@ -125,10 +135,11 @@ type K8sAviVsMeta struct {
 	ApplicationProfile string
 	NetworkProfile     string
 	PortProto          []AviPortProtocol          // for listeners
-	PoolMap            map[AviPortProtocol]string // for mapping listener to Pools
+	PoolGroupMap       map[AviPortProtocol]string // for mapping listener to Pools
 	DefaultPool        string
 	EastWest           bool
 	CloudConfigCksum   string
+	DefaultPoolGroup   string
 }
 
 /*
@@ -152,6 +163,14 @@ type AviVsCache struct {
 	CloudConfigCksum string
 }
 
+type AviPGCache struct {
+	Name             string
+	Tenant           string
+	Uuid             string
+	ServiceMetadata  ServiceMetadataObj
+	CloudConfigCksum string
+}
+
 type AviHttpPolicySetMeta struct {
 	Name             string
 	Tenant           string
@@ -163,4 +182,10 @@ type SkipSyncError struct {
 	Msg string
 }
 
+type WebSyncError struct {
+	err       error
+	operation string
+}
+
+func (e *WebSyncError) Error() string  { return fmt.Sprintf("Error during %s: %v", e.operation, e.err) }
 func (e *SkipSyncError) Error() string { return e.Msg }

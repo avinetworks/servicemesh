@@ -64,7 +64,7 @@ func AviPoolBuild(pool_meta *utils.K8sAviPoolMeta) *utils.RestOp {
 		Tenant: pool_meta.Tenant, Model: "Pool", Version: CtrlVersion}
 
 	utils.AviLog.Info.Print(spew.Sprintf("Pool Restop %v K8sAviPoolMeta %v\n",
-		rest_op, *pool_meta))
+		utils.Stringify(rest_op), *pool_meta))
 	return &rest_op
 }
 
@@ -178,6 +178,10 @@ func RestRespArrToObjByType(rest_op *utils.RestOp, obj_type string) ([]map[strin
 
 func AviPoolCacheDel(pool_cache *utils.AviCache, key utils.NamespaceName) {
 	pool_cache.AviCacheDelete(key)
+}
+
+func AviPGCacheDel(pg_cache *utils.AviCache, key utils.NamespaceName) {
+	pg_cache.AviCacheDelete(key)
 }
 
 func AviSvcToPoolCacheAdd(svc_to_pool_cache *utils.AviMultiCache, rest_op *utils.RestOp,
