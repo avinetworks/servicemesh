@@ -20,10 +20,8 @@ import (
 	"net/url"
 	"sync"
 
-	"github.com/golang/protobuf/proto"
 	"google.golang.org/grpc"
 	mcpapi "istio.io/api/mcp/v1alpha1"
-	istio_networking_v1alpha3 "istio.io/api/networking/v1alpha3"
 	"istio.io/istio/pkg/mcp/client"
 	"istio.io/istio/pkg/mcp/configz"
 	"istio.io/istio/pkg/mcp/monitoring"
@@ -35,89 +33,6 @@ const (
 	// DefaultMCPMaxMsgSize is the default maximum message size
 	DefaultMCPMaxMsgSize = 1024 * 1024 * 4
 )
-
-var (
-	// VirtualService describes v1alpha3 route rules
-	VirtualService = ProtoSchema{
-		Type:        "virtual-service",
-		Plural:      "virtual-services",
-		Group:       "networking",
-		Version:     "v1alpha3",
-		MessageName: "istio.networking.v1alpha3.VirtualService",
-		Validate:    ValidateVirtualService,
-		Collection:  "istio/networking/v1alpha3/virtualservices",
-	}
-	Gateway = ProtoSchema{
-		Type:        "gateway",
-		Plural:      "gateways",
-		Group:       "networking",
-		Version:     "v1alpha3",
-		MessageName: "istio.networking.v1alpha3.Gateway",
-		Validate:    ValidateGateway,
-		Collection:  "istio/networking/v1alpha3/gateways",
-	}
-	// ServiceEntry describes service entries
-	ServiceEntry = ProtoSchema{
-		Type:        "service-entry",
-		Plural:      "service-entries",
-		Group:       "networking",
-		Version:     "v1alpha3",
-		MessageName: "istio.networking.v1alpha3.ServiceEntry",
-		Validate:    ValidateServiceEntry,
-		Collection:  "istio/networking/v1alpha3/serviceentries",
-	}
-
-	// IstioConfigTypes lists all Istio config types with schemas and validation
-	IstioConfigTypes = ConfigDescriptor{
-		VirtualService,
-		Gateway,
-		ServiceEntry,
-	}
-)
-
-func ValidateVirtualService(name, namespace string, msg proto.Message) (errs error) {
-	fmt.Println("We will no-op for now")
-	// This is a bogus print log here to initialize the "istio.io/api/networking/v1alpha3"
-	// Can be removed when we use this package for more work.
-	fmt.Println(istio_networking_v1alpha3.TLSSettings_ISTIO_MUTUAL)
-	return
-}
-
-func ValidateGateway(name, namespace string, msg proto.Message) (errs error) {
-	fmt.Println("We will no-op for now")
-	// This is a bogus print log here to initialize the "istio.io/api/networking/v1alpha3"
-	// Can be removed when we use this package for more work.
-	fmt.Println(istio_networking_v1alpha3.TLSSettings_ISTIO_MUTUAL)
-	return
-}
-
-func ValidateServiceEntry(name, namespace string, msg proto.Message) (errs error) {
-	fmt.Println("We will no-op for now")
-	// This is a bogus print log here to initialize the "istio.io/api/networking/v1alpha3"
-	// Can be removed when we use this package for more work.
-	fmt.Println(istio_networking_v1alpha3.TLSSettings_ISTIO_MUTUAL)
-	return
-}
-
-type ConfigDescriptor []ProtoSchema
-
-type ProtoSchema struct {
-	ClusterScoped bool
-
-	Type string
-
-	Plural string
-
-	Group string
-
-	Version string
-
-	MessageName string
-
-	Validate func(name, namespace string, config proto.Message) error
-
-	Collection string
-}
 
 type MCPClient struct {
 	MCPServerAddrs []string
@@ -146,7 +61,8 @@ func (c *MCPClient) InitMCPClient() error {
 	collections := make([]sink.CollectionOptions, len(IstioConfigTypes))
 	for i, model := range IstioConfigTypes {
 		collections[i] = sink.CollectionOptions{
-			Name: model.Collection,
+			Name:        model.Collection,
+			Incremental: true,
 		}
 	}
 	ctx, cancel := context.WithCancel(context.Background())

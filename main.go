@@ -19,8 +19,8 @@ import (
 	"os"
 
 	"github.com/avinetworks/servicemesh/aviobjects"
+	"github.com/avinetworks/servicemesh/pkg/istio/mcp"
 	"github.com/avinetworks/servicemesh/pkg/k8s"
-	"github.com/avinetworks/servicemesh/pkg/mcp"
 	"github.com/avinetworks/servicemesh/pkg/utils"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
@@ -50,12 +50,11 @@ func main() {
 		istioEnabled := "False"
 		istioEnabled = os.Getenv("ISTIO_ENABLED")
 		if istioEnabled == "True" {
-			stop := make(chan struct{})
 			mcpServers := []string{"mcp://istio-galley.istio-system.svc:9901"}
 			mcpClient := mcp.MCPClient{MCPServerAddrs: mcpServers}
 			_ = mcpClient.InitMCPClient()
 			// TODO (sudswas): Need to handle the stop signal
-			mcpClient.Start(stop)
+			mcpClient.Start(stopCh)
 		}
 		utils.AviLog.Info.Println("We are running inside kubernetes cluster. Won't use kubeconfig files.")
 		kubeCluster = true
