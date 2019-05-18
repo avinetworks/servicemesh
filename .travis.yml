@@ -9,4 +9,4 @@ matrix:
       - export GOPATH=/home/travis/gopath
       - export PATH=$GOPATH/bin:$GOROOT/bin:$PATH
       script:
-      - go test ./src/github.com/avinetworks/servicemesh/pkg/istio/objects
+      - go test ./pkg/istio/objects
