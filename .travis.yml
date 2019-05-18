@@ -1,0 +1,14 @@
+dist: xenial
+sudo: required
+
+matrix:
+  include:
+    - os: "linux"
+      env: TRAVIS_GOOS=darwin TRAVIS_CGO_ENABLED=0
+    - language: go
+      go: "1.12.x"
+      install:
+      - export GOPATH=/home/travis/gopath
+      - export PATH=$GOPATH/bin:$GOROOT/bin:$PATH
+      script:
+      - go test ./servicemesh/pkg/istio/objects/virtual_service_test.go ./servicemesh/pkg/istio/objects/store_test.go
