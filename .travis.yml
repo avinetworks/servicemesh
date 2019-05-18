@@ -3,8 +3,6 @@ sudo: required
 
 matrix:
   include:
-    - os: "linux"
-      env: TRAVIS_GOOS=darwin TRAVIS_CGO_ENABLED=0
     - language: go
       go: "1.12.x"
       install:
