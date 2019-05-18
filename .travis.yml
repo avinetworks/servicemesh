@@ -9,4 +9,5 @@ matrix:
       - export GOPATH=/home/travis/gopath
       - export PATH=$GOPATH/bin:$GOROOT/bin:$PATH
       script:
-      - go test ./pkg/istio/objects
+      - make build
+      - go test ./pkg/istio/objects -v
