@@ -27,6 +27,7 @@ var vsonce sync.Once
 
 type IstioVirtualService interface {
 	VirtualService(ns string) VirtualServiceNameSpaceIntf
+        // To be implemented
 	//List() *[]ObjectStore
 }
 
