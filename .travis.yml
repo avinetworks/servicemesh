@@ -10,4 +10,4 @@ matrix:
       - export PATH=$GOPATH/bin:$GOROOT/bin:$PATH
       script:
       - make build
-      - go test ./pkg/istio/objects -v
+      - make test
