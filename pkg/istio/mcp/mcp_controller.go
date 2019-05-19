@@ -21,6 +21,7 @@ import (
 	"time"
 
 	istio_objs "github.com/avinetworks/servicemesh/pkg/istio/objects"
+	"github.com/avinetworks/servicemesh/pkg/utils"
 	"github.com/gogo/protobuf/types"
 	"istio.io/istio/pkg/mcp/sink"
 )
@@ -41,7 +42,6 @@ func NewController() *Controller {
 			synced[descriptor.Collection] = false
 		}
 	}
-
 	return &Controller{
 		synced:                  synced,
 		descriptorsByCollection: descriptorsByMessageName,
@@ -83,21 +83,17 @@ func (c *Controller) Apply(change *sink.Change) error {
 	}
 
 	schema, valid := c.ConfigDescriptor().GetByType(descriptor.Type)
+	// Retrive all the existing store objects
+	prevStore := schema.GetAll()
 	if !valid {
 		return fmt.Errorf("descriptor type not supported %s", change.Collection)
 	}
 	c.syncedMu.Lock()
 	c.synced[change.Collection] = true
 	c.syncedMu.Unlock()
-	istio_objs.InitializeObjs(descriptor.Type)
 	createTime := time.Now()
 	for _, obj := range change.Objects {
 		namespace, name := extractNameNamespace(obj.Metadata.Name)
-		fmt.Println("Got an update for name %s", name)
-		if err := schema.Validate(name, namespace, obj.Body); err != nil {
-			// Discard the resource
-			continue
-		}
 		if obj.Metadata.CreateTime != nil {
 			var err error
 			if createTime, err = types.TimestampFromProto(obj.Metadata.CreateTime); err != nil {
@@ -114,12 +110,14 @@ func (c *Controller) Apply(change *sink.Change) error {
 			CreationTimestamp: createTime,
 			Labels:            obj.Metadata.Labels,
 			Annotations:       obj.Metadata.Annotations,
-			// TODO (sudswas): Change this to take it from config
-			Domain: "avi.internal",
 		}
-		configMeta.QueueByTypes(obj.Body)
+		schema.Store(name, namespace, configMeta, obj.Body)
 	}
-	istio_objs.CalculateUpdates(descriptor.Type)
+	// Now the store is updated with the latest values. Let's fetch them and calculate updates
+	newStore := schema.GetAll()
+	changedKeys := c.ConfigDescriptor().CalculateUpdates(prevStore, newStore)
+	// Just a placeholder log for now, this should be pushed to the workqueue
+	utils.AviLog.Warning.Printf("Changed Keys %s", changedKeys)
 	return nil
 }
 

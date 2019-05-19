@@ -27,12 +27,27 @@ var vsonce sync.Once
 
 type IstioVirtualService interface {
 	VirtualService(ns string) VirtualServiceNameSpaceIntf
-        // To be implemented
 	//List() *[]ObjectStore
 }
 
 type VirtualServiceLister struct {
 	store *ObjectStore
+}
+
+func (v *VirtualServiceLister) GetAllVirtualServices() map[string]map[string]string {
+	// This method should return a map that looks like this: {ns: [obj1, obj2]}
+	// This is particularly useful if we want to know what are the vs names
+	// present in a namespace without affecting the actual store objects.
+	allNamespaces := v.store.GetAllNamespaces()
+	allVirtualServices := make(map[string]map[string]string)
+	if len(allNamespaces) != 0 {
+		// Iterate over each namespace and formulate the map
+		for _, ns := range allNamespaces {
+			allVirtualServices[ns] = v.VirtualService(ns).GetAllVSNames()
+		}
+	}
+	return allVirtualServices
+
 }
 
 func SharedVirtualServiceLister() *VirtualServiceLister {
@@ -46,7 +61,7 @@ func SharedVirtualServiceLister() *VirtualServiceLister {
 
 func (v *VirtualServiceLister) VirtualService(ns string) *VirtualServiceNSCache {
 	namespacedObjects := v.store.GetNSStore(ns)
-	gwInstance := GetGatewayInstance()
+	gwInstance := SharedGatewayLister()
 	return &VirtualServiceNSCache{namespace: ns, objects: namespacedObjects, gwInstance: gwInstance}
 }
 
@@ -60,7 +75,7 @@ type VirtualServiceNameSpaceIntf interface {
 type VirtualServiceNSCache struct {
 	namespace  string
 	objects    *ObjectMapStore
-	gwInstance *SharedGatewayLister
+	gwInstance *GatewayLister
 }
 
 func (v *VirtualServiceNSCache) Get(name string) (bool, *IstioObject) {
@@ -69,11 +84,24 @@ func (v *VirtualServiceNSCache) Get(name string) (bool, *IstioObject) {
 		// Do error wrapping here
 		return false, nil
 	} else {
+		// Let's return a VS object now
+		_, ok := obj.(*IstioObject).Spec.(*networking.VirtualService)
+		if !ok {
+			// This is not the right object to cast to VirtualService return error.
+			utils.AviLog.Warning.Printf("Wrong object type found in store, will return nil %v", obj)
+			return false, nil
+		}
 		return true, obj.(*IstioObject)
 	}
 }
 
 func (v *VirtualServiceNSCache) Update(obj *IstioObject) {
+	// Check if the resource version in the repo is the same as the one sent.
+	found, storedVS := v.Get(obj.ConfigMeta.Name)
+	if found && storedVS.ConfigMeta.ResourceVersion == obj.ConfigMeta.ResourceVersion {
+		utils.AviLog.Trace.Printf("Nothing to update, resource versions same %s", obj.ConfigMeta.Name)
+		return
+	}
 	v.objects.AddOrUpdate(obj.Name, obj)
 	v.UpdateGatewayRefs(obj)
 }
@@ -90,6 +118,10 @@ func (v *VirtualServiceNSCache) UpdateGatewayRefs(obj *IstioObject) {
 }
 
 func (v *VirtualServiceNSCache) List() map[string]*IstioObject {
+	// TODO (sudswas): Let's check if we can abstract out the store objects
+	// completely. There's still a possibility that if we pass the references
+	// we maybe allowing upper layers to modify the object that would directly
+	// impact the store objects.
 	convertedMap := make(map[string]*IstioObject)
 	// Change the empty interface to IstioObject. Avoid Duck Typing.
 	for key, value := range v.objects.ObjectMap {
@@ -109,6 +141,17 @@ func (v *VirtualServiceNSCache) Delete(name string) bool {
 	return v.objects.Delete(name)
 }
 
+func (v *VirtualServiceNSCache) GetAllVSNames() map[string]string {
+	// Obtain the object for this VS
+	allObjects := v.objects.GetAllObjectNames()
+	objVersionsMap := make(map[string]string)
+	// Now let's parse the object names and their corresponding resourceversions in a Map
+	for _, obj := range allObjects {
+		objVersionsMap[obj.(*IstioObject).ConfigMeta.Name] = obj.(*IstioObject).ConfigMeta.ResourceVersion
+	}
+	return objVersionsMap
+}
+
 func (v *VirtualServiceNSCache) DeleteGatewayRefs(obj *IstioObject) {
 	gateways := v.GetGatewayNamesForVS(obj)
 	for _, gateway := range gateways {
@@ -123,7 +166,7 @@ func (v *VirtualServiceNSCache) DeleteGatewayRefs(obj *IstioObject) {
 func (v *VirtualServiceNSCache) GetGatewayNamesForVS(vs *IstioObject) []string {
 	vsObj, ok := vs.Spec.(*networking.VirtualService)
 	if !ok {
-		// This is not the right object to cast to VirtualService return error
+		// This is not the right object to cast to VirtualService return error.
 		utils.AviLog.Warning.Printf("Wrong object passed. Expecting a Virtual Service object %v", vsObj)
 		return nil
 	}

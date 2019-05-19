@@ -15,73 +15,8 @@
 package objects
 
 import (
-	"strconv"
 	"testing"
-
-	networking "istio.io/api/networking/v1alpha3"
-	"istio.io/istio/pilot/pkg/model/test"
 )
-
-func Make(namespace string, name string, i int) *IstioObject {
-	return &IstioObject{
-		ConfigMeta: ConfigMeta{
-			Type:            "mocked-type",
-			Group:           "test.istio.io",
-			Version:         "v1",
-			Name:            name,
-			Namespace:       namespace,
-			ResourceVersion: strconv.Itoa(i),
-			Labels: map[string]string{
-				"key": name,
-			},
-			Annotations: map[string]string{
-				"annotationkey": name,
-			},
-		},
-		Spec: &test.MockConfig{
-			Key: name,
-			Pairs: []*test.ConfigPair{
-				{Key: "key", Value: strconv.Itoa(i)},
-			},
-		},
-	}
-}
-
-func MakeVirtualService(namespace string, name string, i int) *IstioObject {
-	ExampleVirtualService := &networking.VirtualService{
-		Hosts:    []string{"prod", "test"},
-		Gateways: []string{"gw1", "mesh"},
-		Http: []*networking.HTTPRoute{
-			{
-				Route: []*networking.HTTPRouteDestination{
-					{
-						Destination: &networking.Destination{
-							Host: "job",
-						},
-						Weight: 80,
-					},
-				},
-			},
-		},
-	}
-	return &IstioObject{
-		ConfigMeta: ConfigMeta{
-			Type:            "mocked-type",
-			Group:           "test.vs.io",
-			Version:         "v1",
-			Name:            name,
-			Namespace:       namespace,
-			ResourceVersion: strconv.Itoa(i),
-			Labels: map[string]string{
-				"key": name,
-			},
-			Annotations: map[string]string{
-				"annotationkey": name,
-			},
-		},
-		Spec: ExampleVirtualService,
-	}
-}
 
 func TestUpdateObjInNamespaceGlobalLock(t *testing.T) {
 	newStore := NewObjectStore()

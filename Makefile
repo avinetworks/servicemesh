@@ -24,3 +24,9 @@ deps:
 .PHONY: docker
 docker:
 	docker build -t $(BINARY_NAME):latest -f Dockerfile .
+
+.PHONY: test
+test:
+	go test -v ./pkg/istio/objects
+	go test -v ./pkg/istio/mcp
+

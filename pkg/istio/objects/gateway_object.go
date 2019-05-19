@@ -20,14 +20,14 @@ import (
 	"sync"
 )
 
-var gwlisterinstance *SharedGatewayLister
+var gwlisterinstance *GatewayLister
 var gwonce sync.Once
 
-func GetGatewayInstance() *SharedGatewayLister {
+func SharedGatewayLister() *GatewayLister {
 	gwonce.Do(func() {
 		GWStore := NewObjectStore()
 		gwvsStore := NewObjectStore()
-		gwlisterinstance = &SharedGatewayLister{}
+		gwlisterinstance = &GatewayLister{}
 		gwlisterinstance.gwvsstore = gwvsStore
 		gwlisterinstance.gwstore = GWStore
 	})
@@ -39,12 +39,12 @@ type IstioGateway interface {
 	//List() *[]ObjectStore
 }
 
-type SharedGatewayLister struct {
+type GatewayLister struct {
 	gwstore   *ObjectStore
 	gwvsstore *ObjectStore
 }
 
-func (v *SharedGatewayLister) Gateway(ns string) *GatewayNSCache {
+func (v *GatewayLister) Gateway(ns string) *GatewayNSCache {
 	nsGwObjects := v.gwstore.GetNSStore(ns)
 	nsGwVsObjects := v.gwvsstore.GetNSStore(ns)
 	return &GatewayNSCache{namespace: ns, gwobjects: nsGwObjects, gwvsobjects: nsGwVsObjects}
