@@ -64,7 +64,7 @@ func TestCalculateUpdates(t *testing.T) {
 	newStore := schema.GetAll()
 	changedKeys := GetConfigDescriptors().CalculateUpdates(oldStore, newStore)
 	// This is an UPDATE
-	if len(changedKeys) != 1 && changedKeys[0] != "vs_2" {
+	if len(changedKeys["default"]) != 1 && changedKeys["default"][0] != "vs_2" {
 		t.Errorf("TestCalculateUpdates UPDATE failed to get the expected object, obtained :%s", changedKeys)
 	}
 	// Let's swap the variables
@@ -73,7 +73,7 @@ func TestCalculateUpdates(t *testing.T) {
 	newStore = schema.GetAll()
 	changedKeys = GetConfigDescriptors().CalculateUpdates(oldStore, newStore)
 	// This is a DELETE event
-	if len(changedKeys) != 1 && changedKeys[0] != "vs_2" {
+	if len(changedKeys["default"]) != 1 && changedKeys["default"][0] != "vs_2" {
 		t.Errorf("TestCalculateUpdates DELETE failed to get the expected object, obtained :%s", changedKeys)
 	}
 	oldStore = newStore
@@ -82,7 +82,7 @@ func TestCalculateUpdates(t *testing.T) {
 	newStore = schema.GetAll()
 	changedKeys = GetConfigDescriptors().CalculateUpdates(oldStore, newStore)
 	// This is an ADD event
-	if len(changedKeys) != 1 && changedKeys[0] != "vs_2" {
+	if len(changedKeys["default"]) != 1 && changedKeys["default"][0] != "vs_2" {
 		t.Errorf("TestCalculateUpdates ADD failed to get the expected object, obtained :%s", changedKeys)
 	}
 	newObj = objects.MakeVirtualService("default", "vs_2", 5)
@@ -91,7 +91,7 @@ func TestCalculateUpdates(t *testing.T) {
 	newStore = schema.GetAll()
 	changedKeys = GetConfigDescriptors().CalculateUpdates(oldStore, newStore)
 	// This is an ADD event
-	if len(changedKeys) != 0 {
+	if len(changedKeys["default"]) != 0 {
 		t.Errorf("TestCalculateUpdates NOUPDATE failed to get the expected object, obtained :%s", changedKeys)
 	}
 }

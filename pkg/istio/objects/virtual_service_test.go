@@ -81,19 +81,19 @@ func TestGetVirtualServiceListMisc(t *testing.T) {
 	}
 }
 
-func TestPopulateGatewayRelationships(t *testing.T) {
-	// Check if the gateway relationship was created
-	gw_instance := SharedGatewayLister()
-	_, vslist := gw_instance.Gateway("default").GetVSMapping("gw1")
-	// We should get two VSes.
-	if len(vslist) != 4 {
-		t.Errorf("TestPopulateGatewayRelationships failed to get the expected VSes, obtained :%d", len(vslist))
-	}
-	_, vslist = gw_instance.Gateway("red").GetVSMapping("gw1")
-	if len(vslist) != 3 {
-		t.Errorf("TestPopulateGatewayRelationships failed to get the expected , obtained :%d", len(vslist))
-	}
-}
+// func TestPopulateGatewayRelationships(t *testing.T) {
+// 	// Check if the gateway relationship was created
+// 	gw_instance := SharedGatewayLister()
+// 	_, vslist := gw_instance.Gateway("default").GetVSMapping("gw1")
+// 	// We should get two VSes.
+// 	if len(vslist) != 4 {
+// 		t.Errorf("TestPopulateGatewayRelationships failed to get the expected VSes, obtained :%d", len(vslist))
+// 	}
+// 	_, vslist = gw_instance.Gateway("red").GetVSMapping("gw1")
+// 	if len(vslist) != 3 {
+// 		t.Errorf("TestPopulateGatewayRelationships failed to get the expected , obtained :%d", len(vslist))
+// 	}
+// }
 
 func TestGetAllVirtualServices(t *testing.T) {
 	vsMap := vsLister.GetAllVirtualServices()

@@ -115,9 +115,19 @@ func (c *Controller) Apply(change *sink.Change) error {
 	}
 	// Now the store is updated with the latest values. Let's fetch them and calculate updates
 	newStore := schema.GetAll()
-	changedKeys := c.ConfigDescriptor().CalculateUpdates(prevStore, newStore)
-	// Just a placeholder log for now, this should be pushed to the workqueue
-	utils.AviLog.Warning.Printf("Changed Keys %s", changedKeys)
+	changedKeysMap := c.ConfigDescriptor().CalculateUpdates(prevStore, newStore)
+	sharedQueue := utils.SharedWorkQueueWrappers().GetQueueByName("MCPLayer")
+	// Sharding logic here.
+	for namespace, objKeys := range changedKeysMap {
+		// Hash on namespace
+		bkt := utils.Bkt(namespace, sharedQueue.NumWorkers)
+		for _, key := range objKeys {
+			// TODO : Add the resource type as well here
+			key = descriptor.Type + "/" + namespace + "/" + key
+			sharedQueue.Workqueue[bkt].AddRateLimited(key)
+		}
+	}
+	utils.AviLog.Info.Printf("Added Keys to the workerqueue %s", changedKeysMap)
 	return nil
 }
 

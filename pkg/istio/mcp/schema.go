@@ -37,7 +37,7 @@ var (
 		Version:     "v1alpha3",
 		MessageName: "istio.networking.v1alpha3.Gateway",
 		Store:       ProcessGateway,
-		GetAll:      GetAllVSes,
+		GetAll:      GetAllGateways,
 		Collection:  "istio/networking/v1alpha3/gateways",
 	}
 	// ServiceEntry describes service entries
@@ -66,6 +66,13 @@ func GetAllVSes() map[string]map[string]string {
 	// {ns : {obj_name1: rvs, obj_name2: rv}}
 	StoredVSes := istio_objs.SharedVirtualServiceLister().GetAllVirtualServices()
 	return StoredVSes
+}
+
+func GetAllGateways() map[string]map[string]string {
+	// Obtain all the Gateway across namespaces. This should be of the form:
+	// {ns : {obj_name1: rvs, obj_name2: rv}}
+	StoredGateways := istio_objs.SharedGatewayLister().GetAllGateways()
+	return StoredGateways
 }
 
 func ProcessVS(name string, namespace string, configMeta istio_objs.ConfigMeta, msg proto.Message) {
@@ -106,10 +113,11 @@ func ProcessGateway(name string, namespace string, configMeta istio_objs.ConfigM
 	istio_objs.SharedGatewayLister().Gateway(namespace).Update(istio_object)
 }
 
-func (descriptor ConfigDescriptor) CalculateUpdates(prevStore map[string]map[string]string, currentStore map[string]map[string]string) []string {
+func (descriptor ConfigDescriptor) CalculateUpdates(prevStore map[string]map[string]string, currentStore map[string]map[string]string) map[string][]string {
 	// This method calculates the ADD/DELETES/UPDATES and updates the workqueue.
-	var changedKeys []string
+	changedKeysMap := make(map[string][]string)
 	for namespace, currObjMap := range currentStore {
+		var namespacedKeys []string
 		prevObjMap := prevStore[namespace]
 		for objName, oldRV := range prevObjMap {
 			// Check if new has the obj present in the old.
@@ -118,11 +126,11 @@ func (descriptor ConfigDescriptor) CalculateUpdates(prevStore map[string]map[str
 				// Object exists in new - check resource versions
 				if currRV != oldRV {
 					// This is a update event.
-					changedKeys = append(changedKeys, objName)
+					namespacedKeys = append(namespacedKeys, objName)
 				}
 			} else {
 				// New does not have obj present in old. It's a delete
-				changedKeys = append(changedKeys, objName)
+				namespacedKeys = append(namespacedKeys, objName)
 			}
 			// Let's check if it's the same resource versions
 		}
@@ -131,11 +139,12 @@ func (descriptor ConfigDescriptor) CalculateUpdates(prevStore map[string]map[str
 
 			if !found {
 				// Object present in new but absent in old - it's an ADD
-				changedKeys = append(changedKeys, objName)
+				namespacedKeys = append(namespacedKeys, objName)
 			}
 		}
+		changedKeysMap[namespace] = namespacedKeys
 	}
-	return changedKeys
+	return changedKeysMap
 }
 
 // GetByType finds a schema by type if it is available

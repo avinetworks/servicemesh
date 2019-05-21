@@ -103,7 +103,8 @@ func (v *VirtualServiceNSCache) Update(obj *IstioObject) {
 		return
 	}
 	v.objects.AddOrUpdate(obj.Name, obj)
-	v.UpdateGatewayRefs(obj)
+	// This should be updated in Layer 2.
+	//v.UpdateGatewayRefs(obj)
 }
 
 func (v *VirtualServiceNSCache) UpdateGatewayRefs(obj *IstioObject) {
@@ -132,11 +133,12 @@ func (v *VirtualServiceNSCache) List() map[string]*IstioObject {
 
 func (v *VirtualServiceNSCache) Delete(name string) bool {
 	// Obtain the object for this VS
-	found, vsObj := v.Get(name)
-	if found {
-		// Let's delete the Gateway relationship first.
-		v.DeleteGatewayRefs(vsObj)
-	}
+	//_, vsObj := v.Get(name)
+	// To be updated in Layer 2
+	// if found {
+	// 	// Let's delete the Gateway relationship first.
+	// 	v.DeleteGatewayRefs(vsObj)
+	// }
 
 	return v.objects.Delete(name)
 }

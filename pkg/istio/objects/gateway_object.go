@@ -50,6 +50,22 @@ func (v *GatewayLister) Gateway(ns string) *GatewayNSCache {
 	return &GatewayNSCache{namespace: ns, gwobjects: nsGwObjects, gwvsobjects: nsGwVsObjects}
 }
 
+func (v *GatewayLister) GetAllGateways() map[string]map[string]string {
+	// This method should return a map that looks like this: {ns: [obj1, obj2]}
+	// This is particularly useful if we want to know what are the vs names
+	// present in a namespace without affecting the actual store objects.
+	allNamespaces := v.gwstore.GetAllNamespaces()
+	allGateways := make(map[string]map[string]string)
+	if len(allNamespaces) != 0 {
+		// Iterate over each namespace and formulate the map
+		for _, ns := range allNamespaces {
+			allGateways[ns] = v.Gateway(ns).GetAllGatewayNames()
+		}
+	}
+	return allGateways
+
+}
+
 type GatewayNameSpaceIntf interface {
 	Get(name string) (bool, *IstioObject)
 	Update(obj IstioObject) bool
@@ -61,6 +77,17 @@ type GatewayNSCache struct {
 	namespace   string
 	gwobjects   *ObjectMapStore
 	gwvsobjects *ObjectMapStore
+}
+
+func (v *GatewayNSCache) GetAllGatewayNames() map[string]string {
+	// Obtain the object for this Gateway
+	allObjects := v.gwobjects.GetAllObjectNames()
+	objVersionsMap := make(map[string]string)
+	// Now let's parse the object names and their corresponding resourceversions in a Map
+	for _, obj := range allObjects {
+		objVersionsMap[obj.(*IstioObject).ConfigMeta.Name] = obj.(*IstioObject).ConfigMeta.ResourceVersion
+	}
+	return objVersionsMap
 }
 
 func (v *GatewayNSCache) Get(name string) (bool, *IstioObject) {
