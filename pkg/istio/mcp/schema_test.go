@@ -22,6 +22,7 @@ import (
 )
 
 var vsLister *objects.VirtualServiceLister
+var gwLister *objects.GatewayLister
 
 func TestMain(m *testing.M) {
 	setup()
@@ -49,13 +50,29 @@ func setup() {
 	for _, pt := range sampleValues {
 		vsLister.VirtualService(pt.obj_value.ConfigMeta.Namespace).Update(pt.obj_value)
 	}
+	gwLister = objects.SharedGatewayLister()
+	var sampleGWValues = []struct {
+		obj_value *objects.IstioObject
+	}{
+		{objects.MakeGateway("default", "gw_1", 1)},
+		{objects.MakeGateway("red", "gw_2", 2)},
+		{objects.MakeGateway("default", "gw_2", 3)},
+		{objects.MakeGateway("red", "gw_3", 1)},
+		{objects.MakeGateway("default", "gw_3", 2)},
+		{objects.MakeGateway("red", "gw_4", 1)},
+		{objects.MakeGateway("default", "gw_5", 1)},
+		{objects.MakeGateway("red", "gw_2", 3)},
+	}
+	for _, pt := range sampleGWValues {
+		gwLister.Gateway(pt.obj_value.ConfigMeta.Namespace).Update(pt.obj_value)
+	}
 }
 
 func GetConfigDescriptors() ConfigDescriptor {
 	return IstioConfigTypes
 }
 
-func TestCalculateUpdates(t *testing.T) {
+func TestCalculateUpdatesVS(t *testing.T) {
 	schema, _ := GetConfigDescriptors().GetByType("virtual-service")
 	oldStore := schema.GetAll()
 	newObj := objects.MakeVirtualService("default", "vs_2", 5)
@@ -65,7 +82,7 @@ func TestCalculateUpdates(t *testing.T) {
 	changedKeys := GetConfigDescriptors().CalculateUpdates(oldStore, newStore)
 	// This is an UPDATE
 	if len(changedKeys["default"]) != 1 && changedKeys["default"][0] != "vs_2" {
-		t.Errorf("TestCalculateUpdates UPDATE failed to get the expected object, obtained :%s", changedKeys)
+		t.Errorf("TestCalculateUpdatesVS UPDATE failed to get the expected object, obtained :%s", changedKeys)
 	}
 	// Let's swap the variables
 	oldStore = newStore
@@ -74,7 +91,7 @@ func TestCalculateUpdates(t *testing.T) {
 	changedKeys = GetConfigDescriptors().CalculateUpdates(oldStore, newStore)
 	// This is a DELETE event
 	if len(changedKeys["default"]) != 1 && changedKeys["default"][0] != "vs_2" {
-		t.Errorf("TestCalculateUpdates DELETE failed to get the expected object, obtained :%s", changedKeys)
+		t.Errorf("TestCalculateUpdatesVS DELETE failed to get the expected object, obtained :%s", changedKeys)
 	}
 	oldStore = newStore
 	newObj = objects.MakeVirtualService("default", "vs_2", 5)
@@ -83,7 +100,7 @@ func TestCalculateUpdates(t *testing.T) {
 	changedKeys = GetConfigDescriptors().CalculateUpdates(oldStore, newStore)
 	// This is an ADD event
 	if len(changedKeys["default"]) != 1 && changedKeys["default"][0] != "vs_2" {
-		t.Errorf("TestCalculateUpdates ADD failed to get the expected object, obtained :%s", changedKeys)
+		t.Errorf("TestCalculateUpdatesVS ADD failed to get the expected object, obtained :%s", changedKeys)
 	}
 	newObj = objects.MakeVirtualService("default", "vs_2", 5)
 	oldStore = newStore
@@ -92,6 +109,46 @@ func TestCalculateUpdates(t *testing.T) {
 	changedKeys = GetConfigDescriptors().CalculateUpdates(oldStore, newStore)
 	// This is an ADD event
 	if len(changedKeys["default"]) != 0 {
-		t.Errorf("TestCalculateUpdates NOUPDATE failed to get the expected object, obtained :%s", changedKeys)
+		t.Errorf("TestCalculateUpdatesVS NOUPDATE failed to get the expected object, obtained :%s", changedKeys)
+	}
+}
+
+func TestCalculateUpdatesGW(t *testing.T) {
+	schema, _ := GetConfigDescriptors().GetByType("gateway")
+	oldStore := schema.GetAll()
+	newObj := objects.MakeGateway("default", "gw_2", 5)
+	schema.Store("gw_2", "default", newObj.ConfigMeta, newObj.Spec)
+	newStore := schema.GetAll()
+	changedKeys := GetConfigDescriptors().CalculateUpdates(oldStore, newStore)
+	// This is an UPDATE
+	if len(changedKeys["default"]) != 1 && changedKeys["default"][0] != "gw_2" {
+		t.Errorf("TestCalculateUpdatesGW UPDATE failed to get the expected object, obtained :%s", changedKeys)
+	}
+	// Let's swap the variables
+	oldStore = newStore
+	gwLister.Gateway("default").Delete("gw_2")
+	newStore = schema.GetAll()
+	changedKeys = GetConfigDescriptors().CalculateUpdates(oldStore, newStore)
+	// This is a DELETE event
+	if len(changedKeys["default"]) != 1 && changedKeys["default"][0] != "gw_2" {
+		t.Errorf("TestCalculateUpdatesGW DELETE failed to get the expected object, obtained :%s", changedKeys)
+	}
+	oldStore = newStore
+	newObj = objects.MakeGateway("default", "gw_2", 5)
+	schema.Store("gw_2", "default", newObj.ConfigMeta, newObj.Spec)
+	newStore = schema.GetAll()
+	changedKeys = GetConfigDescriptors().CalculateUpdates(oldStore, newStore)
+	// This is an ADD event
+	if len(changedKeys["default"]) != 1 && changedKeys["default"][0] != "gw_2" {
+		t.Errorf("TestCalculateUpdatesGW ADD failed to get the expected object, obtained :%s", changedKeys)
+	}
+	newObj = objects.MakeGateway("default", "gw_2", 5)
+	oldStore = newStore
+	schema.Store("gw_2", "default", newObj.ConfigMeta, newObj.Spec)
+	newStore = schema.GetAll()
+	changedKeys = GetConfigDescriptors().CalculateUpdates(oldStore, newStore)
+	// This is an ADD event
+	if len(changedKeys["default"]) != 0 {
+		t.Errorf("TestCalculateUpdatesGW NOUPDATE failed to get the expected object, obtained :%s", changedKeys)
 	}
 }

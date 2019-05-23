@@ -125,9 +125,9 @@ func (c *Controller) Apply(change *sink.Change) error {
 			// TODO : Add the resource type as well here
 			key = descriptor.Type + "/" + namespace + "/" + key
 			sharedQueue.Workqueue[bkt].AddRateLimited(key)
+			utils.AviLog.Info.Printf("Added Key to the workerqueue %s", key)
 		}
 	}
-	utils.AviLog.Info.Printf("Added Keys to the workerqueue %s", changedKeysMap)
 	return nil
 }
 

@@ -117,3 +117,20 @@ func (v *GatewayNSCache) Update(obj *IstioObject) {
 func (v *GatewayNSCache) UpdateGWVSMapping(gwName string, vsList []string) {
 	v.gwvsobjects.AddOrUpdate(gwName, vsList)
 }
+
+func (v *GatewayNSCache) Delete(name string) bool {
+	return v.gwobjects.Delete(name)
+}
+
+func (v *GatewayNSCache) List() map[string]*IstioObject {
+	// TODO (sudswas): Let's check if we can abstract out the store objects
+	// completely. There's still a possibility that if we pass the references
+	// we maybe allowing upper layers to modify the object that would directly
+	// impact the store objects.
+	convertedMap := make(map[string]*IstioObject)
+	// Change the empty interface to IstioObject. Avoid Duck Typing.
+	for key, value := range v.gwobjects.ObjectMap {
+		convertedMap[key] = value.(*IstioObject)
+	}
+	return convertedMap
+}

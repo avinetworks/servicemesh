@@ -157,45 +157,8 @@ func NewAviController(inf *utils.Informers, cs *kubernetes.Clientset) *AviContro
 		},
 	}
 
-	// ing_event_handler := cache.ResourceEventHandlerFuncs{
-	// 	AddFunc: func(obj interface{}) {
-	// 		ing := obj.(*extensions.Ingress)
-	// 		key := "Ingress/" + utils.CrudHashKey("Ingress", ing) + "/" + ObjKey(ing)
-	// 		bkt := utils.Bkt(key, num_workers)
-	// 		c.workqueue[bkt].AddRateLimited(key)
-	// 	},
-	// 	DeleteFunc: func(obj interface{}) {
-	// 		ing, ok := obj.(*extensions.Ingress)
-	// 		if !ok {
-	// 			// endpoints was deleted but its final state is unrecorded.
-	// 			tombstone, ok := obj.(cache.DeletedFinalStateUnknown)
-	// 			if !ok {
-	// 				utils.AviLog.Error.Printf("couldn't get object from tombstone %#v", obj)
-	// 				return
-	// 			}
-	// 			ing, ok = tombstone.Obj.(*extensions.Ingress)
-	// 			if !ok {
-	// 				utils.AviLog.Error.Printf("Tombstone contained object that is not an Ingress: %#v", obj)
-	// 				return
-	// 			}
-	// 		}
-	// 		ing = obj.(*extensions.Ingress)
-	// 		key := "Ingress/" + utils.CrudHashKey("Ingress", ing) + "/" + ObjKey(ing)
-	// 		bkt := utils.Bkt(key, num_workers)
-	// 		c.workqueue[bkt].AddRateLimited(key)
-	// 	},
-	// 	UpdateFunc: func(old, cur interface{}) {
-	// 		// TODO Check if anything has changed here ?
-	// 		ing := cur.(*extensions.Ingress)
-	// 		key := "Ingress/" + utils.CrudHashKey("Ingress", ing) + "/" + ObjKey(ing)
-	// 		bkt := utils.Bkt(key, num_workers)
-	// 		c.workqueue[bkt].AddRateLimited(key)
-	// 	},
-	// }
-
 	c.informers.EpInformer.Informer().AddEventHandler(ep_event_handler)
 	c.informers.ServiceInformer.Informer().AddEventHandler(svc_event_handler)
-	//c.informers.IngInformer.Informer().AddEventHandler(ing_event_handler)
 
 	return c
 }
@@ -203,12 +166,10 @@ func NewAviController(inf *utils.Informers, cs *kubernetes.Clientset) *AviContro
 func (c *AviController) Start(stopCh <-chan struct{}) {
 	go c.informers.ServiceInformer.Informer().Run(stopCh)
 	go c.informers.EpInformer.Informer().Run(stopCh)
-	//go c.informers.IngInformer.Informer().Run(stopCh)
 
 	if !cache.WaitForCacheSync(stopCh,
 		c.informers.EpInformer.Informer().HasSynced,
 		c.informers.ServiceInformer.Informer().HasSynced,
-		//c.informers.IngInformer.Informer().HasSynced,
 	) {
 		runtime.HandleError(fmt.Errorf("Timed out waiting for caches to sync"))
 	} else {

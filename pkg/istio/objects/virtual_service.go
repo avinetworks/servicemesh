@@ -103,8 +103,6 @@ func (v *VirtualServiceNSCache) Update(obj *IstioObject) {
 		return
 	}
 	v.objects.AddOrUpdate(obj.Name, obj)
-	// This should be updated in Layer 2.
-	//v.UpdateGatewayRefs(obj)
 }
 
 func (v *VirtualServiceNSCache) UpdateGatewayRefs(obj *IstioObject) {

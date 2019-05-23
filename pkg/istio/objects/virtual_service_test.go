@@ -20,6 +20,7 @@ import (
 )
 
 var vsLister *VirtualServiceLister
+var gwLister *GatewayLister
 
 func TestMain(m *testing.M) {
 	setup()
@@ -47,8 +48,24 @@ func setup() {
 	for _, pt := range sampleValues {
 		vsLister.VirtualService(pt.obj_value.ConfigMeta.Namespace).Update(pt.obj_value)
 	}
+	// Use this method to populate some VS objects
+	gwLister = SharedGatewayLister()
+	var sampleGWValues = []struct {
+		obj_value *IstioObject
+	}{
+		{MakeGateway("default", "gw_1", 1)},
+		{MakeGateway("red", "gw_2", 2)},
+		{MakeGateway("default", "gw_2", 3)},
+		{MakeGateway("red", "gw_3", 1)},
+		{MakeGateway("default", "gw_3", 2)},
+		{MakeGateway("red", "gw_4", 1)},
+		{MakeGateway("default", "gw_5", 1)},
+		{MakeGateway("red", "gw_2", 3)},
+	}
+	for _, pt := range sampleGWValues {
+		gwLister.Gateway(pt.obj_value.ConfigMeta.Namespace).Update(pt.obj_value)
+	}
 }
-
 func TestGetVirtualServiceObject(t *testing.T) {
 	vsLister := SharedVirtualServiceLister()
 	vsObj := MakeVirtualService("default", "vs_1", 1)

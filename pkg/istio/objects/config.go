@@ -16,6 +16,8 @@ package objects
 
 import (
 	"time"
+
+	"github.com/golang/protobuf/proto"
 )
 
 type ConfigMeta struct {
@@ -49,4 +51,17 @@ type ConfigMeta struct {
 	ResourceVersion string `json:"resourceVersion,omitempty"`
 	// CreationTimestamp records the creation time
 	CreationTimestamp time.Time `json:"creationTimestamp,omitempty"`
+}
+
+// This is a basic object that is used to store istio object information.
+type IstioObject struct {
+	ConfigMeta
+	Spec proto.Message
+}
+
+func NewIstioObject(configMeta ConfigMeta, spec proto.Message) *IstioObject {
+	obj := &IstioObject{}
+	obj.ConfigMeta = configMeta
+	obj.Spec = spec
+	return obj
 }

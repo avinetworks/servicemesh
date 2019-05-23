@@ -81,3 +81,31 @@ func MakeVirtualService(namespace string, name string, i int) *IstioObject {
 		Spec: ExampleVirtualService,
 	}
 }
+
+func MakeGateway(namespace string, name string, i int) *IstioObject {
+	ExampleGateway := &networking.Gateway{
+		Servers: []*networking.Server{
+			{
+				Hosts: []string{"google.com"},
+				Port:  &networking.Port{Name: "http", Protocol: "http", Number: 10080},
+			},
+		},
+	}
+	return &IstioObject{
+		ConfigMeta: ConfigMeta{
+			Type:            "mocked-type",
+			Group:           "test.gw.io",
+			Version:         "v1",
+			Name:            name,
+			Namespace:       namespace,
+			ResourceVersion: strconv.Itoa(i),
+			Labels: map[string]string{
+				"key": name,
+			},
+			Annotations: map[string]string{
+				"annotationkey": name,
+			},
+		},
+		Spec: ExampleGateway,
+	}
+}
