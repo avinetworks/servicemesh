@@ -22,9 +22,13 @@ import (
 	"k8s.io/client-go/util/workqueue"
 )
 
+const (
+	ObjectIngestionLayer = "ObjectIngestionLayer"
+)
+
 var queuewrapper sync.Once
 var queueInstance *WorkQueueWrapper
-var fixedQueues = [...]WorkerQueue{WorkerQueue{NumWorkers: NumWorkers, WorkqueueName: "MCPLayer"}}
+var fixedQueues = [...]WorkerQueue{WorkerQueue{NumWorkers: NumWorkers, WorkqueueName: ObjectIngestionLayer}}
 
 type WorkQueueWrapper struct {
 	// This struct should manage a set of WorkerQueues for the various layers

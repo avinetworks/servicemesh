@@ -15,7 +15,6 @@ package mcp
 
 import (
 	istio_objs "github.com/avinetworks/servicemesh/pkg/istio/objects"
-	"github.com/golang/protobuf/proto"
 )
 
 var (
@@ -75,46 +74,42 @@ func GetAllGateways() map[string]map[string]string {
 	return StoredGateways
 }
 
-func ProcessVS(name string, namespace string, configMeta istio_objs.ConfigMeta, msg proto.Message) {
-	istio_object := istio_objs.NewIstioObject(configMeta, msg)
-	// First do a GET on this VS to check if it exists already in the store or not.
-	ok, obj := istio_objs.SharedVirtualServiceLister().VirtualService(namespace).Get(name)
-	if ok {
-		// Object found, let's check now if it's a update or a no-op
-		if configMeta.ResourceVersion == obj.ConfigMeta.ResourceVersion {
-			// The same resourceversion obtained from store. Won't process anything
-			return
-		} else {
-			// Update the new object in store
-			istio_objs.SharedVirtualServiceLister().VirtualService(namespace).Update(istio_object)
-			return
+func ProcessVS(currStore map[string]map[string]*istio_objs.IstioObject, prevStore map[string]map[string]string) {
+	// Let's make an update call with whatever we have in presentStore
+	for namespace, currObjMap := range currStore {
+		for _, obj := range currObjMap {
+			istio_objs.SharedVirtualServiceLister().VirtualService(namespace).Update(obj)
 		}
-
+		prevObjMap := prevStore[namespace]
+		for objName, _ := range prevObjMap {
+			_, found := currObjMap[objName]
+			if !found {
+				// This is a DELETE case
+				istio_objs.SharedVirtualServiceLister().VirtualService(namespace).Delete(objName)
+			}
+		}
 	}
-	istio_objs.SharedVirtualServiceLister().VirtualService(namespace).Update(istio_object)
 }
 
-func ProcessGateway(name string, namespace string, configMeta istio_objs.ConfigMeta, msg proto.Message) {
-	istio_object := istio_objs.NewIstioObject(configMeta, msg)
-	// First do a GET on this Gateway to check if it exists already in the store or not.
-	ok, obj := istio_objs.SharedGatewayLister().Gateway(namespace).Get(name)
-	if ok {
-		// Object found, let's check now if it's a update or a no-op
-		if configMeta.ResourceVersion == obj.ConfigMeta.ResourceVersion {
-			// The same resourceversion obtained from store. Won't process anything
-			return
-		} else {
-			// Update the new object in store
-			istio_objs.SharedGatewayLister().Gateway(namespace).Update(istio_object)
-			return
+func ProcessGateway(currStore map[string]map[string]*istio_objs.IstioObject, prevStore map[string]map[string]string) {
+	// Let's make an update call with whatever we have in presentStore
+	for namespace, currObjMap := range currStore {
+		for _, obj := range currObjMap {
+			istio_objs.SharedGatewayLister().Gateway(namespace).Update(obj)
 		}
-
+		prevObjMap := prevStore[namespace]
+		for objName, _ := range prevObjMap {
+			_, found := currObjMap[objName]
+			if !found {
+				// This is a DELETE case
+				istio_objs.SharedGatewayLister().Gateway(namespace).Delete(objName)
+			}
+		}
 	}
-	istio_objs.SharedGatewayLister().Gateway(namespace).Update(istio_object)
 }
 
 func (descriptor ConfigDescriptor) CalculateUpdates(prevStore map[string]map[string]string, currentStore map[string]map[string]string) map[string][]string {
-	// This method calculates the ADD/DELETES/UPDATES and updates the workqueue.
+	// This method calculates the ADD/DELETES/UPDATES for various objects based on the previous and current state of the store.
 	changedKeysMap := make(map[string][]string)
 	for namespace, currObjMap := range currentStore {
 		var namespacedKeys []string
@@ -168,6 +163,6 @@ type ProtoSchema struct {
 	MessageName      string
 	CalculateUpdates func(map[string]map[string]string, map[string]map[string]string)
 	GetAll           func() map[string]map[string]string
-	Store            func(string, string, istio_objs.ConfigMeta, proto.Message)
+	Store            func(map[string]map[string]*istio_objs.IstioObject, map[string]map[string]string)
 	Collection       string
 }

@@ -43,7 +43,7 @@ func (v *VirtualServiceLister) GetAllVirtualServices() map[string]map[string]str
 	if len(allNamespaces) != 0 {
 		// Iterate over each namespace and formulate the map
 		for _, ns := range allNamespaces {
-			allVirtualServices[ns] = v.VirtualService(ns).GetAllVSNames()
+			allVirtualServices[ns] = v.VirtualService(ns).GetAllVSNamesVers()
 		}
 	}
 	return allVirtualServices
@@ -141,7 +141,7 @@ func (v *VirtualServiceNSCache) Delete(name string) bool {
 	return v.objects.Delete(name)
 }
 
-func (v *VirtualServiceNSCache) GetAllVSNames() map[string]string {
+func (v *VirtualServiceNSCache) GetAllVSNamesVers() map[string]string {
 	// Obtain the object for this VS
 	allObjects := v.objects.GetAllObjectNames()
 	objVersionsMap := make(map[string]string)

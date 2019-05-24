@@ -91,6 +91,7 @@ func (c *Controller) Apply(change *sink.Change) error {
 	c.syncedMu.Lock()
 	c.synced[change.Collection] = true
 	c.syncedMu.Unlock()
+	presentValues := make(map[string]map[string]*istio_objs.IstioObject)
 	createTime := time.Now()
 	for _, obj := range change.Objects {
 		namespace, name := extractNameNamespace(obj.Metadata.Name)
@@ -111,24 +112,35 @@ func (c *Controller) Apply(change *sink.Change) error {
 			Labels:            obj.Metadata.Labels,
 			Annotations:       obj.Metadata.Annotations,
 		}
-		schema.Store(name, namespace, configMeta, obj.Body)
+		istioObj := istio_objs.NewIstioObject(configMeta, obj.Body)
+		addLocalIstioObjs(name, namespace, istioObj, presentValues)
 	}
-	// Now the store is updated with the latest values. Let's fetch them and calculate updates
+	schema.Store(presentValues, prevStore)
 	newStore := schema.GetAll()
 	changedKeysMap := c.ConfigDescriptor().CalculateUpdates(prevStore, newStore)
-	sharedQueue := utils.SharedWorkQueueWrappers().GetQueueByName("MCPLayer")
+	sharedQueue := utils.SharedWorkQueueWrappers().GetQueueByName(utils.ObjectIngestionLayer)
 	// Sharding logic here.
 	for namespace, objKeys := range changedKeysMap {
 		// Hash on namespace
 		bkt := utils.Bkt(namespace, sharedQueue.NumWorkers)
 		for _, key := range objKeys {
-			// TODO : Add the resource type as well here
 			key = descriptor.Type + "/" + namespace + "/" + key
 			sharedQueue.Workqueue[bkt].AddRateLimited(key)
-			utils.AviLog.Info.Printf("Added Key to the workerqueue %s", key)
+			utils.AviLog.Info.Printf("Added Key from MCP update to the workerqueue %s", key)
 		}
 	}
 	return nil
+}
+
+func addLocalIstioObjs(name string, namespace string, istio_object *istio_objs.IstioObject, presentValues map[string]map[string]*istio_objs.IstioObject) {
+	obj, ok := presentValues[namespace]
+	if ok {
+		// Namespace is found. Let's update the value against it.
+		obj[name] = istio_object
+	} else {
+		objMap := map[string]*istio_objs.IstioObject{name: istio_object}
+		presentValues[namespace] = objMap
+	}
 }
 
 func extractNameNamespace(metadataName string) (string, string) {

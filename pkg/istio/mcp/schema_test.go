@@ -19,6 +19,7 @@ import (
 	"testing"
 
 	"github.com/avinetworks/servicemesh/pkg/istio/objects"
+	istio_objs "github.com/avinetworks/servicemesh/pkg/istio/objects"
 )
 
 var vsLister *objects.VirtualServiceLister
@@ -77,11 +78,13 @@ func TestCalculateUpdatesVS(t *testing.T) {
 	oldStore := schema.GetAll()
 	newObj := objects.MakeVirtualService("default", "vs_2", 5)
 	//vsLister.VirtualService(newObj.ConfigMeta.Namespace).Update(newObj)
-	schema.Store("vs_2", "default", newObj.ConfigMeta, newObj.Spec)
+	presentValues := make(map[string]map[string]*istio_objs.IstioObject)
+	presentValues["default"] = map[string]*istio_objs.IstioObject{"vs_2": newObj}
+	schema.Store(presentValues, oldStore)
 	newStore := schema.GetAll()
 	changedKeys := GetConfigDescriptors().CalculateUpdates(oldStore, newStore)
 	// This is an UPDATE
-	if len(changedKeys["default"]) != 1 && changedKeys["default"][0] != "vs_2" {
+	if len(changedKeys["default"]) != 4 {
 		t.Errorf("TestCalculateUpdatesVS UPDATE failed to get the expected object, obtained :%s", changedKeys)
 	}
 	// Let's swap the variables
@@ -95,7 +98,9 @@ func TestCalculateUpdatesVS(t *testing.T) {
 	}
 	oldStore = newStore
 	newObj = objects.MakeVirtualService("default", "vs_2", 5)
-	schema.Store("vs_2", "default", newObj.ConfigMeta, newObj.Spec)
+	presentValues = make(map[string]map[string]*istio_objs.IstioObject)
+	presentValues["default"] = map[string]*istio_objs.IstioObject{"vs_2": newObj}
+	schema.Store(presentValues, oldStore)
 	newStore = schema.GetAll()
 	changedKeys = GetConfigDescriptors().CalculateUpdates(oldStore, newStore)
 	// This is an ADD event
@@ -104,7 +109,9 @@ func TestCalculateUpdatesVS(t *testing.T) {
 	}
 	newObj = objects.MakeVirtualService("default", "vs_2", 5)
 	oldStore = newStore
-	schema.Store("vs_2", "default", newObj.ConfigMeta, newObj.Spec)
+	presentValues = make(map[string]map[string]*istio_objs.IstioObject)
+	presentValues["default"] = map[string]*istio_objs.IstioObject{"vs_2": newObj}
+	schema.Store(presentValues, oldStore)
 	newStore = schema.GetAll()
 	changedKeys = GetConfigDescriptors().CalculateUpdates(oldStore, newStore)
 	// This is an ADD event
@@ -117,11 +124,13 @@ func TestCalculateUpdatesGW(t *testing.T) {
 	schema, _ := GetConfigDescriptors().GetByType("gateway")
 	oldStore := schema.GetAll()
 	newObj := objects.MakeGateway("default", "gw_2", 5)
-	schema.Store("gw_2", "default", newObj.ConfigMeta, newObj.Spec)
+	presentValues := make(map[string]map[string]*istio_objs.IstioObject)
+	presentValues["default"] = map[string]*istio_objs.IstioObject{"gw_2": newObj}
+	schema.Store(presentValues, oldStore)
 	newStore := schema.GetAll()
 	changedKeys := GetConfigDescriptors().CalculateUpdates(oldStore, newStore)
 	// This is an UPDATE
-	if len(changedKeys["default"]) != 1 && changedKeys["default"][0] != "gw_2" {
+	if len(changedKeys["default"]) != 4 {
 		t.Errorf("TestCalculateUpdatesGW UPDATE failed to get the expected object, obtained :%s", changedKeys)
 	}
 	// Let's swap the variables
@@ -135,7 +144,9 @@ func TestCalculateUpdatesGW(t *testing.T) {
 	}
 	oldStore = newStore
 	newObj = objects.MakeGateway("default", "gw_2", 5)
-	schema.Store("gw_2", "default", newObj.ConfigMeta, newObj.Spec)
+	presentValues = make(map[string]map[string]*istio_objs.IstioObject)
+	presentValues["default"] = map[string]*istio_objs.IstioObject{"gw_2": newObj}
+	schema.Store(presentValues, oldStore)
 	newStore = schema.GetAll()
 	changedKeys = GetConfigDescriptors().CalculateUpdates(oldStore, newStore)
 	// This is an ADD event
@@ -144,7 +155,9 @@ func TestCalculateUpdatesGW(t *testing.T) {
 	}
 	newObj = objects.MakeGateway("default", "gw_2", 5)
 	oldStore = newStore
-	schema.Store("gw_2", "default", newObj.ConfigMeta, newObj.Spec)
+	presentValues = make(map[string]map[string]*istio_objs.IstioObject)
+	presentValues["default"] = map[string]*istio_objs.IstioObject{"gw_2": newObj}
+	schema.Store(presentValues, oldStore)
 	newStore = schema.GetAll()
 	changedKeys = GetConfigDescriptors().CalculateUpdates(oldStore, newStore)
 	// This is an ADD event

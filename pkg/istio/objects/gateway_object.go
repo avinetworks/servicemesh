@@ -59,7 +59,7 @@ func (v *GatewayLister) GetAllGateways() map[string]map[string]string {
 	if len(allNamespaces) != 0 {
 		// Iterate over each namespace and formulate the map
 		for _, ns := range allNamespaces {
-			allGateways[ns] = v.Gateway(ns).GetAllGatewayNames()
+			allGateways[ns] = v.Gateway(ns).GetAllGatewayNameVers()
 		}
 	}
 	return allGateways
@@ -79,7 +79,7 @@ type GatewayNSCache struct {
 	gwvsobjects *ObjectMapStore
 }
 
-func (v *GatewayNSCache) GetAllGatewayNames() map[string]string {
+func (v *GatewayNSCache) GetAllGatewayNameVers() map[string]string {
 	// Obtain the object for this Gateway
 	allObjects := v.gwobjects.GetAllObjectNames()
 	objVersionsMap := make(map[string]string)

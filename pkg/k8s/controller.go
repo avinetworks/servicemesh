@@ -70,7 +70,7 @@ func NewAviController(inf *utils.Informers, cs *kubernetes.Clientset) *AviContro
 		recorder:  recorder,
 		informers: inf,
 	}
-	mcpQueue := utils.SharedWorkQueueWrappers().GetQueueByName("MCPLayer")
+	mcpQueue := utils.SharedWorkQueueWrappers().GetQueueByName(utils.ObjectIngestionLayer)
 	c.workqueue = mcpQueue.Workqueue
 	numWorkers := mcpQueue.NumWorkers
 
@@ -81,6 +81,7 @@ func NewAviController(inf *utils.Informers, cs *kubernetes.Clientset) *AviContro
 			key := "Endpoints/" + namespace + "/" + ObjKey(ep)
 			bkt := utils.Bkt(namespace, numWorkers)
 			c.workqueue[bkt].AddRateLimited(key)
+			utils.AviLog.Info.Printf("Added ADD Endpoint key from the kubernetes controller %s", key)
 		},
 		DeleteFunc: func(obj interface{}) {
 			ep, ok := obj.(*corev1.Endpoints)
@@ -102,6 +103,7 @@ func NewAviController(inf *utils.Informers, cs *kubernetes.Clientset) *AviContro
 			key := "Endpoints/" + namespace + "/" + ObjKey(ep)
 			bkt := utils.Bkt(namespace, numWorkers)
 			c.workqueue[bkt].AddRateLimited(key)
+			utils.AviLog.Info.Printf("Added DELETE Endpoint key from the kubernetes controller %s", key)
 		},
 		UpdateFunc: func(old, cur interface{}) {
 			oep := old.(*corev1.Endpoints)
@@ -111,6 +113,7 @@ func NewAviController(inf *utils.Informers, cs *kubernetes.Clientset) *AviContro
 				key := "Endpoints/" + namespace + "/" + ObjKey(cep)
 				bkt := utils.Bkt(namespace, numWorkers)
 				c.workqueue[bkt].AddRateLimited(key)
+				utils.AviLog.Info.Printf("Added UPDATE Endpoint key from the kubernetes controller %s", key)
 			}
 		},
 	}
@@ -122,6 +125,7 @@ func NewAviController(inf *utils.Informers, cs *kubernetes.Clientset) *AviContro
 			key := "Service/" + namespace + "/" + ObjKey(svc)
 			bkt := utils.Bkt(namespace, numWorkers)
 			c.workqueue[bkt].AddRateLimited(key)
+			utils.AviLog.Info.Printf("Added ADD Service key from the kubernetes controller %s", key)
 		},
 		DeleteFunc: func(obj interface{}) {
 			svc, ok := obj.(*corev1.Service)
@@ -143,6 +147,7 @@ func NewAviController(inf *utils.Informers, cs *kubernetes.Clientset) *AviContro
 			key := "Service/" + namespace + "/" + ObjKey(svc)
 			bkt := utils.Bkt(namespace, numWorkers)
 			c.workqueue[bkt].AddRateLimited(key)
+			utils.AviLog.Info.Printf("Added DELETE Service key from the kubernetes controller %s", key)
 		},
 		UpdateFunc: func(old, cur interface{}) {
 			oldobj := old.(*corev1.Service)
@@ -153,6 +158,7 @@ func NewAviController(inf *utils.Informers, cs *kubernetes.Clientset) *AviContro
 				key := "Service/" + namespace + "/" + ObjKey(svc)
 				bkt := utils.Bkt(namespace, numWorkers)
 				c.workqueue[bkt].AddRateLimited(key)
+				utils.AviLog.Info.Printf("Added UPDATE service key from the kubernetes controller %s", key)
 			}
 		},
 	}
