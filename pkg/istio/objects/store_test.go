@@ -15,73 +15,9 @@
 package objects
 
 import (
-	"strconv"
 	"testing"
-
-	networking "istio.io/api/networking/v1alpha3"
-	"istio.io/istio/pilot/pkg/model/test"
+	"time"
 )
-
-func Make(namespace string, name string, i int) *IstioObject {
-	return &IstioObject{
-		ConfigMeta: ConfigMeta{
-			Type:            "mocked-type",
-			Group:           "test.istio.io",
-			Version:         "v1",
-			Name:            name,
-			Namespace:       namespace,
-			ResourceVersion: strconv.Itoa(i),
-			Labels: map[string]string{
-				"key": name,
-			},
-			Annotations: map[string]string{
-				"annotationkey": name,
-			},
-		},
-		Spec: &test.MockConfig{
-			Key: name,
-			Pairs: []*test.ConfigPair{
-				{Key: "key", Value: strconv.Itoa(i)},
-			},
-		},
-	}
-}
-
-func MakeVirtualService(namespace string, name string, i int) *IstioObject {
-	ExampleVirtualService := &networking.VirtualService{
-		Hosts:    []string{"prod", "test"},
-		Gateways: []string{"gw1", "mesh"},
-		Http: []*networking.HTTPRoute{
-			{
-				Route: []*networking.HTTPRouteDestination{
-					{
-						Destination: &networking.Destination{
-							Host: "job",
-						},
-						Weight: 80,
-					},
-				},
-			},
-		},
-	}
-	return &IstioObject{
-		ConfigMeta: ConfigMeta{
-			Type:            "mocked-type",
-			Group:           "test.vs.io",
-			Version:         "v1",
-			Name:            name,
-			Namespace:       namespace,
-			ResourceVersion: strconv.Itoa(i),
-			Labels: map[string]string{
-				"key": name,
-			},
-			Annotations: map[string]string{
-				"annotationkey": name,
-			},
-		},
-		Spec: ExampleVirtualService,
-	}
-}
 
 func TestUpdateObjInNamespaceGlobalLock(t *testing.T) {
 	newStore := NewObjectStore()
@@ -114,6 +50,60 @@ func TestUpdateObjInNamespaceGlobalLock(t *testing.T) {
 	_, vs_obj = nsHandle.Get("vs_1")
 	if vs_obj != nil {
 		t.Errorf("TestUpdateObjInNamespace failed to get the expected object, obtained :%s", vs_obj.(*IstioObject).ConfigMeta.Name)
+	}
+}
+
+func TestParallelUpdateStore(t *testing.T) {
+	newStore := NewObjectStore()
+	var sampleValuesRoutine1 = []struct {
+		obj_value *IstioObject
+	}{
+		{Make("default", "vs_1", 1)},
+		{Make("red", "vs_2", 2)},
+		{Make("red", "vs_3", 2)},
+		{Make("red", "vs_4", 2)},
+		{Make("red", "vs_5", 2)},
+		{Make("red", "vs_6", 2)},
+		{Make("red", "vs_7", 2)},
+		{Make("red", "vs_8", 2)},
+	}
+	var sampleValuesRoutine2 = []struct {
+		obj_value *IstioObject
+	}{
+		{Make("default", "vs_3", 1)},
+		{Make("red", "vs_2", 2)},
+		{Make("red", "vs_3", 2)},
+		{Make("red", "vs_4", 2)},
+		{Make("red", "vs_5", 2)},
+		{Make("red", "vs_6", 2)},
+		{Make("red", "vs_7", 2)},
+		{Make("red", "vs_8", 2)},
+		{Make("red", "vs_9", 2)},
+		{Make("red", "vs_10", 2)},
+		{Make("red", "vs_11", 2)},
+		{Make("red", "vs_12", 2)},
+		{Make("red", "vs_13", 2)},
+		{Make("red", "vs_14", 2)},
+	}
+	go UpdateStore(sampleValuesRoutine1, newStore)
+	go UpdateStore(sampleValuesRoutine2, newStore)
+	//Assuming the go routines would be done in this time.
+	time.Sleep(100 * time.Millisecond)
+	nsHandle := newStore.GetNSStore("red")
+	objs := nsHandle.GetAllObjectNames()
+	if len(objs) != 13 {
+		t.Errorf("TestParallelUpdateStore failed to get the expected object in red ns , obtained :%v", len(objs))
+	}
+	nsHandle = newStore.GetNSStore("default")
+	objs = nsHandle.GetAllObjectNames()
+	if len(objs) != 2 {
+		t.Errorf("TestParallelUpdateStore failed to get the expected object in default ns, obtained :%v", len(objs))
+	}
+}
+
+func UpdateStore(sampleValues []struct{ obj_value *IstioObject }, newStore *ObjectStore) {
+	for _, pt := range sampleValues {
+		newStore.UpdateNSStore(pt.obj_value)
 	}
 }
 

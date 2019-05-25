@@ -74,6 +74,18 @@ func (store *ObjectStore) UpdateNSStore(obj *IstioObject) bool {
 	return true
 }
 
+func (store *ObjectStore) GetAllNamespaces() []string {
+	// Take a read lock on the store and write lock on NS object
+	store.NSLock.RLock()
+	defer store.NSLock.RUnlock()
+	var allNamespaces []string
+	for ns, _ := range store.NSObjectMap {
+		allNamespaces = append(allNamespaces, ns)
+	}
+	return allNamespaces
+
+}
+
 type ObjectMapStore struct {
 	ObjectMap map[string]interface{}
 	ObjLock   sync.RWMutex
@@ -113,5 +125,13 @@ func (o *ObjectMapStore) Get(objName string) (bool, interface{}) {
 	}
 	utils.AviLog.Warning.Printf("Object Not found in store:  %s ", objName)
 	return false, nil
+
+}
+
+func (o *ObjectMapStore) GetAllObjectNames() map[string]interface{} {
+	o.ObjLock.RLock()
+	defer o.ObjLock.RUnlock()
+	// TODO (sudswas): Pass a copy instead of the reference
+	return o.ObjectMap
 
 }

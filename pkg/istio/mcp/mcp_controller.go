@@ -21,6 +21,7 @@ import (
 	"time"
 
 	istio_objs "github.com/avinetworks/servicemesh/pkg/istio/objects"
+	"github.com/avinetworks/servicemesh/pkg/utils"
 	"github.com/gogo/protobuf/types"
 	"istio.io/istio/pkg/mcp/sink"
 )
@@ -41,7 +42,6 @@ func NewController() *Controller {
 			synced[descriptor.Collection] = false
 		}
 	}
-
 	return &Controller{
 		synced:                  synced,
 		descriptorsByCollection: descriptorsByMessageName,
@@ -83,21 +83,18 @@ func (c *Controller) Apply(change *sink.Change) error {
 	}
 
 	schema, valid := c.ConfigDescriptor().GetByType(descriptor.Type)
+	// Retrive all the existing store objects
+	prevStore := schema.GetAll()
 	if !valid {
 		return fmt.Errorf("descriptor type not supported %s", change.Collection)
 	}
 	c.syncedMu.Lock()
 	c.synced[change.Collection] = true
 	c.syncedMu.Unlock()
-	istio_objs.InitializeObjs(descriptor.Type)
+	presentValues := make(map[string]map[string]*istio_objs.IstioObject)
 	createTime := time.Now()
 	for _, obj := range change.Objects {
 		namespace, name := extractNameNamespace(obj.Metadata.Name)
-		fmt.Println("Got an update for name %s", name)
-		if err := schema.Validate(name, namespace, obj.Body); err != nil {
-			// Discard the resource
-			continue
-		}
 		if obj.Metadata.CreateTime != nil {
 			var err error
 			if createTime, err = types.TimestampFromProto(obj.Metadata.CreateTime); err != nil {
@@ -114,13 +111,36 @@ func (c *Controller) Apply(change *sink.Change) error {
 			CreationTimestamp: createTime,
 			Labels:            obj.Metadata.Labels,
 			Annotations:       obj.Metadata.Annotations,
-			// TODO (sudswas): Change this to take it from config
-			Domain: "avi.internal",
 		}
-		configMeta.QueueByTypes(obj.Body)
+		istioObj := istio_objs.NewIstioObject(configMeta, obj.Body)
+		addLocalIstioObjs(name, namespace, istioObj, presentValues)
 	}
-	istio_objs.CalculateUpdates(descriptor.Type)
+	schema.Store(presentValues, prevStore)
+	newStore := schema.GetAll()
+	changedKeysMap := c.ConfigDescriptor().CalculateUpdates(prevStore, newStore)
+	sharedQueue := utils.SharedWorkQueueWrappers().GetQueueByName(utils.ObjectIngestionLayer)
+	// Sharding logic here.
+	for namespace, objKeys := range changedKeysMap {
+		// Hash on namespace
+		bkt := utils.Bkt(namespace, sharedQueue.NumWorkers)
+		for _, key := range objKeys {
+			key = descriptor.Type + "/" + namespace + "/" + key
+			sharedQueue.Workqueue[bkt].AddRateLimited(key)
+			utils.AviLog.Info.Printf("Added Key from MCP update to the workerqueue %s", key)
+		}
+	}
 	return nil
+}
+
+func addLocalIstioObjs(name string, namespace string, istio_object *istio_objs.IstioObject, presentValues map[string]map[string]*istio_objs.IstioObject) {
+	obj, ok := presentValues[namespace]
+	if ok {
+		// Namespace is found. Let's update the value against it.
+		obj[name] = istio_object
+	} else {
+		objMap := map[string]*istio_objs.IstioObject{name: istio_object}
+		presentValues[namespace] = objMap
+	}
 }
 
 func extractNameNamespace(metadataName string) (string, string) {

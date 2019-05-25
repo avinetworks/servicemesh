@@ -24,3 +24,11 @@ deps:
 .PHONY: docker
 docker:
 	docker build -t $(BINARY_NAME):latest -f Dockerfile .
+
+.PHONY: test
+test:
+	go get github.com/onsi/gomega
+	go test -v ./pkg/istio/objects
+	go test -v ./pkg/istio/mcp
+	go test -v ./pkg/istio/mcp/mcptests
+

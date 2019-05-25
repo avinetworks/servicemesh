@@ -20,14 +20,14 @@ import (
 	"sync"
 )
 
-var gwlisterinstance *SharedGatewayLister
+var gwlisterinstance *GatewayLister
 var gwonce sync.Once
 
-func GetGatewayInstance() *SharedGatewayLister {
+func SharedGatewayLister() *GatewayLister {
 	gwonce.Do(func() {
 		GWStore := NewObjectStore()
 		gwvsStore := NewObjectStore()
-		gwlisterinstance = &SharedGatewayLister{}
+		gwlisterinstance = &GatewayLister{}
 		gwlisterinstance.gwvsstore = gwvsStore
 		gwlisterinstance.gwstore = GWStore
 	})
@@ -39,15 +39,31 @@ type IstioGateway interface {
 	//List() *[]ObjectStore
 }
 
-type SharedGatewayLister struct {
+type GatewayLister struct {
 	gwstore   *ObjectStore
 	gwvsstore *ObjectStore
 }
 
-func (v *SharedGatewayLister) Gateway(ns string) *GatewayNSCache {
+func (v *GatewayLister) Gateway(ns string) *GatewayNSCache {
 	nsGwObjects := v.gwstore.GetNSStore(ns)
 	nsGwVsObjects := v.gwvsstore.GetNSStore(ns)
 	return &GatewayNSCache{namespace: ns, gwobjects: nsGwObjects, gwvsobjects: nsGwVsObjects}
+}
+
+func (v *GatewayLister) GetAllGateways() map[string]map[string]string {
+	// This method should return a map that looks like this: {ns: [obj1, obj2]}
+	// This is particularly useful if we want to know what are the vs names
+	// present in a namespace without affecting the actual store objects.
+	allNamespaces := v.gwstore.GetAllNamespaces()
+	allGateways := make(map[string]map[string]string)
+	if len(allNamespaces) != 0 {
+		// Iterate over each namespace and formulate the map
+		for _, ns := range allNamespaces {
+			allGateways[ns] = v.Gateway(ns).GetAllGatewayNameVers()
+		}
+	}
+	return allGateways
+
 }
 
 type GatewayNameSpaceIntf interface {
@@ -61,6 +77,17 @@ type GatewayNSCache struct {
 	namespace   string
 	gwobjects   *ObjectMapStore
 	gwvsobjects *ObjectMapStore
+}
+
+func (v *GatewayNSCache) GetAllGatewayNameVers() map[string]string {
+	// Obtain the object for this Gateway
+	allObjects := v.gwobjects.GetAllObjectNames()
+	objVersionsMap := make(map[string]string)
+	// Now let's parse the object names and their corresponding resourceversions in a Map
+	for _, obj := range allObjects {
+		objVersionsMap[obj.(*IstioObject).ConfigMeta.Name] = obj.(*IstioObject).ConfigMeta.ResourceVersion
+	}
+	return objVersionsMap
 }
 
 func (v *GatewayNSCache) Get(name string) (bool, *IstioObject) {
@@ -89,4 +116,21 @@ func (v *GatewayNSCache) Update(obj *IstioObject) {
 
 func (v *GatewayNSCache) UpdateGWVSMapping(gwName string, vsList []string) {
 	v.gwvsobjects.AddOrUpdate(gwName, vsList)
+}
+
+func (v *GatewayNSCache) Delete(name string) bool {
+	return v.gwobjects.Delete(name)
+}
+
+func (v *GatewayNSCache) List() map[string]*IstioObject {
+	// TODO (sudswas): Let's check if we can abstract out the store objects
+	// completely. There's still a possibility that if we pass the references
+	// we maybe allowing upper layers to modify the object that would directly
+	// impact the store objects.
+	convertedMap := make(map[string]*IstioObject)
+	// Change the empty interface to IstioObject. Avoid Duck Typing.
+	for key, value := range v.gwobjects.ObjectMap {
+		convertedMap[key] = value.(*IstioObject)
+	}
+	return convertedMap
 }

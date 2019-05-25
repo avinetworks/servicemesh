@@ -20,6 +20,7 @@ import (
 	"net/url"
 	"sync"
 
+	"github.com/avinetworks/servicemesh/pkg/utils"
 	"google.golang.org/grpc"
 	mcpapi "istio.io/api/mcp/v1alpha1"
 	"istio.io/istio/pkg/mcp/client"
@@ -77,7 +78,7 @@ func (c *MCPClient) InitMCPClient() error {
 			cancel()
 			return err
 		}
-		fmt.Println("The MCP server address", u.Host)
+		utils.AviLog.Info.Println("The MCP server address", u.Host)
 		securityOption := grpc.WithInsecure()
 		msgSizeOption := grpc.WithDefaultCallOptions(grpc.MaxCallRecvMsgSize(DefaultMCPMaxMsgSize))
 		conn, err := grpc.DialContext(ctx, u.Host, securityOption, msgSizeOption)
@@ -96,7 +97,7 @@ func (c *MCPClient) InitMCPClient() error {
 		}
 		mcpClient := client.New(cl, sinkOptions)
 		configz.Register(mcpClient)
-		fmt.Println("Successfully registered the client")
+		utils.AviLog.Info.Println("Successfully registered the MCP client")
 		clients = append(clients, mcpClient)
 		conns = append(conns, conn)
 	}

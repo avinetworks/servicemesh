@@ -15,27 +15,10 @@
 package objects
 
 import (
-	"fmt"
 	"time"
 
 	"github.com/golang/protobuf/proto"
 )
-
-var OldGwMap *IstioObjectMap
-var OldVsMap *IstioObjectMap
-var NewGwMap *IstioObjectMap
-var NewVsMap *IstioObjectMap
-var gwOpsMap *IstioObjectOpsContainer
-var vsOpsMap *IstioObjectOpsContainer
-
-func init() {
-	// Initialize the recognized type maps
-	OldGwMap = NewIstioObjectMap()
-	OldVsMap = NewIstioObjectMap()
-	gwOpsMap = NewIstioObjectOpsContainer("gateway")
-	vsOpsMap = NewIstioObjectOpsContainer("virtual-service")
-
-}
 
 type ConfigMeta struct {
 	// Type is a short configuration name that matches the content message type
@@ -56,10 +39,6 @@ type ConfigMeta struct {
 	// (security domains, fault domains, organizational domains)
 	Namespace string `json:"namespace,omitempty"`
 
-	// Domain defines the suffix of the fully qualified name past the namespace.
-	// Domain is not a part of the unique key unlike name and namespace.
-	Domain string `json:"domain,omitempty"`
-
 	// Map of string keys and values that can be used to organize and categorize
 	// (scope and select) objects.
 	Labels map[string]string `json:"labels,omitempty"`
@@ -74,83 +53,15 @@ type ConfigMeta struct {
 	CreationTimestamp time.Time `json:"creationTimestamp,omitempty"`
 }
 
-func (c ConfigMeta) QueueByTypes(spec proto.Message) {
-	switch c.Type {
-	case "gateway":
-		// Hydrate the Gateway Structs
-		gw := NewIstioObject(c, spec)
-		key := c.Namespace + ":" + c.Name
-		NewGwMap.AddObj(key, gw)
-
-	case "virtual-service":
-		// Hydrate the VS Structs
-		vs := NewIstioObject(c, spec)
-		key := c.Namespace + ":" + c.Name
-		NewVsMap.AddObj(key, vs)
-	}
+// This is a basic object that is used to store istio object information.
+type IstioObject struct {
+	ConfigMeta
+	Spec proto.Message
 }
 
-func InitializeObjs(objType string) {
-	// Initialize the objects
-	switch objType {
-	case "gateway":
-		NewGwMap = NewIstioObjectMap()
-	case "virtual-service":
-		NewVsMap = NewIstioObjectMap()
-	}
-}
-
-func CalculateUpdates(objType string) {
-	/* This method compares the newMap with the old Map and finds out the items to delete/update/create.
-	Eventually newMap replaces the old Map. We look at the old map and compare every key with the new map,
-	if a key is absent in the new map - we assume it's a candidate for delete.
-	If the key is present and the resourceVersion is different, we assume it's an update.
-	If the key is present and the resourceVersion is same, we no-op.
-	If the key is absent in the old map but present in the newMap - we assume that it's an add operation. */
-	switch objType {
-	case "gateway":
-		for newKey, newValue := range NewGwMap.objMap {
-			ok, val := OldGwMap.GetObjByNameNamespace(newKey)
-			if !ok {
-				// Key is not found in the old map - it's an add
-				gwOpsMap.AddOps(newKey, "ADD")
-			} else {
-				// Compare if the resourceVersions are same
-				if val.ConfigMeta.ResourceVersion != newValue.ConfigMeta.ResourceVersion {
-					// It's an update
-					gwOpsMap.AddOps(newKey, "UPDATE")
-				}
-			}
-		}
-		for oldKey, _ := range OldGwMap.objMap {
-			ok, _ := NewGwMap.GetObjByNameNamespace(oldKey)
-			if !ok {
-				gwOpsMap.AddOps(oldKey, "DELETE")
-			}
-		}
-		// Now let's swap the old with the new
-		OldGwMap.objMap = NewGwMap.objMap
-	case "virtual-service":
-		for newKey, newValue := range NewVsMap.objMap {
-			ok, val := OldVsMap.GetObjByNameNamespace(newKey)
-			if !ok {
-				// Key is not found in the old map - it's an add
-				fmt.Println("Add", val)
-			} else {
-				// Compare if the resourceVersions are same
-				if val.ConfigMeta.ResourceVersion != newValue.ConfigMeta.ResourceVersion {
-					// It's an update
-					fmt.Println("Update", val)
-				}
-			}
-		}
-		for oldKey, _ := range OldVsMap.objMap {
-			ok, val := NewVsMap.GetObjByNameNamespace(oldKey)
-			if !ok {
-				fmt.Println("Delete", val)
-			}
-		}
-		// Now let's swap the old with the new
-		OldVsMap.objMap = NewVsMap.objMap
-	}
+func NewIstioObject(configMeta ConfigMeta, spec proto.Message) *IstioObject {
+	obj := &IstioObject{}
+	obj.ConfigMeta = configMeta
+	obj.Spec = spec
+	return obj
 }
