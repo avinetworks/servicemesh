@@ -16,7 +16,6 @@ package main
 
 import (
 	"flag"
-	"fmt"
 	"os"
 
 	"github.com/avinetworks/servicemesh/aviobjects"
@@ -77,12 +76,10 @@ func main() {
 	istioEnabled := "False"
 	istioEnabled = os.Getenv("ISTIO_ENABLED")
 	if istioEnabled == "True" {
-		fmt.Println("SUDII")
 		//MCP_URL format: mcp://<IP>:port
 		mcpServerURL := os.Getenv("MCP_URL")
 		mcpServers := []string{mcpServerURL}
 		mcpClient := mcp.MCPClient{MCPServerAddrs: mcpServers}
-		fmt.Println(mcpServerURL)
 		_ = mcpClient.InitMCPClient()
 		// TODO (sudswas): Need to handle the stop signal
 		mcpClient.Start(stopCh)
