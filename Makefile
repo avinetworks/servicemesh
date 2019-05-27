@@ -27,7 +27,6 @@ docker:
 
 .PHONY: test
 test:
-	go get github.com/onsi/gomega
 	go test -v ./pkg/istio/objects
 	go test -v ./pkg/istio/mcp
 	go test -v ./pkg/istio/mcp/mcptests
