@@ -211,6 +211,27 @@
   version = "v2.1"
 
 [[projects]]
+  digest = "1:dbafce2fddb1ca331646fe2ac9c9413980368b19a60a4406a6e5861680bd73be"
+  name = "github.com/onsi/gomega"
+  packages = [
+    ".",
+    "format",
+    "internal/assertion",
+    "internal/asyncassertion",
+    "internal/oraclematcher",
+    "internal/testingtsupport",
+    "matchers",
+    "matchers/support/goraph/bipartitegraph",
+    "matchers/support/goraph/edge",
+    "matchers/support/goraph/node",
+    "matchers/support/goraph/util",
+    "types",
+  ]
+  pruneopts = ""
+  revision = "90e289841c1ed79b7a598a7cd9959750cb5e89e2"
+  version = "v1.5.0"
+
+[[projects]]
   branch = "master"
   digest = "1:c24598ffeadd2762552269271b3b1510df2d83ee6696c1e543a0ff653af494bc"
   name = "github.com/petar/GoLLRB"
@@ -357,6 +378,9 @@
   packages = [
     "context",
     "context/ctxhttp",
+    "html",
+    "html/atom",
+    "html/charset",
     "http/httpguts",
     "http2",
     "http2/hpack",
@@ -395,12 +419,24 @@
   packages = [
     "collate",
     "collate/build",
+    "encoding",
+    "encoding/charmap",
+    "encoding/htmlindex",
+    "encoding/internal",
+    "encoding/internal/identifier",
+    "encoding/japanese",
+    "encoding/korean",
+    "encoding/simplifiedchinese",
+    "encoding/traditionalchinese",
+    "encoding/unicode",
     "internal/colltab",
     "internal/gen",
     "internal/tag",
     "internal/triegen",
     "internal/ucd",
+    "internal/utf8internal",
     "language",
+    "runes",
     "secure/bidirule",
     "transform",
     "unicode/bidi",
@@ -515,6 +551,7 @@
   digest = "1:b56e279348c9efa3828a84851053333580dc4df1b9d022b1a6c4e36a278ccc3b"
   name = "istio.io/istio"
   packages = [
+    "pilot/pkg/model/test",
     "pkg/ctrlz",
     "pkg/ctrlz/fw",
     "pkg/ctrlz/topics",
@@ -799,19 +836,21 @@
     "github.com/avinetworks/sdk/go/models",
     "github.com/avinetworks/sdk/go/session",
     "github.com/davecgh/go-spew/spew",
+    "github.com/gogo/protobuf/types",
     "github.com/golang/protobuf/proto",
+    "github.com/onsi/gomega",
     "google.golang.org/grpc",
     "istio.io/api/mcp/v1alpha1",
     "istio.io/api/networking/v1alpha3",
+    "istio.io/istio/pilot/pkg/model/test",
     "istio.io/istio/pkg/mcp/client",
     "istio.io/istio/pkg/mcp/configz",
     "istio.io/istio/pkg/mcp/monitoring",
     "istio.io/istio/pkg/mcp/sink",
     "k8s.io/api/core/v1",
     "k8s.io/api/extensions/v1beta1",
-    "k8s.io/apimachinery/pkg/api/errors",
+    "k8s.io/apimachinery/pkg/apis/meta/v1",
     "k8s.io/apimachinery/pkg/util/runtime",
-    "k8s.io/apimachinery/pkg/util/wait",
     "k8s.io/client-go/informers",
     "k8s.io/client-go/informers/core/v1",
     "k8s.io/client-go/informers/extensions/v1beta1",
