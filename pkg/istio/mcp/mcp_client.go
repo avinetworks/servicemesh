@@ -23,7 +23,6 @@ import (
 	"github.com/avinetworks/servicemesh/pkg/utils"
 	"google.golang.org/grpc"
 	mcpapi "istio.io/api/mcp/v1alpha1"
-	"istio.io/istio/pkg/mcp/client"
 	"istio.io/istio/pkg/mcp/configz"
 	"istio.io/istio/pkg/mcp/monitoring"
 	"istio.io/istio/pkg/mcp/sink"
@@ -67,7 +66,7 @@ func (c *MCPClient) InitMCPClient() error {
 		}
 	}
 	ctx, cancel := context.WithCancel(context.Background())
-	var clients []*client.Client
+	var clients []*sink.Client
 	var conns []*grpc.ClientConn
 
 	reporter := monitoring.NewStatsContext("gocontroller/mcp/sink")
@@ -87,7 +86,7 @@ func (c *MCPClient) InitMCPClient() error {
 			cancel()
 			return err
 		}
-		cl := mcpapi.NewAggregatedMeshConfigServiceClient(conn)
+		cl := mcpapi.NewResourceSourceClient(conn)
 		mcpController := NewController()
 		sinkOptions := &sink.Options{
 			CollectionOptions: collections,
@@ -95,7 +94,7 @@ func (c *MCPClient) InitMCPClient() error {
 			ID:                clientNodeID,
 			Reporter:          reporter,
 		}
-		mcpClient := client.New(cl, sinkOptions)
+		mcpClient := sink.NewClient(cl, sinkOptions)
 		configz.Register(mcpClient)
 		utils.AviLog.Info.Println("Successfully registered the MCP client")
 		clients = append(clients, mcpClient)
