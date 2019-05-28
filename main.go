@@ -21,6 +21,7 @@ import (
 	"github.com/avinetworks/servicemesh/aviobjects"
 	"github.com/avinetworks/servicemesh/pkg/istio/mcp"
 	"github.com/avinetworks/servicemesh/pkg/k8s"
+	"github.com/avinetworks/servicemesh/pkg/queue"
 	"github.com/avinetworks/servicemesh/pkg/utils"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
@@ -85,11 +86,14 @@ func main() {
 		mcpClient.Start(stopCh)
 	}
 
-	c := k8s.NewAviController(informers, kubeClient)
-
+	c := k8s.SharedAviController(informers)
+	c.SetupEventHandlers(kubeClient)
 	c.Start(stopCh)
 
-	c.Run(stopCh)
+	// start the go routines draining the queues in various layers
+	ingestionQueue := queue.SharedWorkQueueWrappers().GetQueueByName(queue.ObjectIngestionLayer)
+	ingestionQueue.Run(stopCh)
+	//c.Run(stopCh)
 }
 
 func init() {

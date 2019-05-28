@@ -35,8 +35,8 @@ func NewObjectStore() *ObjectStore {
 }
 
 func (store *ObjectStore) GetNSStore(nsName string) *ObjectMapStore {
-	store.NSLock.RLock()
-	defer store.NSLock.RUnlock()
+	store.NSLock.Lock()
+	defer store.NSLock.Unlock()
 	val, ok := store.NSObjectMap[nsName]
 	if ok {
 		return val

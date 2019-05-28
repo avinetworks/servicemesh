@@ -20,24 +20,38 @@ import (
 	"sync"
 	"time"
 
+	"github.com/avinetworks/servicemesh/pkg/queue"
 	"github.com/avinetworks/servicemesh/pkg/utils"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/util/runtime"
 	kubeinformers "k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes"
-	"k8s.io/client-go/kubernetes/scheme"
 	typedcorev1 "k8s.io/client-go/kubernetes/typed/core/v1"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/tools/record"
 	"k8s.io/client-go/util/workqueue"
 )
 
+var controllerInstance *AviController
+var ctrlonce sync.Once
+
 type AviController struct {
 	worker_id       uint32
 	worker_id_mutex sync.Mutex
-	recorder        record.EventRecorder
-	informers       *utils.Informers
-	workqueue       []workqueue.RateLimitingInterface
+	//recorder        record.EventRecorder
+	informers *utils.Informers
+	workqueue []workqueue.RateLimitingInterface
+}
+
+func SharedAviController(inf *utils.Informers) *AviController {
+	ctrlonce.Do(func() {
+		controllerInstance = &AviController{
+			worker_id: (uint32(1) << utils.NumWorkers) - 1,
+			//recorder:  recorder,
+			informers: inf,
+		}
+	})
+	return controllerInstance
 }
 
 func ObjKey(obj interface{}) string {
@@ -58,19 +72,14 @@ func NewInformers(cs *kubernetes.Clientset) *utils.Informers {
 	return &informers
 }
 
-func NewAviController(inf *utils.Informers, cs *kubernetes.Clientset) *AviController {
+func (c *AviController) SetupEventHandlers(cs *kubernetes.Clientset) {
 	utils.AviLog.Info.Printf("Creating event broadcaster")
 	eventBroadcaster := record.NewBroadcaster()
 	eventBroadcaster.StartLogging(utils.AviLog.Info.Printf)
 	eventBroadcaster.StartRecordingToSink(&typedcorev1.EventSinkImpl{Interface: cs.CoreV1().Events("")})
-	recorder := eventBroadcaster.NewRecorder(scheme.Scheme, corev1.EventSource{Component: "avi-k8s-controller"})
+	//recorder := eventBroadcaster.NewRecorder(scheme.Scheme, corev1.EventSource{Component: "avi-k8s-controller"})
 
-	c := &AviController{
-		worker_id: (uint32(1) << utils.NumWorkers) - 1,
-		recorder:  recorder,
-		informers: inf,
-	}
-	mcpQueue := utils.SharedWorkQueueWrappers().GetQueueByName(utils.ObjectIngestionLayer)
+	mcpQueue := queue.SharedWorkQueueWrappers().GetQueueByName(queue.ObjectIngestionLayer)
 	c.workqueue = mcpQueue.Workqueue
 	numWorkers := mcpQueue.NumWorkers
 
@@ -78,7 +87,7 @@ func NewAviController(inf *utils.Informers, cs *kubernetes.Clientset) *AviContro
 		AddFunc: func(obj interface{}) {
 			ep := obj.(*corev1.Endpoints)
 			namespace, _, _ := cache.SplitMetaNamespaceKey(ObjKey(ep))
-			key := "Endpoints/" + namespace + "/" + ObjKey(ep)
+			key := "Endpoints/" + ObjKey(ep)
 			bkt := utils.Bkt(namespace, numWorkers)
 			c.workqueue[bkt].AddRateLimited(key)
 			utils.AviLog.Info.Printf("Added ADD Endpoint key from the kubernetes controller %s", key)
@@ -100,7 +109,7 @@ func NewAviController(inf *utils.Informers, cs *kubernetes.Clientset) *AviContro
 			}
 			ep = obj.(*corev1.Endpoints)
 			namespace, _, _ := cache.SplitMetaNamespaceKey(ObjKey(ep))
-			key := "Endpoints/" + namespace + "/" + ObjKey(ep)
+			key := "Endpoints/" + ObjKey(ep)
 			bkt := utils.Bkt(namespace, numWorkers)
 			c.workqueue[bkt].AddRateLimited(key)
 			utils.AviLog.Info.Printf("Added DELETE Endpoint key from the kubernetes controller %s", key)
@@ -110,7 +119,7 @@ func NewAviController(inf *utils.Informers, cs *kubernetes.Clientset) *AviContro
 			cep := cur.(*corev1.Endpoints)
 			if !reflect.DeepEqual(cep.Subsets, oep.Subsets) {
 				namespace, _, _ := cache.SplitMetaNamespaceKey(ObjKey(cep))
-				key := "Endpoints/" + namespace + "/" + ObjKey(cep)
+				key := "Endpoints/" + ObjKey(cep)
 				bkt := utils.Bkt(namespace, numWorkers)
 				c.workqueue[bkt].AddRateLimited(key)
 				utils.AviLog.Info.Printf("Added UPDATE Endpoint key from the kubernetes controller %s", key)
@@ -122,7 +131,7 @@ func NewAviController(inf *utils.Informers, cs *kubernetes.Clientset) *AviContro
 		AddFunc: func(obj interface{}) {
 			svc := obj.(*corev1.Service)
 			namespace, _, _ := cache.SplitMetaNamespaceKey(ObjKey(svc))
-			key := "Service/" + namespace + "/" + ObjKey(svc)
+			key := "Service/" + ObjKey(svc)
 			bkt := utils.Bkt(namespace, numWorkers)
 			c.workqueue[bkt].AddRateLimited(key)
 			utils.AviLog.Info.Printf("Added ADD Service key from the kubernetes controller %s", key)
@@ -144,7 +153,7 @@ func NewAviController(inf *utils.Informers, cs *kubernetes.Clientset) *AviContro
 			}
 			svc = obj.(*corev1.Service)
 			namespace, _, _ := cache.SplitMetaNamespaceKey(ObjKey(svc))
-			key := "Service/" + namespace + "/" + ObjKey(svc)
+			key := "Service/" + ObjKey(svc)
 			bkt := utils.Bkt(namespace, numWorkers)
 			c.workqueue[bkt].AddRateLimited(key)
 			utils.AviLog.Info.Printf("Added DELETE Service key from the kubernetes controller %s", key)
@@ -155,7 +164,7 @@ func NewAviController(inf *utils.Informers, cs *kubernetes.Clientset) *AviContro
 			if oldobj.ResourceVersion != svc.ResourceVersion {
 				// Only add the key if the resource versions have changed.
 				namespace, _, _ := cache.SplitMetaNamespaceKey(ObjKey(svc))
-				key := "Service/" + namespace + "/" + ObjKey(svc)
+				key := "Service/" + ObjKey(svc)
 				bkt := utils.Bkt(namespace, numWorkers)
 				c.workqueue[bkt].AddRateLimited(key)
 				utils.AviLog.Info.Printf("Added UPDATE service key from the kubernetes controller %s", key)
@@ -166,7 +175,6 @@ func NewAviController(inf *utils.Informers, cs *kubernetes.Clientset) *AviContro
 	c.informers.EpInformer.Informer().AddEventHandler(ep_event_handler)
 	c.informers.ServiceInformer.Informer().AddEventHandler(svc_event_handler)
 
-	return c
 }
 
 func (c *AviController) Start(stopCh <-chan struct{}) {

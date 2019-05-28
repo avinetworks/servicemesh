@@ -15,6 +15,7 @@
 package utils
 
 import (
+	"hash/fnv"
 	"net"
 	"net/url"
 	"strings"
@@ -92,4 +93,11 @@ func CrudHashKey(obj_type string, obj interface{}) string {
 		return ":"
 	}
 	return ns + ":" + name
+}
+
+func Bkt(key string, num_workers uint32) uint32 {
+	h := fnv.New32a()
+	h.Write([]byte(key))
+	bkt := h.Sum32() & (num_workers - 1)
+	return bkt
 }
