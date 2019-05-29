@@ -145,10 +145,12 @@ func (c *WorkerQueue) processNextWorkItem(worker_id uint32) bool {
 			return nil
 		}
 		// Run the syncToAvi, passing it the ev resource to be synced.
-		if err := c.syncFunc(ev); err != nil {
-			c.Workqueue[worker_id].Forget(obj)
-			return nil
+		err := c.syncFunc(ev)
+		if err != nil {
+			// TODO (sudswas): Do an add back logic via the retry layer here.
+			utils.AviLog.Error.Printf("There was an error while syncing the key: %s", ev)
 		}
+		c.Workqueue[worker_id].Forget(obj)
 
 		return nil
 	}(obj)
@@ -162,6 +164,8 @@ func (c *WorkerQueue) processNextWorkItem(worker_id uint32) bool {
 func SyncFromIngestionLayer(key string) error {
 	// This method will do all necessary graph calculations on the Graph Layer
 	// Let's route the key to the graph layer.
+	// NOTE: There's no error propagation from the graph layer back to the workerqueue. We will evaluate
+	// This condition in the future and visit as needed. But right now, there's no necessity for it.
 	graph.SyncToGraphLayer(key)
 	return nil
 }

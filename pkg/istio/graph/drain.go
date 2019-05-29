@@ -57,9 +57,14 @@ func SyncToGraphLayer(key string) {
 	}
 	gateways := schema.TraceGateway(name, namespace)
 	// Update the relationships associated with this object
+	if gateways == nil {
+		// This is a special case, Gateway delete event. We need to delete the entire VS.
+		// Short circuit and publish the VS key for deletion to Layer 3.
+		return
+	}
 	if len(gateways) == 0 {
 		utils.AviLog.Info.Printf("Couldn't trace to the gateway for key %s", key)
-		//No gateways associated with this update. No-op
+		// No gateways associated with this update. No-op
 		return
 	} else {
 		GenerateIstioGraph(gateways)

@@ -19,9 +19,13 @@ import (
 	"net"
 	"net/url"
 	"strings"
+	"sync"
+	"time"
 
 	corev1 "k8s.io/api/core/v1"
 	extensions "k8s.io/api/extensions/v1beta1"
+	kubeinformers "k8s.io/client-go/informers"
+	"k8s.io/client-go/kubernetes"
 )
 
 func IsV4(addr string) bool {
@@ -100,4 +104,26 @@ func Bkt(key string, num_workers uint32) uint32 {
 	h.Write([]byte(key))
 	bkt := h.Sum32() & (num_workers - 1)
 	return bkt
+}
+
+var informer sync.Once
+var informerInstance *Informers
+
+func NewInformers(cs *kubernetes.Clientset) *Informers {
+	kubeInformerFactory := kubeinformers.NewSharedInformerFactory(cs, time.Second*30)
+	informer.Do(func() {
+		informerInstance = &Informers{
+			ServiceInformer: kubeInformerFactory.Core().V1().Services(),
+			EpInformer:      kubeInformerFactory.Core().V1().Endpoints(),
+		}
+	})
+	return informerInstance
+}
+
+func GetInformers() *Informers {
+	if informerInstance == nil {
+		AviLog.Error.Fatal("Cannot retrieve the informers since it's not initialized yet.")
+		return nil
+	}
+	return informerInstance
 }

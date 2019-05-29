@@ -43,12 +43,12 @@ type AviController struct {
 	workqueue []workqueue.RateLimitingInterface
 }
 
-func SharedAviController(inf *utils.Informers) *AviController {
+func SharedAviController() *AviController {
 	ctrlonce.Do(func() {
 		controllerInstance = &AviController{
 			worker_id: (uint32(1) << utils.NumWorkers) - 1,
 			//recorder:  recorder,
-			informers: inf,
+			informers: utils.GetInformers(),
 		}
 	})
 	return controllerInstance

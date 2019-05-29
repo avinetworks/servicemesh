@@ -64,9 +64,6 @@ func (store *ObjectStore) DeleteNSStore(nsName string) bool {
 }
 
 func (store *ObjectStore) UpdateNSStore(obj *IstioObject) bool {
-	// Take a read lock on the store and write lock on NS object
-	store.NSLock.RLock()
-	defer store.NSLock.RUnlock()
 	// Obtain the namespace of this object
 	nsObjects := store.GetNSStore(obj.Namespace)
 	nsObjects.AddOrUpdate(obj.Name, obj)

@@ -60,7 +60,7 @@ func main() {
 		utils.AviLog.Error.Fatalf("Error building kubernetes clientset: %s", err.Error())
 	}
 
-	informers := k8s.NewInformers(kubeClient)
+	informers := utils.NewInformers(kubeClient)
 	avi_obj_cache := utils.NewAviObjCache(kubeClient, informers)
 
 	ctrlUsername := os.Getenv("CTRL_USERNAME")
@@ -86,7 +86,7 @@ func main() {
 		mcpClient.Start(stopCh)
 	}
 
-	c := k8s.SharedAviController(informers)
+	c := k8s.SharedAviController()
 	c.SetupEventHandlers(kubeClient)
 	c.Start(stopCh)
 

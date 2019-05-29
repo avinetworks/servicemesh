@@ -49,15 +49,21 @@ func Make(namespace string, name string, i int) *IstioObject {
 func MakeVirtualService(namespace string, name string, i int) *IstioObject {
 	ExampleVirtualService := &networking.VirtualService{
 		Hosts:    []string{"prod", "test"},
-		Gateways: []string{"gw1", "mesh"},
+		Gateways: []string{"ns/gw1", "mesh"},
 		Http: []*networking.HTTPRoute{
 			{
 				Route: []*networking.HTTPRouteDestination{
 					{
 						Destination: &networking.Destination{
-							Host: "job",
+							Host: "reviews",
 						},
 						Weight: 80,
+					},
+					{
+						Destination: &networking.Destination{
+							Host: "reviews.prod",
+						},
+						Weight: 20,
 					},
 				},
 			},

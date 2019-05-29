@@ -16,6 +16,7 @@
 package objects
 
 import (
+	"strings"
 	"sync"
 
 	"github.com/avinetworks/servicemesh/pkg/utils"
@@ -150,7 +151,10 @@ func (v *VirtualServiceNSCache) GetAllVSNamesVers() map[string]string {
 
 func (v *VirtualServiceNSCache) GetGatewaysForVS(vsName string) (bool, []string) {
 	// Need checks if it's found or not?
-	_, gateways := v.vsToGwObjects.Get(vsName)
+	found, gateways := v.vsToGwObjects.Get(vsName)
+	if !found {
+		return false, make([]string, 0)
+	}
 	return true, gateways.([]string)
 }
 
@@ -171,8 +175,16 @@ func (v *VirtualServiceNSCache) UpdateGatewayVsRefs(obj *IstioObject) {
 	// First get the VS Name and then look for gateway. Add the gateway to the list.
 	gateways := v.GetGatewayNamesForVS(obj)
 	for _, gateway := range gateways {
-		_, vsList := v.gwInstance.Gateway(obj.ConfigMeta.Namespace).GetVSMapping(gateway)
-		vsList = append(vsList, obj.ConfigMeta.Name)
+		// Check if the gateway has a qualified namespace
+		namespacedGw := strings.Contains(gateway, "/")
+		ns := obj.ConfigMeta.Namespace
+		if namespacedGw {
+			nsGw := strings.Split(gateway, "/")
+			ns = nsGw[0]
+		}
+		_, vsList := v.gwInstance.Gateway(ns).GetVSMapping(gateway)
+		// Update the VS with it's own namespace.
+		vsList = append(vsList, obj.ConfigMeta.Namespace+"/"+obj.ConfigMeta.Name)
 		v.gwInstance.Gateway(obj.ConfigMeta.Namespace).UpdateGWVSMapping(gateway, vsList)
 	}
 	v.vsToGwObjects.AddOrUpdate(obj.ConfigMeta.Name, gateways)
@@ -206,7 +218,10 @@ func (v *VirtualServiceNSCache) DeleteSvcToVs(vsName string) {
 }
 
 func (v *VirtualServiceNSCache) GetVSToSVC(vsName string) []string {
-	_, services := v.vsToSvcInstance.Get(vsName)
+	found, services := v.vsToSvcInstance.Get(vsName)
+	if !found {
+		return make([]string, 0)
+	}
 	return services.([]string)
 }
 
