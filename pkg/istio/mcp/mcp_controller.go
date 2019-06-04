@@ -21,7 +21,7 @@ import (
 	"time"
 
 	istio_objs "github.com/avinetworks/servicemesh/pkg/istio/objects"
-	"github.com/avinetworks/servicemesh/pkg/queue"
+	queue "github.com/avinetworks/servicemesh/pkg/k8s"
 	"github.com/avinetworks/servicemesh/pkg/utils"
 	"github.com/gogo/protobuf/types"
 	"istio.io/istio/pkg/mcp/sink"

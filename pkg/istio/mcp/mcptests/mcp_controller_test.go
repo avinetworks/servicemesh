@@ -20,7 +20,7 @@ import (
 	"testing"
 
 	"github.com/avinetworks/servicemesh/pkg/istio/mcp"
-	"github.com/avinetworks/servicemesh/pkg/queue"
+	queue "github.com/avinetworks/servicemesh/pkg/k8s"
 	"github.com/avinetworks/servicemesh/pkg/utils"
 	"github.com/gogo/protobuf/types"
 	"github.com/golang/protobuf/proto"

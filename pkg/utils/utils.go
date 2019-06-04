@@ -15,7 +15,9 @@
 package utils
 
 import (
+	"encoding/json"
 	"hash/fnv"
+	"math/rand"
 	"net"
 	"net/url"
 	"strings"
@@ -100,10 +102,24 @@ func CrudHashKey(obj_type string, obj interface{}) string {
 }
 
 func Bkt(key string, num_workers uint32) uint32 {
-	h := fnv.New32a()
-	h.Write([]byte(key))
-	bkt := h.Sum32() & (num_workers - 1)
+	bkt := Hash(key) & (num_workers - 1)
 	return bkt
+}
+
+func Hash(s string) uint32 {
+	h := fnv.New32a()
+	h.Write([]byte(s))
+	return h.Sum32()
+}
+
+var letters = []rune("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ")
+
+func RandomSeq(n int) string {
+	b := make([]rune, n)
+	for i := range b {
+		b[i] = letters[rand.Intn(len(letters))]
+	}
+	return string(b)
 }
 
 var informer sync.Once
@@ -126,4 +142,9 @@ func GetInformers() *Informers {
 		return nil
 	}
 	return informerInstance
+}
+
+func Stringify(serialize interface{}) string {
+	json_marshalled, _ := json.Marshal(serialize)
+	return string(json_marshalled)
 }

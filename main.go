@@ -19,9 +19,9 @@ import (
 	"os"
 
 	"github.com/avinetworks/servicemesh/aviobjects"
+	"github.com/avinetworks/servicemesh/pkg/istio/graph"
 	"github.com/avinetworks/servicemesh/pkg/istio/mcp"
 	"github.com/avinetworks/servicemesh/pkg/k8s"
-	"github.com/avinetworks/servicemesh/pkg/queue"
 	"github.com/avinetworks/servicemesh/pkg/utils"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
@@ -91,8 +91,14 @@ func main() {
 	c.Start(stopCh)
 
 	// start the go routines draining the queues in various layers
-	ingestionQueue := queue.SharedWorkQueueWrappers().GetQueueByName(queue.ObjectIngestionLayer)
+	ingestionQueue := k8s.SharedWorkQueueWrappers().GetQueueByName(k8s.ObjectIngestionLayer)
+
 	ingestionQueue.Run(stopCh)
+	graphQueue := graph.SharedWorkQueueWrappers().GetQueueByName(graph.GraphLayer)
+	graphQueue.Run(stopCh)
+	<-stopCh
+	ingestionQueue.StopWorkers(stopCh)
+	graphQueue.StopWorkers(stopCh)
 	//c.Run(stopCh)
 }
 

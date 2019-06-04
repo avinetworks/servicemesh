@@ -181,11 +181,17 @@ func (v *VirtualServiceNSCache) UpdateGatewayVsRefs(obj *IstioObject) {
 		if namespacedGw {
 			nsGw := strings.Split(gateway, "/")
 			ns = nsGw[0]
+			gateway = nsGw[1]
 		}
 		_, vsList := v.gwInstance.Gateway(ns).GetVSMapping(gateway)
 		// Update the VS with it's own namespace.
+		vsName := obj.ConfigMeta.Namespace + "/" + obj.ConfigMeta.Name
+		if Contains(vsList, vsName) {
+			// The vsName is already added, continue
+			continue
+		}
 		vsList = append(vsList, obj.ConfigMeta.Namespace+"/"+obj.ConfigMeta.Name)
-		v.gwInstance.Gateway(obj.ConfigMeta.Namespace).UpdateGWVSMapping(gateway, vsList)
+		v.gwInstance.Gateway(ns).UpdateGWVSMapping(gateway, vsList)
 	}
 	v.vsToGwObjects.AddOrUpdate(obj.ConfigMeta.Name, gateways)
 }

@@ -20,7 +20,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/avinetworks/servicemesh/pkg/queue"
 	"github.com/avinetworks/servicemesh/pkg/utils"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/util/runtime"
@@ -79,7 +78,7 @@ func (c *AviController) SetupEventHandlers(cs *kubernetes.Clientset) {
 	eventBroadcaster.StartRecordingToSink(&typedcorev1.EventSinkImpl{Interface: cs.CoreV1().Events("")})
 	//recorder := eventBroadcaster.NewRecorder(scheme.Scheme, corev1.EventSource{Component: "avi-k8s-controller"})
 
-	mcpQueue := queue.SharedWorkQueueWrappers().GetQueueByName(queue.ObjectIngestionLayer)
+	mcpQueue := SharedWorkQueueWrappers().GetQueueByName(ObjectIngestionLayer)
 	c.workqueue = mcpQueue.Workqueue
 	numWorkers := mcpQueue.NumWorkers
 

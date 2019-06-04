@@ -17,6 +17,8 @@ package graph
 import (
 	"strings"
 
+	"github.com/avinetworks/servicemesh/pkg/istio/objects"
+	istio_objs "github.com/avinetworks/servicemesh/pkg/istio/objects"
 	"github.com/avinetworks/servicemesh/pkg/utils"
 )
 
@@ -47,7 +49,7 @@ var (
 
 func SyncToGraphLayer(key string) {
 	// The key format expected here is: objectType/Namespace/ObjKey
-	utils.AviLog.Info.Printf("Obtained Key %s", key)
+	utils.AviLog.Info.Printf("Obtained %s to sync to graph", key)
 	objType, namespace, name := extractTypeNameNamespace(key)
 	schema, valid := ConfigDescriptor().GetByType(objType)
 	if !valid {
@@ -67,12 +69,45 @@ func SyncToGraphLayer(key string) {
 		// No gateways associated with this update. No-op
 		return
 	} else {
-		GenerateIstioGraph(gateways)
-	}
+		for _, gateway := range gateways {
+			gatewayNs := namespace
+			namespacedGw := strings.Contains(gateway, "/")
+			if namespacedGw {
+				nsGw := strings.Split(gateway, "/")
+				gatewayNs = nsGw[0]
+				gateway = nsGw[1]
+			}
+			// Gateways provide us data for AVI Virtual Machine. First check if it exists?
+			found, gwObj := istio_objs.SharedGatewayLister().Gateway(gatewayNs).Get(gateway)
+			if !found {
+				// The Gateway object is not found, we don't have to care about it. Let's pass
+				continue
+			} else {
+				utils.AviLog.Info.Printf("Obtained Gateway : %s to sync to graph", gateway)
+				aviModelGraph := NewAviObjectGraph()
+				aviModelGraph.BuildAviObjectGraph(namespace, gatewayNs, gateway, gwObj)
+				if len(aviModelGraph.GetOrderedNodes()) != 0 {
+					model_name := gatewayNs + "/" + gateway
+					// TODO (sudswas): Lots of checksum optimization goes here
+					objects.SharedAviGraphLister().Save(model_name, aviModelGraph)
+					utils.AviLog.Info.Printf("The list of ordered nodes: %s", utils.Stringify(aviModelGraph.GetOrderedNodes()))
+					sharedQueue := SharedWorkQueueWrappers().GetQueueByName(GraphLayer)
+					bkt := utils.Bkt(namespace, sharedQueue.NumWorkers)
+					pgs := aviModelGraph.GetPoolGroups()
+					utils.AviLog.Info.Printf("The list of PG nodes: %s", utils.Stringify(pgs))
+					sharedQueue.Workqueue[bkt].AddRateLimited(model_name)
+				}
+			}
 
+		}
+	}
 }
 
-func GenerateIstioGraph(gws []string) {
+func BuildAviGraph(gws []string) {
+	/* We should be picking up each gateway and then traverse the gateway with a pre-known relationship.
+	 * as we visit each node while walking from the gateway, we would call a AVI Translate function, that would
+	 * translate each node into a pre-defined set of AVI objects */
+
 	return
 }
 

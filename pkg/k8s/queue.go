@@ -12,7 +12,7 @@
 * limitations under the License.
  */
 
-package queue
+package k8s
 
 import (
 	"fmt"
@@ -81,20 +81,19 @@ func NewWorkQueue(num_workers uint32, workerQueueName string, syncFunc func(stri
 
 func (c *WorkerQueue) Run(stopCh <-chan struct{}) error {
 	defer runtime.HandleCrash()
-	for i := uint32(0); i < c.NumWorkers; i++ {
-		defer c.Workqueue[i].ShutDown()
-	}
-
 	utils.AviLog.Info.Printf("Starting workers to drain the %s layer queues", c.WorkqueueName)
 	for i := uint32(0); i < c.NumWorkers; i++ {
 		go wait.Until(c.runWorker, time.Second, stopCh)
 	}
-
 	utils.AviLog.Info.Printf("Started the workers for: %s", c.WorkqueueName)
-	<-stopCh
-	utils.AviLog.Info.Printf("Shutting down the workers for %s", c.WorkqueueName)
 
 	return nil
+}
+func (c *WorkerQueue) StopWorkers(stopCh <-chan struct{}) {
+	for i := uint32(0); i < c.NumWorkers; i++ {
+		defer c.Workqueue[i].ShutDown()
+	}
+	utils.AviLog.Info.Printf("Shutting down the workers for %s", c.WorkqueueName)
 }
 
 // runWorker is a long-running function that will continually call the
@@ -117,7 +116,7 @@ func (c *WorkerQueue) runWorker() {
 	c.workerIdMutex.Lock()
 	c.workerId = c.workerId | (uint32(1) << workerId)
 	c.workerIdMutex.Unlock()
-	utils.AviLog.Info.Printf("Worker id %d restarting", workerId)
+	//utils.AviLog.Info.Printf("Worker id %d restarting", workerId)
 }
 
 func (c *WorkerQueue) processNextWorkItem(worker_id uint32) bool {
@@ -166,6 +165,7 @@ func SyncFromIngestionLayer(key string) error {
 	// Let's route the key to the graph layer.
 	// NOTE: There's no error propagation from the graph layer back to the workerqueue. We will evaluate
 	// This condition in the future and visit as needed. But right now, there's no necessity for it.
+	//sharedQueue := SharedWorkQueueWrappers().GetQueueByName(queue.GraphLayer)
 	graph.SyncToGraphLayer(key)
 	return nil
 }
