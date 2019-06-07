@@ -18,7 +18,6 @@ import (
 	"flag"
 	"os"
 
-	"github.com/avinetworks/servicemesh/aviobjects"
 	"github.com/avinetworks/servicemesh/pkg/istio/graph"
 	"github.com/avinetworks/servicemesh/pkg/istio/mcp"
 	"github.com/avinetworks/servicemesh/pkg/k8s"
@@ -63,17 +62,10 @@ func main() {
 	informers := utils.NewInformers(kubeClient)
 	avi_obj_cache := utils.NewAviObjCache(kubeClient, informers)
 
-	ctrlUsername := os.Getenv("CTRL_USERNAME")
-	ctrlPassword := os.Getenv("CTRL_PASSWORD")
-	ctrlIpAddress := os.Getenv("CTRL_IPADDRESS")
-	if ctrlUsername == "" || ctrlPassword == "" || ctrlIpAddress == "" {
-		utils.AviLog.Error.Panic(`AVI controller information missing. Update them in kubernetes secret or via environment variables.`)
-	}
-	avi_rest_client_pool, err := utils.NewAviRestClientPool(utils.NumWorkers,
-		ctrlIpAddress, ctrlUsername, ctrlPassword)
+	avi_rest_client_pool := utils.SharedAVIClients()
 
 	avi_obj_cache.AviObjCachePopulate(avi_rest_client_pool.AviClient[0],
-		aviobjects.CtrlVersion, "Default-Cloud")
+		utils.CtrlVersion, "Default-Cloud")
 	istioEnabled := "False"
 	istioEnabled = os.Getenv("ISTIO_ENABLED")
 	if istioEnabled == "True" {
@@ -91,10 +83,10 @@ func main() {
 	c.Start(stopCh)
 
 	// start the go routines draining the queues in various layers
-	ingestionQueue := k8s.SharedWorkQueueWrappers().GetQueueByName(k8s.ObjectIngestionLayer)
+	ingestionQueue := k8s.SharedWorkQueue().GetQueueByName(utils.ObjectIngestionLayer)
 
 	ingestionQueue.Run(stopCh)
-	graphQueue := graph.SharedWorkQueueWrappers().GetQueueByName(graph.GraphLayer)
+	graphQueue := graph.SharedWorkQueue().GetQueueByName(utils.GraphLayer)
 	graphQueue.Run(stopCh)
 	<-stopCh
 	ingestionQueue.StopWorkers(stopCh)

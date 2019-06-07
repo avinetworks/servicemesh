@@ -25,13 +25,9 @@ import (
 	"k8s.io/client-go/util/workqueue"
 )
 
-const (
-	GraphLayer = "GraphLayer"
-)
-
 var queuewrapper sync.Once
 var queueInstance *WorkQueueWrapper
-var fixedQueues = [...]WorkerQueue{WorkerQueue{NumWorkers: utils.NumWorkers, WorkqueueName: GraphLayer, syncFunc: SyncFromGraphLayer}}
+var fixedQueues = [...]WorkerQueue{WorkerQueue{NumWorkers: utils.NumWorkers, WorkqueueName: utils.GraphLayer, syncFunc: SyncFromGraphLayer}}
 
 type WorkQueueWrapper struct {
 	// This struct should manage a set of WorkerQueues for the various layers
@@ -43,7 +39,7 @@ func (w *WorkQueueWrapper) GetQueueByName(queueName string) *WorkerQueue {
 	return workqueue
 }
 
-func SharedWorkQueueWrappers() *WorkQueueWrapper {
+func SharedWorkQueue() *WorkQueueWrapper {
 	queuewrapper.Do(func() {
 		queueInstance = &WorkQueueWrapper{}
 		queueInstance.queueCollection = make(map[string]*WorkerQueue)
@@ -58,7 +54,7 @@ func SharedWorkQueueWrappers() *WorkQueueWrapper {
 //Common utils like processing worker queue, that is common for all objects.
 type WorkerQueue struct {
 	NumWorkers    uint32
-	Workqueue     []workqueue.RateLimitingInterface
+	workqueue     []workqueue.RateLimitingInterface
 	WorkqueueName string
 	workerIdMutex sync.Mutex
 	workerId      uint32
@@ -67,19 +63,19 @@ type WorkerQueue struct {
 
 func NewWorkQueue(num_workers uint32, workerQueueName string, syncFunc func(string) error) *WorkerQueue {
 	queue := &WorkerQueue{}
-	queue.Workqueue = make([]workqueue.RateLimitingInterface, num_workers)
+	queue.workqueue = make([]workqueue.RateLimitingInterface, num_workers)
 	queue.workerId = (uint32(1) << num_workers) - 1
 	queue.NumWorkers = num_workers
 	queue.WorkqueueName = workerQueueName
 	queue.syncFunc = syncFunc
 	for i := uint32(0); i < num_workers; i++ {
-		queue.Workqueue[i] = workqueue.NewNamedRateLimitingQueue(workqueue.DefaultControllerRateLimiter(), fmt.Sprintf("avi-%d", i))
+		queue.workqueue[i] = workqueue.NewNamedRateLimitingQueue(workqueue.DefaultControllerRateLimiter(), fmt.Sprintf("avi-%s", workerQueueName))
 	}
 	return queue
 }
 
 func (c *WorkerQueue) Run(stopCh <-chan struct{}) error {
-	defer runtime.HandleCrash()
+	//defer runtime.HandleCrash()
 	utils.AviLog.Info.Printf("Starting workers to drain the %s layer queues", c.WorkqueueName)
 	for i := uint32(0); i < c.NumWorkers; i++ {
 		go wait.Until(c.runWorker, time.Second, stopCh)
@@ -92,7 +88,7 @@ func (c *WorkerQueue) Run(stopCh <-chan struct{}) error {
 
 func (c *WorkerQueue) StopWorkers(stopCh <-chan struct{}) {
 	for i := uint32(0); i < c.NumWorkers; i++ {
-		defer c.Workqueue[i].ShutDown()
+		c.workqueue[i].ShutDown()
 	}
 	utils.AviLog.Info.Printf("Shutting down the workers for %s", c.WorkqueueName)
 }
@@ -120,7 +116,7 @@ func (c *WorkerQueue) runWorker() {
 }
 
 func (c *WorkerQueue) processNextWorkItem(worker_id uint32) bool {
-	obj, shutdown := c.Workqueue[worker_id].Get()
+	obj, shutdown := c.workqueue[worker_id].Get()
 	if shutdown {
 		return false
 	}
@@ -134,12 +130,12 @@ func (c *WorkerQueue) processNextWorkItem(worker_id uint32) bool {
 		// not call Forget if a transient error occurs, instead the item is
 		// put back on the workqueue and attempted again after a back-off
 		// period.
-		defer c.Workqueue[worker_id].Done(obj)
+		defer c.workqueue[worker_id].Done(obj)
 		if ev, ok = obj.(string); !ok {
 			// As the item in the workqueue is actually invalid, we call
 			// Forget here else we'd go into a loop of attempting to
 			// process a work item that is invalid.
-			c.Workqueue[worker_id].Forget(obj)
+			c.workqueue[worker_id].Forget(obj)
 			runtime.HandleError(fmt.Errorf("expected string in workqueue but got %#v", obj))
 			return nil
 		}
@@ -149,7 +145,7 @@ func (c *WorkerQueue) processNextWorkItem(worker_id uint32) bool {
 			// TODO (sudswas): Do an add back logic via the retry layer here.
 			utils.AviLog.Error.Printf("There was an error while syncing the key: %s", ev)
 		}
-		c.Workqueue[worker_id].Forget(obj)
+		c.workqueue[worker_id].Forget(obj)
 
 		return nil
 	}(obj)
@@ -162,5 +158,6 @@ func (c *WorkerQueue) processNextWorkItem(worker_id uint32) bool {
 
 func SyncFromGraphLayer(key string) error {
 	// TBU
+	//SyncToREST(key)
 	return nil
 }

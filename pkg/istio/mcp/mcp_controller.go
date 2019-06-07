@@ -119,7 +119,7 @@ func (c *Controller) Apply(change *sink.Change) error {
 	schema.Store(presentValues, prevStore)
 	newStore := schema.GetAll()
 	changedKeysMap := c.ConfigDescriptor().CalculateUpdates(prevStore, newStore)
-	sharedQueue := queue.SharedWorkQueueWrappers().GetQueueByName(queue.ObjectIngestionLayer)
+	sharedQueue := queue.SharedWorkQueue().GetQueueByName(utils.ObjectIngestionLayer)
 	// Sharding logic here.
 	for namespace, objKeys := range changedKeysMap {
 		// Hash on namespace

@@ -26,13 +26,9 @@ import (
 	"k8s.io/client-go/util/workqueue"
 )
 
-const (
-	ObjectIngestionLayer = "ObjectIngestionLayer"
-)
-
 var queuewrapper sync.Once
 var queueInstance *WorkQueueWrapper
-var fixedQueues = [...]WorkerQueue{WorkerQueue{NumWorkers: utils.NumWorkers, WorkqueueName: ObjectIngestionLayer, syncFunc: SyncFromIngestionLayer}}
+var fixedQueues = [...]WorkerQueue{WorkerQueue{NumWorkers: utils.NumWorkers, workqueueName: utils.ObjectIngestionLayer, syncFunc: SyncFromIngestionLayer}}
 
 type WorkQueueWrapper struct {
 	// This struct should manage a set of WorkerQueues for the various layers
@@ -44,13 +40,13 @@ func (w *WorkQueueWrapper) GetQueueByName(queueName string) *WorkerQueue {
 	return workqueue
 }
 
-func SharedWorkQueueWrappers() *WorkQueueWrapper {
+func SharedWorkQueue() *WorkQueueWrapper {
 	queuewrapper.Do(func() {
 		queueInstance = &WorkQueueWrapper{}
 		queueInstance.queueCollection = make(map[string]*WorkerQueue)
 		for _, queue := range fixedQueues {
-			workqueue := NewWorkQueue(queue.NumWorkers, queue.WorkqueueName, queue.syncFunc)
-			queueInstance.queueCollection[queue.WorkqueueName] = workqueue
+			workqueue := NewWorkQueue(queue.NumWorkers, queue.workqueueName, queue.syncFunc)
+			queueInstance.queueCollection[queue.workqueueName] = workqueue
 		}
 	})
 	return queueInstance
@@ -60,7 +56,7 @@ func SharedWorkQueueWrappers() *WorkQueueWrapper {
 type WorkerQueue struct {
 	NumWorkers    uint32
 	Workqueue     []workqueue.RateLimitingInterface
-	WorkqueueName string
+	workqueueName string
 	workerIdMutex sync.Mutex
 	workerId      uint32
 	syncFunc      func(string) error
@@ -71,29 +67,29 @@ func NewWorkQueue(num_workers uint32, workerQueueName string, syncFunc func(stri
 	queue.Workqueue = make([]workqueue.RateLimitingInterface, num_workers)
 	queue.workerId = (uint32(1) << num_workers) - 1
 	queue.NumWorkers = num_workers
-	queue.WorkqueueName = workerQueueName
+	queue.workqueueName = workerQueueName
 	queue.syncFunc = syncFunc
 	for i := uint32(0); i < num_workers; i++ {
-		queue.Workqueue[i] = workqueue.NewNamedRateLimitingQueue(workqueue.DefaultControllerRateLimiter(), fmt.Sprintf("avi-%d", i))
+		queue.Workqueue[i] = workqueue.NewNamedRateLimitingQueue(workqueue.DefaultControllerRateLimiter(), fmt.Sprintf("avi-%s", workerQueueName))
 	}
 	return queue
 }
 
 func (c *WorkerQueue) Run(stopCh <-chan struct{}) error {
-	defer runtime.HandleCrash()
-	utils.AviLog.Info.Printf("Starting workers to drain the %s layer queues", c.WorkqueueName)
+	//defer runtime.HandleCrash()
+	utils.AviLog.Info.Printf("Starting workers to drain the %s layer queues", c.workqueueName)
 	for i := uint32(0); i < c.NumWorkers; i++ {
 		go wait.Until(c.runWorker, time.Second, stopCh)
 	}
-	utils.AviLog.Info.Printf("Started the workers for: %s", c.WorkqueueName)
+	utils.AviLog.Info.Printf("Started the workers for: %s", c.workqueueName)
 
 	return nil
 }
 func (c *WorkerQueue) StopWorkers(stopCh <-chan struct{}) {
 	for i := uint32(0); i < c.NumWorkers; i++ {
-		defer c.Workqueue[i].ShutDown()
+		c.Workqueue[i].ShutDown()
 	}
-	utils.AviLog.Info.Printf("Shutting down the workers for %s", c.WorkqueueName)
+	utils.AviLog.Info.Printf("Shutting down the workers for %s", c.workqueueName)
 }
 
 // runWorker is a long-running function that will continually call the
