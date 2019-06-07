@@ -17,27 +17,26 @@ package graph
 import (
 	"strings"
 
-	"github.com/avinetworks/servicemesh/pkg/istio/objects"
 	istio_objs "github.com/avinetworks/servicemesh/pkg/istio/objects"
 	"github.com/avinetworks/servicemesh/pkg/utils"
 )
 
 var (
 	VirtualService = GraphSchema{
-		Type:         "virtual-service",
-		TraceGateway: VSToGateway,
+		Type:              "virtual-service",
+		GetParentGateways: VSToGateway,
 	}
 	Gateway = GraphSchema{
-		Type:         "gateway",
-		TraceGateway: GwToGateway,
+		Type:              "gateway",
+		GetParentGateways: GwToGateway,
 	}
 	Service = GraphSchema{
-		Type:         "Service",
-		TraceGateway: ServiceToGateway,
+		Type:              "Service",
+		GetParentGateways: SvcToGateway,
 	}
 	Endpoint = GraphSchema{
-		Type:         "Endpoints",
-		TraceGateway: EndpointToGateway,
+		Type:              "Endpoints",
+		GetParentGateways: EPToGateway,
 	}
 	SupportedGraphTypes = GraphDescriptor{
 		VirtualService,
@@ -47,59 +46,69 @@ var (
 	}
 )
 
+type GraphSchema struct {
+	Type              string
+	GetParentGateways func(string, string) []string
+	UpdateRels        func(string, string) bool
+}
+
+type GraphDescriptor []GraphSchema
+
 func SyncToGraphLayer(key string) {
 	// The key format expected here is: objectType/Namespace/ObjKey
-	utils.AviLog.Info.Printf("Obtained %s to sync to graph", key)
+	utils.AviLog.Info.Printf("%s: Starting graph Sync", key)
 	objType, namespace, name := extractTypeNameNamespace(key)
 	schema, valid := ConfigDescriptor().GetByType(objType)
 	if !valid {
 		// Invalid objectType obtained
-		utils.AviLog.Warning.Printf("Invalid Graph Schema type obtained. %s", objType)
+		utils.AviLog.Warning.Printf("%s: Invalid Graph Schema type obtained.", key)
 		return
 	}
-	gateways := schema.TraceGateway(name, namespace)
+	sharedQueue := SharedWorkQueue().GetQueueByName(utils.GraphLayer)
+	gatewayNames := schema.GetParentGateways(name, namespace)
 	// Update the relationships associated with this object
-	if gateways == nil {
+	if gatewayNames == nil && objType == "gateway" {
+		model_name := namespace + "/" + name
 		// This is a special case, Gateway delete event. We need to delete the entire VS.
 		// Short circuit and publish the VS key for deletion to Layer 3.
+		istio_objs.SharedAviGraphLister().Save(model_name, nil)
+		bkt := utils.Bkt(model_name, sharedQueue.NumWorkers)
+		sharedQueue.workqueue[bkt].AddRateLimited(model_name)
 		return
 	}
-	if len(gateways) == 0 {
-		utils.AviLog.Info.Printf("Couldn't trace to the gateway for key %s", key)
+	if len(gatewayNames) == 0 {
+		utils.AviLog.Info.Printf("%s: Couldn't trace to the gateway for key.", key)
 		// No gateways associated with this update. No-op
 		return
-	} else {
-		for _, gateway := range gateways {
-			gatewayNs := namespace
-			namespacedGw := strings.Contains(gateway, "/")
-			if namespacedGw {
-				nsGw := strings.Split(gateway, "/")
-				gatewayNs = nsGw[0]
-				gateway = nsGw[1]
-			}
-			// Gateways provide us data for AVI Virtual Machine. First check if it exists?
-			found, gwObj := istio_objs.SharedGatewayLister().Gateway(gatewayNs).Get(gateway)
-			if !found {
-				// The Gateway object is not found, we don't have to care about it. Let's pass
-				continue
-			} else {
-				utils.AviLog.Info.Printf("Obtained Gateway : %s to sync to graph", gateway)
-				aviModelGraph := NewAviObjectGraph()
-				aviModelGraph.BuildAviObjectGraph(namespace, gatewayNs, gateway, gwObj)
-				if len(aviModelGraph.GetOrderedNodes()) != 0 {
-					model_name := gatewayNs + "/" + gateway
-					// TODO (sudswas): Lots of checksum optimization goes here
-					objects.SharedAviGraphLister().Save(model_name, aviModelGraph)
-					utils.AviLog.Info.Printf("The list of ordered nodes: %s", utils.Stringify(aviModelGraph.GetOrderedNodes()))
-					sharedQueue := SharedWorkQueueWrappers().GetQueueByName(GraphLayer)
-					bkt := utils.Bkt(namespace, sharedQueue.NumWorkers)
-					pgs := aviModelGraph.GetPoolGroups()
-					utils.AviLog.Info.Printf("The list of PG nodes: %s", utils.Stringify(pgs))
-					sharedQueue.Workqueue[bkt].AddRateLimited(model_name)
-				}
-			}
-
+	}
+	for _, gateway := range gatewayNames {
+		gatewayNs := namespace
+		namespacedGw := strings.Contains(gateway, "/")
+		if namespacedGw {
+			nsGw := strings.Split(gateway, "/")
+			gatewayNs = nsGw[0]
+			gateway = nsGw[1]
 		}
+		// Gateways provide us data for AVI Virtual Machine. First check if it exists?
+		found, gwObj := istio_objs.SharedGatewayLister().Gateway(gatewayNs).Get(gateway)
+		if !found {
+			// The Gateway object is not found, we don't have to care about it. Let's pass
+			utils.AviLog.Info.Printf("%s: Gateway object for gateway name: gw-%s-%s does not exist", key, gatewayNs, gateway)
+			continue
+		} else {
+			utils.AviLog.Info.Printf("%s: Obtained Gateway: gw-%s-%s to sync to graph", key, gatewayNs, gateway)
+			aviModelGraph := NewAviObjectGraph()
+			aviModelGraph.BuildAviObjectGraph(namespace, gatewayNs, gateway, gwObj)
+			if len(aviModelGraph.GetOrderedNodes()) != 0 {
+				model_name := gatewayNs + "/" + gateway
+				// TODO (sudswas): Lots of checksum optimization goes here
+				istio_objs.SharedAviGraphLister().Save(model_name, aviModelGraph)
+				utils.AviLog.Info.Printf("%s: The list of ordered nodes :%s", key, utils.Stringify(aviModelGraph.GetOrderedNodes()))
+				bkt := utils.Bkt(model_name, sharedQueue.NumWorkers)
+				sharedQueue.workqueue[bkt].AddRateLimited(model_name)
+			}
+		}
+
 	}
 }
 
@@ -114,14 +123,6 @@ func BuildAviGraph(gws []string) {
 func ConfigDescriptor() GraphDescriptor {
 	return SupportedGraphTypes
 }
-
-type GraphSchema struct {
-	Type         string
-	TraceGateway func(string, string) []string
-	UpdateRels   func(string, string) bool
-}
-
-type GraphDescriptor []GraphSchema
 
 func (descriptor GraphDescriptor) GetByType(name string) (GraphSchema, bool) {
 	for _, schema := range descriptor {

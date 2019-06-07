@@ -40,6 +40,9 @@ func setup() {
 		obj_value *objects.IstioObject
 	}{
 		{objects.MakeVirtualService("default", "vs_1", 1)},
+		{objects.MakeVirtualService("default", "vs_2", 1)},
+		{objects.MakeVirtualService("default", "vs_3", 1)},
+		{objects.MakeVirtualService("default", "vs_4", 1)},
 	}
 	for _, pt := range sampleValues {
 		vsLister.VirtualService(pt.obj_value.ConfigMeta.Namespace).Update(pt.obj_value)
@@ -62,7 +65,7 @@ func TestVSServiceCreate(t *testing.T) {
 	svcs := vsLister.VirtualService("default").GetVSToSVC("vs_1")
 	expectedSvcs := []string{"reviews", "reviews.prod"}
 	g.Expect(svcs).To(gomega.Equal(expectedSvcs))
-	gateways = ServiceToGateway("reviews", "default")
+	gateways = SvcToGateway("reviews", "default")
 	g.Expect(gateways).To(gomega.ContainElement("ns/gw1"))
 }
 
@@ -76,6 +79,6 @@ func TestVSServiceDelete(t *testing.T) {
 	// We don't expect the relationship to exist anymore.
 	g.Expect(len(svcs)).To(gomega.Equal(0))
 	// Now the service will not be able to trace to the gateway
-	gateways = ServiceToGateway("reviews", "default")
+	gateways = SvcToGateway("reviews", "default")
 	g.Expect(len(gateways)).To(gomega.Equal(0))
 }

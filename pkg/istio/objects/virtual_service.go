@@ -190,7 +190,7 @@ func (v *VirtualServiceNSCache) UpdateGatewayVsRefs(obj *IstioObject) {
 			// The vsName is already added, continue
 			continue
 		}
-		vsList = append(vsList, obj.ConfigMeta.Namespace+"/"+obj.ConfigMeta.Name)
+		vsList = append(vsList, vsName)
 		v.gwInstance.Gateway(ns).UpdateGWVSMapping(gateway, vsList)
 	}
 	v.vsToGwObjects.AddOrUpdate(obj.ConfigMeta.Name, gateways)

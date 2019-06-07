@@ -118,7 +118,7 @@ func TestControllerQueueShardingCheck(t *testing.T) {
 
 	err := controller.Apply(change)
 	g.Expect(err).ToNot(gomega.HaveOccurred())
-	sharedQueue := queue.SharedWorkQueueWrappers().GetQueueByName(queue.ObjectIngestionLayer)
+	sharedQueue := queue.SharedWorkQueue().GetQueueByName(utils.ObjectIngestionLayer)
 	// Run the hashing algorithm to figure out which bucket to expect the item
 	redbkt := utils.Bkt("red", sharedQueue.NumWorkers)
 	defaultbkt := utils.Bkt("default", sharedQueue.NumWorkers)
@@ -156,7 +156,7 @@ func TestControllerRepeatResourceShards(t *testing.T) {
 	g.Expect(err).ToNot(gomega.HaveOccurred())
 	err = controller.Apply(changeVs)
 	g.Expect(err).ToNot(gomega.HaveOccurred())
-	sharedQueue := queue.SharedWorkQueueWrappers().GetQueueByName(queue.ObjectIngestionLayer)
+	sharedQueue := queue.SharedWorkQueue().GetQueueByName(utils.ObjectIngestionLayer)
 	// Run the hashing algorithm to figure out which bucket to expect the item
 	redbkt := utils.Bkt("red", sharedQueue.NumWorkers)
 	// Here we shouldn't find the Gateway object gateway1 because they are already present
@@ -182,7 +182,7 @@ func TestControllerDeleteResourceShards(t *testing.T) {
 	err := controller.Apply(changeGw)
 
 	g.Expect(err).ToNot(gomega.HaveOccurred())
-	sharedQueue := queue.SharedWorkQueueWrappers().GetQueueByName(queue.ObjectIngestionLayer)
+	sharedQueue := queue.SharedWorkQueue().GetQueueByName(utils.ObjectIngestionLayer)
 	defaultbkt := utils.Bkt("default", sharedQueue.NumWorkers)
 	keys := GetKeysFromQueue(sharedQueue.Workqueue[defaultbkt], 1)
 	g.Expect(keys).To(gomega.ContainElement("gateway/default/gateway3"))

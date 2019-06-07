@@ -20,6 +20,7 @@ import (
 	"math/rand"
 	"net"
 	"net/url"
+	"os"
 	"strings"
 	"sync"
 	"time"
@@ -29,6 +30,16 @@ import (
 	kubeinformers "k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes"
 )
+
+var CtrlVersion string
+
+func init() {
+	//Setting the package-wide version
+	CtrlVersion = os.Getenv("CTRL_VERSION")
+	if CtrlVersion == "" {
+		CtrlVersion = "18.2.2"
+	}
+}
 
 func IsV4(addr string) bool {
 	ip := net.ParseIP(addr)

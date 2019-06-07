@@ -25,17 +25,12 @@ func VSToGateway(vsName string, namespace string) []string {
 	// Given a VS Key - trace to the gateways that are associated with it.
 	found, istioObj := istio_objs.SharedVirtualServiceLister().VirtualService(namespace).Get(vsName)
 	if !found {
-		utils.AviLog.Info.Printf("Object not found for VS %s. It's a DELETED object.", vsName)
+		utils.AviLog.Info.Printf("vs-%s-%s Object not found. It's a DELETED object.", namespace, vsName)
 		//This is a DELETE event. First let's find the impacted Gateways.
 		_, gateways := istio_objs.SharedVirtualServiceLister().VirtualService(namespace).GetGatewaysForVS(vsName)
 		// For each gateway, delete the gateway to VS mappings.
 		for _, gateway := range gateways {
-			namespacedGw := strings.Contains(gateway, "/")
-			ns := namespace
-			if namespacedGw {
-				nsGw := strings.Split(gateway, "/")
-				ns = nsGw[0]
-			}
+			ns := GetGatewayNamespace(namespace, gateway)
 			istio_objs.SharedVirtualServiceLister().VirtualService(ns).DeleteGwToVsRefs(gateway, vsName)
 		}
 		// DELETE the vs to gateway relationship for this VS
@@ -45,13 +40,43 @@ func VSToGateway(vsName string, namespace string) []string {
 		istio_objs.SharedVirtualServiceLister().VirtualService(namespace).DeleteVSToSVC(vsName)
 		return gateways
 	} else {
-		utils.AviLog.Info.Printf("Object found for VS %s. It's a ADDED/UPDATED object.", vsName)
+		utils.AviLog.Info.Printf("vs-%s-%s Object found for VS. It's a ADDED/UPDATED object.", namespace, vsName)
+		// Let's first detect the case of a VS disassociation with a Gateway
+		_, gateways := istio_objs.SharedVirtualServiceLister().VirtualService(namespace).GetGatewaysForVS(vsName)
+		// Obtain the associted gateways for this VS object to see if they match with what's there in store
+		gatewaysFromVSObj := istio_objs.SharedVirtualServiceLister().VirtualService(namespace).GetGatewayNamesForVS(istioObj)
+		var diffGateways []string
+		// Diff the two lists to see what are the gateways that could have possibly been removed from the VS.
+		for _, gateway := range gateways {
+			// Whatever is present in store, and not present in the current VS object, detect them
+			gatewayFound := false
+			for _, gatewayInStore := range gatewaysFromVSObj {
+				if gatewayInStore == gateway {
+					gatewayFound = true
+				}
+			}
+			if gatewayFound {
+				diffGateways = append(diffGateways, gateway)
+				gatewayFound = false
+			}
+		}
+		if len(diffGateways) > 0 {
+			// These are deleted gateways for this VS.
+			utils.AviLog.Info.Printf("vs-%s-%s, has the following gateways missing %s", namespace, vsName, diffGateways)
+			for _, gateway := range diffGateways {
+				ns := GetGatewayNamespace(namespace, gateway)
+				istio_objs.SharedVirtualServiceLister().VirtualService(ns).DeleteGwToVsRefs(gateway, vsName)
+			}
+		}
 		// It's an ADD or UPDATE event. Update the relationships GW Rel first
 		istio_objs.SharedVirtualServiceLister().VirtualService(namespace).UpdateGatewayVsRefs(istioObj)
 		// Update the SVC relationships
 		istio_objs.SharedVirtualServiceLister().VirtualService(namespace).UpdateSvcVSRefs(istioObj)
 		// Find the gateways.
-		_, gateways := istio_objs.SharedVirtualServiceLister().VirtualService(namespace).GetGatewaysForVS(vsName)
+		_, gateways = istio_objs.SharedVirtualServiceLister().VirtualService(namespace).GetGatewaysForVS(vsName)
+		// Add the diffGateways to this list. Diff gateways should not have anything overlapping in the gateways.
+		gateways = append(gateways, diffGateways...)
+		utils.AviLog.Info.Printf("vs-%s-%s, total gateways retrieved %s", namespace, vsName, gateways)
 		return gateways
 	}
 }
@@ -69,25 +94,37 @@ func GwToGateway(gwName string, namespace string) []string {
 	return gateways
 }
 
-func ServiceToGateway(svcName string, namespace string) []string {
+func SvcToGateway(svcName string, namespace string) []string {
 	// Given a Service Key - trace to the gateways that are associated with it.
 	// first figure out, what are the VSes, associated with this service. Then, for each VS, find out the Gateways
 	// Collate the gateways and send it back.
 	var gateways []string
 	_, vsNames := istio_objs.SharedSvcLister().Service(namespace).GetSvcToVS(svcName)
-	utils.AviLog.Info.Printf("The Service: %s has associated VSes:  %s", svcName, vsNames)
+	utils.AviLog.Info.Printf("svc-%s-%s, The Service has the following associated VSes:  %s", namespace, svcName, vsNames)
 	for _, vsName := range vsNames {
 		// For each VS find out the associated Gateways
 		_, vsGw := istio_objs.SharedVirtualServiceLister().VirtualService(namespace).GetGatewaysForVS(vsName)
 		gateways = append(gateways, vsGw...)
 	}
+	utils.AviLog.Info.Printf("svc-%s-%s, total gateways retrieved:  %s", namespace, svcName, gateways)
 	return gateways
 }
 
-func EndpointToGateway(epName string, namespace string) []string {
+func EPToGateway(epName string, namespace string) []string {
 	// Given a VS Endpoint - trace to the gateways that are associated with it.
 	// The endpoint name is the same as the service name.
 	// The below call is safe to make since the ServiceToGateway does not update relationships at the moment.
-	gateways := ServiceToGateway(epName, namespace)
+	gateways := SvcToGateway(epName, namespace)
+	utils.AviLog.Info.Printf("ep-%s-%s, total gateways retrieved:  %s", namespace, epName, gateways)
 	return gateways
+}
+
+func GetGatewayNamespace(namespace string, gateway string) string {
+	namespacedGw := strings.Contains(gateway, "/")
+	ns := namespace
+	if namespacedGw {
+		nsGw := strings.Split(gateway, "/")
+		ns = nsGw[0]
+	}
+	return ns
 }

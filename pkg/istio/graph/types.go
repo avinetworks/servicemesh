@@ -15,6 +15,8 @@
 package graph
 
 import (
+	"fmt"
+
 	avimodels "github.com/avinetworks/sdk/go/models"
 	"github.com/avinetworks/servicemesh/pkg/utils"
 )
@@ -31,6 +33,8 @@ type AviVsNode struct {
 	EastWest         bool
 	CloudConfigCksum uint32
 	DefaultPoolGroup string
+	// This field will detect if the HTTP policy set rules have changed.
+	HTTPChecksum uint32
 }
 
 func (v *AviVsNode) GetCheckSum() uint32 {
@@ -40,7 +44,7 @@ func (v *AviVsNode) GetCheckSum() uint32 {
 
 func (v *AviVsNode) CalculateCheckSum() {
 	// A sum of fields for this VS.
-	checksum := utils.Hash(utils.Stringify(v))
+	checksum := utils.Hash(v.ApplicationProfile) + utils.Hash(v.NetworkProfile) + utils.Hash(utils.Stringify(v.PortProto)) + utils.Hash(fmt.Sprint(v.HTTPChecksum))
 	v.CloudConfigCksum = checksum
 }
 
@@ -61,7 +65,7 @@ func (v *AviPoolGroupNode) GetCheckSum() uint32 {
 
 func (v *AviPoolGroupNode) CalculateCheckSum() {
 	// A sum of fields for this VS.
-	checksum := utils.Hash(utils.Stringify(v))
+	checksum := utils.Hash(utils.Stringify(v.Members)) + utils.Hash(utils.Stringify(v.MatchList))
 	v.CloudConfigCksum = checksum
 }
 
@@ -83,7 +87,7 @@ func (v *AviPoolNode) GetCheckSum() uint32 {
 
 func (v *AviPoolNode) CalculateCheckSum() {
 	// A sum of fields for this VS.
-	checksum := utils.Hash(utils.Stringify(v))
+	checksum := utils.Hash(v.Protocol) + utils.Hash(fmt.Sprint(v.Port)) + utils.Hash(v.PortName) + utils.Hash(utils.Stringify(v.Servers))
 	v.CloudConfigCksum = checksum
 }
 
@@ -117,6 +121,17 @@ type AviHttpPolicySetNode struct {
 	Tenant           string
 	CloudConfigCksum uint32
 	HppMap           []AviHostPathPortPoolPG
+}
+
+func (v *AviHttpPolicySetNode) GetCheckSum() uint32 {
+	// Calculate checksum and return
+	return v.CloudConfigCksum
+}
+
+func (v *AviHttpPolicySetNode) CalculateCheckSum() {
+	// A sum of fields for this VS.
+	checksum := utils.Hash(utils.Stringify(v.HppMap))
+	v.CloudConfigCksum = checksum
 }
 
 type MatchCriteria struct {
@@ -173,17 +188,6 @@ func (m *MatchCriteria) GetPrefix() string {
 func (*RouteMatch_Prefix) isRouteMatch_PathSpecifier() {}
 func (*RouteMatch_Path) isRouteMatch_PathSpecifier()   {}
 func (*RouteMatch_Regex) isRouteMatch_PathSpecifier()  {}
-
-func (v *AviHttpPolicySetNode) GetCheckSum() uint32 {
-	// Calculate checksum and return
-	return v.CloudConfigCksum
-}
-
-func (v *AviHttpPolicySetNode) CalculateCheckSum() {
-	// A sum of fields for this VS.
-	checksum := utils.Hash(utils.Stringify(v))
-	v.CloudConfigCksum = checksum
-}
 
 type ServiceMetadataObj struct {
 	CrudHashKey string `json:"crud_hash_key"`
