@@ -16,6 +16,7 @@
 package objects
 
 import (
+	"strings"
 	"sync"
 
 	"github.com/avinetworks/servicemesh/pkg/utils"
@@ -32,6 +33,10 @@ type IstioVirtualService interface {
 
 type VirtualServiceLister struct {
 	store *ObjectStore
+	// stores the Vs To Gateway Relationships
+	vsgwstore *ObjectStore
+	// stores the VS to Svc Relationships.
+	vssvcstore *ObjectStore
 }
 
 func (v *VirtualServiceLister) GetAllVirtualServices() map[string]map[string]string {
@@ -55,6 +60,8 @@ func SharedVirtualServiceLister() *VirtualServiceLister {
 		VSstore := NewObjectStore()
 		instance = &VirtualServiceLister{}
 		instance.store = VSstore
+		instance.vsgwstore = NewObjectStore()
+		instance.vssvcstore = NewObjectStore()
 	})
 	return instance
 }
@@ -62,7 +69,11 @@ func SharedVirtualServiceLister() *VirtualServiceLister {
 func (v *VirtualServiceLister) VirtualService(ns string) *VirtualServiceNSCache {
 	namespacedObjects := v.store.GetNSStore(ns)
 	gwInstance := SharedGatewayLister()
-	return &VirtualServiceNSCache{namespace: ns, objects: namespacedObjects, gwInstance: gwInstance}
+	svcInstance := SharedSvcLister()
+	vsToSvcInstance := v.vssvcstore.GetNSStore(ns)
+	vsToGwObjects := v.vsgwstore.GetNSStore(ns)
+	return &VirtualServiceNSCache{namespace: ns, objects: namespacedObjects, gwInstance: gwInstance, svcInstance: svcInstance,
+		vsToSvcInstance: vsToSvcInstance, vsToGwObjects: vsToGwObjects}
 }
 
 type VirtualServiceNameSpaceIntf interface {
@@ -73,9 +84,12 @@ type VirtualServiceNameSpaceIntf interface {
 }
 
 type VirtualServiceNSCache struct {
-	namespace  string
-	objects    *ObjectMapStore
-	gwInstance *GatewayLister
+	namespace       string
+	objects         *ObjectMapStore
+	gwInstance      *GatewayLister
+	svcInstance     *SvcLister
+	vsToGwObjects   *ObjectMapStore
+	vsToSvcInstance *ObjectMapStore
 }
 
 func (v *VirtualServiceNSCache) Get(name string) (bool, *IstioObject) {
@@ -105,17 +119,6 @@ func (v *VirtualServiceNSCache) Update(obj *IstioObject) {
 	v.objects.AddOrUpdate(obj.Name, obj)
 }
 
-func (v *VirtualServiceNSCache) UpdateGatewayRefs(obj *IstioObject) {
-	// First get the VS Name and then look for gateway. Add the gateway to the list.
-	// This is not thread safe.
-	gateways := v.GetGatewayNamesForVS(obj)
-	for _, gateway := range gateways {
-		_, vsList := v.gwInstance.Gateway(obj.ConfigMeta.Namespace).GetVSMapping(gateway)
-		vsList = append(vsList, obj.ConfigMeta.Name)
-		v.gwInstance.Gateway(obj.ConfigMeta.Namespace).UpdateGWVSMapping(gateway, vsList)
-	}
-}
-
 func (v *VirtualServiceNSCache) List() map[string]*IstioObject {
 	// TODO (sudswas): Let's check if we can abstract out the store objects
 	// completely. There's still a possibility that if we pass the references
@@ -130,14 +133,6 @@ func (v *VirtualServiceNSCache) List() map[string]*IstioObject {
 }
 
 func (v *VirtualServiceNSCache) Delete(name string) bool {
-	// Obtain the object for this VS
-	//_, vsObj := v.Get(name)
-	// To be updated in Layer 2
-	// if found {
-	// 	// Let's delete the Gateway relationship first.
-	// 	v.DeleteGatewayRefs(vsObj)
-	// }
-
 	return v.objects.Delete(name)
 }
 
@@ -152,15 +147,92 @@ func (v *VirtualServiceNSCache) GetAllVSNamesVers() map[string]string {
 	return objVersionsMap
 }
 
-func (v *VirtualServiceNSCache) DeleteGatewayRefs(obj *IstioObject) {
+// All of the VS <--> GW relationships follow
+
+func (v *VirtualServiceNSCache) GetGatewaysForVS(vsName string) (bool, []string) {
+	// Need checks if it's found or not?
+	found, gateways := v.vsToGwObjects.Get(vsName)
+	if !found {
+		return false, make([]string, 0)
+	}
+	return true, gateways.([]string)
+}
+
+func (v *VirtualServiceNSCache) DeleteVSToGw(vsName string) {
+	// Need checks if it's found or not?
+	v.vsToGwObjects.Delete(vsName)
+}
+
+func (v *VirtualServiceNSCache) DeleteGwToVsRefs(gwName string, vsName string) {
+	_, vsList := v.gwInstance.Gateway(v.namespace).GetVSMapping(gwName)
+	if Contains(vsList, vsName) {
+		vsList = Remove(vsList, vsName)
+	}
+	v.gwInstance.Gateway(v.namespace).UpdateGWVSMapping(gwName, vsList)
+}
+
+func (v *VirtualServiceNSCache) UpdateGatewayVsRefs(obj *IstioObject) {
+	// First get the VS Name and then look for gateway. Add the gateway to the list.
 	gateways := v.GetGatewayNamesForVS(obj)
 	for _, gateway := range gateways {
-		_, vsList := v.gwInstance.Gateway(obj.ConfigMeta.Namespace).GetVSMapping(gateway)
-		if Contains(vsList, obj.ConfigMeta.Name) {
-			vsList = Remove(vsList, obj.ConfigMeta.Name)
+		// Check if the gateway has a qualified namespace
+		namespacedGw := strings.Contains(gateway, "/")
+		ns := obj.ConfigMeta.Namespace
+		if namespacedGw {
+			nsGw := strings.Split(gateway, "/")
+			ns = nsGw[0]
+			gateway = nsGw[1]
 		}
-		v.gwInstance.Gateway(obj.ConfigMeta.Namespace).UpdateGWVSMapping(gateway, vsList)
+		_, vsList := v.gwInstance.Gateway(ns).GetVSMapping(gateway)
+		// Update the VS with it's own namespace.
+		vsName := obj.ConfigMeta.Namespace + "/" + obj.ConfigMeta.Name
+		if Contains(vsList, vsName) {
+			// The vsName is already added, continue
+			continue
+		}
+		vsList = append(vsList, vsName)
+		v.gwInstance.Gateway(ns).UpdateGWVSMapping(gateway, vsList)
 	}
+	v.vsToGwObjects.AddOrUpdate(obj.ConfigMeta.Name, gateways)
+}
+
+// All of the VS <--> SVC relationships follow
+
+func (v *VirtualServiceNSCache) UpdateSvcVSRefs(obj *IstioObject) {
+	// First update the SVC to VS relationship
+	services := v.GetServiceForVS(obj)
+	utils.AviLog.Info.Printf("The Services associated with VS: %s is %s ", obj.ConfigMeta.Name, services)
+	for _, service := range services {
+		_, vsList := v.svcInstance.Service(obj.ConfigMeta.Namespace).GetSvcToVS(service)
+		vsList = append(vsList, obj.ConfigMeta.Name)
+		v.svcInstance.Service(obj.ConfigMeta.Namespace).UpdateSvcToVSMapping(service, vsList)
+	}
+	// Now update the VS to SVC relationship
+	v.vsToSvcInstance.AddOrUpdate(obj.ConfigMeta.Name, services)
+}
+
+func (v *VirtualServiceNSCache) DeleteSvcToVs(vsName string) {
+	services := v.GetVSToSVC(vsName)
+	for _, service := range services {
+		_, vsList := v.svcInstance.Service(v.namespace).GetSvcToVS(service)
+		if Contains(vsList, vsName) {
+			vsList = Remove(vsList, vsName)
+		}
+		v.svcInstance.Service(v.namespace).UpdateSvcToVSMapping(service, vsList)
+	}
+	v.vsToSvcInstance.AddOrUpdate(vsName, services)
+}
+
+func (v *VirtualServiceNSCache) GetVSToSVC(vsName string) []string {
+	found, services := v.vsToSvcInstance.Get(vsName)
+	if !found {
+		return make([]string, 0)
+	}
+	return services.([]string)
+}
+
+func (v *VirtualServiceNSCache) DeleteVSToSVC(vsName string) {
+	v.vsToSvcInstance.Delete(vsName)
 }
 
 func (v *VirtualServiceNSCache) GetGatewayNamesForVS(vs *IstioObject) []string {
@@ -180,6 +252,38 @@ func (v *VirtualServiceNSCache) GetGatewayNamesForVS(vs *IstioObject) []string {
 		}
 	}
 	return gateways
+}
+
+func (v *VirtualServiceNSCache) GetServiceForVS(vs *IstioObject) []string {
+	// This is a rather complicated method. The Services are found in destinations of various
+	// protocol types. For example given a VS object, the relations ship is:
+	// vs has TLS or HTTP or TCP. In each HTTP or TLS or TCP we have specific Routes. Inside each route
+	// we will find the Destination information for those routes. Implementing this method for HTTP to begin with.
+	vsObj, ok := vs.Spec.(*networking.VirtualService)
+	if !ok {
+		// This is not the right object to cast to VirtualService return error.
+		utils.AviLog.Warning.Printf("Wrong object passed. Expecting a Virtual Service object %v", vsObj)
+		return nil
+	}
+	var svcs []string
+	if len(vsObj.Http) == 0 {
+		utils.AviLog.Warning.Println("There are no HTTP routes found for this Virtual Service")
+		return nil
+	}
+	for _, httpRoute := range vsObj.Http {
+		// For each httpRoute, obtain the DestinationRoutes
+		if len(httpRoute.Route) == 0 {
+			utils.AviLog.Warning.Println("There are no Destination Routes found for this Virtual Service")
+			return nil
+		}
+		for _, HTTPRouteDestinations := range httpRoute.Route {
+			// TODO: Take care of subsets
+			svcs = append(svcs, HTTPRouteDestinations.Destination.Host)
+		}
+	}
+
+	return svcs
+
 }
 
 func Contains(s []string, e string) bool {

@@ -15,13 +15,31 @@
 package utils
 
 import (
+	"encoding/json"
+	"hash/fnv"
+	"math/rand"
 	"net"
 	"net/url"
+	"os"
 	"strings"
+	"sync"
+	"time"
 
 	corev1 "k8s.io/api/core/v1"
 	extensions "k8s.io/api/extensions/v1beta1"
+	kubeinformers "k8s.io/client-go/informers"
+	"k8s.io/client-go/kubernetes"
 )
+
+var CtrlVersion string
+
+func init() {
+	//Setting the package-wide version
+	CtrlVersion = os.Getenv("CTRL_VERSION")
+	if CtrlVersion == "" {
+		CtrlVersion = "18.2.2"
+	}
+}
 
 func IsV4(addr string) bool {
 	ip := net.ParseIP(addr)
@@ -92,4 +110,52 @@ func CrudHashKey(obj_type string, obj interface{}) string {
 		return ":"
 	}
 	return ns + ":" + name
+}
+
+func Bkt(key string, num_workers uint32) uint32 {
+	bkt := Hash(key) & (num_workers - 1)
+	return bkt
+}
+
+func Hash(s string) uint32 {
+	h := fnv.New32a()
+	h.Write([]byte(s))
+	return h.Sum32()
+}
+
+var letters = []rune("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ")
+
+func RandomSeq(n int) string {
+	b := make([]rune, n)
+	for i := range b {
+		b[i] = letters[rand.Intn(len(letters))]
+	}
+	return string(b)
+}
+
+var informer sync.Once
+var informerInstance *Informers
+
+func NewInformers(cs *kubernetes.Clientset) *Informers {
+	kubeInformerFactory := kubeinformers.NewSharedInformerFactory(cs, time.Second*30)
+	informer.Do(func() {
+		informerInstance = &Informers{
+			ServiceInformer: kubeInformerFactory.Core().V1().Services(),
+			EpInformer:      kubeInformerFactory.Core().V1().Endpoints(),
+		}
+	})
+	return informerInstance
+}
+
+func GetInformers() *Informers {
+	if informerInstance == nil {
+		AviLog.Error.Fatal("Cannot retrieve the informers since it's not initialized yet.")
+		return nil
+	}
+	return informerInstance
+}
+
+func Stringify(serialize interface{}) string {
+	json_marshalled, _ := json.Marshal(serialize)
+	return string(json_marshalled)
 }
