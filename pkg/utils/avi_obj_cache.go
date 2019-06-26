@@ -16,32 +16,37 @@ package utils
 
 import (
 	"encoding/json"
-	"fmt"
 	"net/url"
-	"strings"
+	"sync"
 
 	"github.com/avinetworks/sdk/go/clients"
 	"github.com/avinetworks/sdk/go/session"
-	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/client-go/kubernetes"
 )
 
 type AviObjCache struct {
-	client         *kubernetes.Clientset
 	VsCache        *AviCache
 	PgCache        *AviCache
 	PoolCache      *AviCache
 	SvcToPoolCache *AviMultiCache
-	informers      *Informers
 }
 
-func NewAviObjCache(client *kubernetes.Clientset, informers *Informers) *AviObjCache {
-	c := AviObjCache{client: client, informers: informers}
+func NewAviObjCache() *AviObjCache {
+	c := AviObjCache{}
 	c.VsCache = NewAviCache()
 	c.PgCache = NewAviCache()
 	c.PoolCache = NewAviCache()
 	c.SvcToPoolCache = NewAviMultiCache()
 	return &c
+}
+
+var cacheInstance *AviObjCache
+var cacheOnce sync.Once
+
+func SharedCacheFetch() *AviObjCache {
+	cacheOnce.Do(func() {
+		cacheInstance = NewAviObjCache()
+	})
+	return cacheInstance
 }
 
 func (c *AviObjCache) AviObjCachePopulate(client *clients.AviClient,
@@ -56,7 +61,7 @@ func (c *AviObjCache) AviObjCachePopulate(client *clients.AviClient,
 	var svc_mdata interface{}
 	var svc_mdata_map map[string]interface{}
 	var err error
-	var pool_name string
+	//var pool_name string
 
 	avi_pools := make(map[string]bool)
 	avi_pgs := make(map[string]bool)
@@ -144,37 +149,37 @@ func (c *AviObjCache) AviObjCachePopulate(client *clients.AviClient,
 	c.AviObjVSCachePopulate(client, cloud)
 	c.AviPGCachePopulate(client, cloud, avi_pgs)
 	// svcs, err := c.informers.ServiceInformer.Lister().List(labels.Everything())
-	svcs, err := c.client.CoreV1().Services("").List(v1.ListOptions{})
-	if err != nil {
-		AviLog.Warning.Printf("Service Lister returned %v", err)
-	} else {
-		for _, svc := range svcs.Items {
-			for _, pp := range svc.Spec.Ports {
-				var prot string
-				if pp.Protocol == "" {
-					prot = "tcp"
-				} else {
-					prot = strings.ToLower(string(pp.Protocol))
-				}
-				// pool_name is of the form name_prefix-pool-port-protocol
-				// For Service, name_prefix is the Service's name
-				pool_name = fmt.Sprintf("%s-pool-%v-%s", svc.Name,
-					pp.TargetPort.String(), prot)
-			}
-			_, pool_pres := avi_pools[pool_name]
-			if pool_pres {
-				key := NamespaceName{Namespace: svc.Namespace, Name: svc.Name}
-				pool_cache_entry := "service/" + pool_name
-				c.SvcToPoolCache.AviMultiCacheAdd(key, pool_cache_entry)
-				AviLog.Info.Printf(`key %v maps to pool %v in pool cache`,
-					key, pool_cache_entry)
-			} else {
-				AviLog.Warning.Printf(`Service namespace %v name %v pool %v
-					 has no corresponding pool`, svc.Namespace, svc.Name,
-					pool_name)
-			}
-		}
-	}
+	// svcs, err := c.client.CoreV1().Services("").List(v1.ListOptions{})
+	// if err != nil {
+	// 	AviLog.Warning.Printf("Service Lister returned %v", err)
+	// } else {
+	// 	for _, svc := range svcs.Items {
+	// 		for _, pp := range svc.Spec.Ports {
+	// 			var prot string
+	// 			if pp.Protocol == "" {
+	// 				prot = "tcp"
+	// 			} else {
+	// 				prot = strings.ToLower(string(pp.Protocol))
+	// 			}
+	// 			// pool_name is of the form name_prefix-pool-port-protocol
+	// 			// For Service, name_prefix is the Service's name
+	// 			pool_name = fmt.Sprintf("%s-pool-%v-%s", svc.Name,
+	// 				pp.TargetPort.String(), prot)
+	// 		}
+	// 		_, pool_pres := avi_pools[pool_name]
+	// 		if pool_pres {
+	// 			key := NamespaceName{Namespace: svc.Namespace, Name: svc.Name}
+	// 			pool_cache_entry := "service/" + pool_name
+	// 			c.SvcToPoolCache.AviMultiCacheAdd(key, pool_cache_entry)
+	// 			AviLog.Info.Printf(`key %v maps to pool %v in pool cache`,
+	// 				key, pool_cache_entry)
+	// 		} else {
+	// 			AviLog.Warning.Printf(`Service namespace %v name %v pool %v
+	// 				 has no corresponding pool`, svc.Namespace, svc.Name,
+	// 				pool_name)
+	// 		}
+	// 	}
+	// }
 }
 
 // TODO (sudswas): Should this be run inside a go routine for parallel population

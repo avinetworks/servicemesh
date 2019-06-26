@@ -18,8 +18,10 @@ import (
 	"flag"
 	"os"
 
-	"github.com/avinetworks/servicemesh/pkg/istio/graph"
 	"github.com/avinetworks/servicemesh/pkg/istio/mcp"
+	"github.com/avinetworks/servicemesh/pkg/istio/nodes"
+
+	//avirest "github.com/avinetworks/servicemesh/pkg/istio/rest"
 	"github.com/avinetworks/servicemesh/pkg/k8s"
 	"github.com/avinetworks/servicemesh/pkg/utils"
 	"k8s.io/client-go/kubernetes"
@@ -59,8 +61,8 @@ func main() {
 		utils.AviLog.Error.Fatalf("Error building kubernetes clientset: %s", err.Error())
 	}
 
-	informers := utils.NewInformers(kubeClient)
-	avi_obj_cache := utils.NewAviObjCache(kubeClient, informers)
+	utils.NewInformers(kubeClient)
+	avi_obj_cache := utils.SharedCacheFetch()
 
 	avi_rest_client_pool := utils.SharedAVIClients()
 
@@ -83,10 +85,11 @@ func main() {
 	c.Start(stopCh)
 
 	// start the go routines draining the queues in various layers
-	ingestionQueue := k8s.SharedWorkQueue().GetQueueByName(utils.ObjectIngestionLayer)
-
+	ingestionQueue := utils.SharedWorkQueue().GetQueueByName(utils.ObjectIngestionLayer)
+	ingestionQueue.SyncFunc = SyncFromIngestionLayer
 	ingestionQueue.Run(stopCh)
-	graphQueue := graph.SharedWorkQueue().GetQueueByName(utils.GraphLayer)
+	graphQueue := utils.SharedWorkQueue().GetQueueByName(utils.GraphLayer)
+	graphQueue.SyncFunc = SyncFromNodesLayer
 	graphQueue.Run(stopCh)
 	<-stopCh
 	ingestionQueue.StopWorkers(stopCh)
@@ -98,4 +101,19 @@ func init() {
 	def_kube_config := os.Getenv("HOME") + "/.kube/config"
 	flag.StringVar(&kubeconfig, "kubeconfig", def_kube_config, "Path to a kubeconfig. Only required if out-of-cluster.")
 	flag.StringVar(&masterURL, "master", "", "The address of the Kubernetes API server. Overrides any value in kubeconfig. Only required if out-of-cluster.")
+}
+
+func SyncFromIngestionLayer(key string) error {
+	// This method will do all necessary graph calculations on the Graph Layer
+	// Let's route the key to the graph layer.
+	// NOTE: There's no error propagation from the graph layer back to the workerqueue. We will evaluate
+	// This condition in the future and visit as needed. But right now, there's no necessity for it.
+	//sharedQueue := SharedWorkQueueWrappers().GetQueueByName(queue.GraphLayer)
+	nodes.DequeueIngestion(key)
+	return nil
+}
+
+func SyncFromNodesLayer(key string) error {
+	// TBU
+	return nil
 }

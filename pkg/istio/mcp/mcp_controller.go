@@ -21,7 +21,6 @@ import (
 	"time"
 
 	istio_objs "github.com/avinetworks/servicemesh/pkg/istio/objects"
-	queue "github.com/avinetworks/servicemesh/pkg/k8s"
 	"github.com/avinetworks/servicemesh/pkg/utils"
 	"github.com/gogo/protobuf/types"
 	"istio.io/istio/pkg/mcp/sink"
@@ -119,7 +118,7 @@ func (c *Controller) Apply(change *sink.Change) error {
 	schema.Store(presentValues, prevStore)
 	newStore := schema.GetAll()
 	changedKeysMap := c.ConfigDescriptor().CalculateUpdates(prevStore, newStore)
-	sharedQueue := queue.SharedWorkQueue().GetQueueByName(utils.ObjectIngestionLayer)
+	sharedQueue := utils.SharedWorkQueue().GetQueueByName(utils.ObjectIngestionLayer)
 	// Sharding logic here.
 	for namespace, objKeys := range changedKeysMap {
 		// Hash on namespace

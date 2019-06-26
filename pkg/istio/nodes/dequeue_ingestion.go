@@ -12,7 +12,7 @@
 * limitations under the License.
  */
 
-package graph
+package nodes
 
 import (
 	"strings"
@@ -21,40 +21,7 @@ import (
 	"github.com/avinetworks/servicemesh/pkg/utils"
 )
 
-var (
-	VirtualService = GraphSchema{
-		Type:              "virtual-service",
-		GetParentGateways: VSToGateway,
-	}
-	Gateway = GraphSchema{
-		Type:              "gateway",
-		GetParentGateways: GwToGateway,
-	}
-	Service = GraphSchema{
-		Type:              "Service",
-		GetParentGateways: SvcToGateway,
-	}
-	Endpoint = GraphSchema{
-		Type:              "Endpoints",
-		GetParentGateways: EPToGateway,
-	}
-	SupportedGraphTypes = GraphDescriptor{
-		VirtualService,
-		Gateway,
-		Service,
-		Endpoint,
-	}
-)
-
-type GraphSchema struct {
-	Type              string
-	GetParentGateways func(string, string) []string
-	UpdateRels        func(string, string) bool
-}
-
-type GraphDescriptor []GraphSchema
-
-func SyncToGraphLayer(key string) {
+func DequeueIngestion(key string) {
 	// The key format expected here is: objectType/Namespace/ObjKey
 	utils.AviLog.Info.Printf("%s: Starting graph Sync", key)
 	objType, namespace, name := extractTypeNameNamespace(key)
@@ -64,7 +31,7 @@ func SyncToGraphLayer(key string) {
 		utils.AviLog.Warning.Printf("%s: Invalid Graph Schema type obtained.", key)
 		return
 	}
-	sharedQueue := SharedWorkQueue().GetQueueByName(utils.GraphLayer)
+	sharedQueue := utils.SharedWorkQueue().GetQueueByName(utils.GraphLayer)
 	gatewayNames := schema.GetParentGateways(name, namespace)
 	// Update the relationships associated with this object
 	if gatewayNames == nil && objType == "gateway" {
@@ -73,7 +40,7 @@ func SyncToGraphLayer(key string) {
 		// Short circuit and publish the VS key for deletion to Layer 3.
 		istio_objs.SharedAviGraphLister().Save(model_name, nil)
 		bkt := utils.Bkt(model_name, sharedQueue.NumWorkers)
-		sharedQueue.workqueue[bkt].AddRateLimited(model_name)
+		sharedQueue.Workqueue[bkt].AddRateLimited(model_name)
 		return
 	}
 	if len(gatewayNames) == 0 {
@@ -105,7 +72,7 @@ func SyncToGraphLayer(key string) {
 				istio_objs.SharedAviGraphLister().Save(model_name, aviModelGraph)
 				utils.AviLog.Info.Printf("%s: The list of ordered nodes :%s", key, utils.Stringify(aviModelGraph.GetOrderedNodes()))
 				bkt := utils.Bkt(model_name, sharedQueue.NumWorkers)
-				sharedQueue.workqueue[bkt].AddRateLimited(model_name)
+				sharedQueue.Workqueue[bkt].AddRateLimited(model_name)
 			}
 		}
 
