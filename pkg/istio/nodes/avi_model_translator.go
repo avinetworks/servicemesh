@@ -12,7 +12,7 @@
 * limitations under the License.
  */
 
-package graph
+package nodes
 
 import (
 	"fmt"
@@ -151,8 +151,13 @@ func (o *AviObjectGraph) evaluateHTTPPools(ns string, randString string, destina
 		poolName := serviceName + "-" + randString
 		// To be supported: obtain the servers for this service. Naming convention of the service is - svcname.ns.sub-domain
 		poolNode := &AviPoolNode{Name: poolName, Tenant: gatewayNs, Port: portNumber, Protocol: HTTP}
-		epObj, _ := utils.GetInformers().EpInformer.Lister().Endpoints(ns).Get(serviceName)
-		poolNode.Servers = o.extractServers(epObj, portNumber, portName)
+		epObj, err := utils.GetInformers().EpInformer.Lister().Endpoints(ns).Get(serviceName)
+		if err != nil || epObj == nil {
+			// There's no endpoint object for the service.
+			poolNode.Servers = nil
+		} else {
+			poolNode.Servers = o.extractServers(epObj, portNumber, portName)
+		}
 		if portName != "" {
 			poolNode.PortName = portName
 		} else if portNumber != 0 {

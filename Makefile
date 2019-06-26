@@ -30,5 +30,5 @@ test:
 	go test -v ./pkg/istio/objects
 	go test -v ./pkg/istio/mcp
 	go test -v ./pkg/istio/mcp/mcptests
-	go test -v ./pkg/istio/graph
+	go test -v ./pkg/istio/nodes
 

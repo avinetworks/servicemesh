@@ -12,7 +12,7 @@
 * limitations under the License.
  */
 
-package graph
+package nodes
 
 import (
 	"strings"
