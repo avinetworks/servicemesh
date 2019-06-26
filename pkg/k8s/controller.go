@@ -78,7 +78,7 @@ func (c *AviController) SetupEventHandlers(cs *kubernetes.Clientset) {
 	eventBroadcaster.StartRecordingToSink(&typedcorev1.EventSinkImpl{Interface: cs.CoreV1().Events("")})
 	//recorder := eventBroadcaster.NewRecorder(scheme.Scheme, corev1.EventSource{Component: "avi-k8s-controller"})
 
-	mcpQueue := SharedWorkQueue().GetQueueByName(utils.ObjectIngestionLayer)
+	mcpQueue := utils.SharedWorkQueue().GetQueueByName(utils.ObjectIngestionLayer)
 	c.workqueue = mcpQueue.Workqueue
 	numWorkers := mcpQueue.NumWorkers
 

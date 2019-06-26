@@ -12,7 +12,7 @@
 * limitations under the License.
  */
 
-package graph
+package nodes
 
 import (
 	"fmt"
@@ -59,7 +59,7 @@ func (o *AviObjectGraph) GetOrderedNodes() []AviModelNode {
 	return o.modelNodes
 }
 
-func (o *AviObjectGraph) GetPoolGroups() []*AviPoolGroupNode {
+func (o *AviObjectGraph) GetAviPoolGroups() []*AviPoolGroupNode {
 	var poolgroups []*AviPoolGroupNode
 	for _, model := range o.modelNodes {
 		pg, ok := model.(*AviPoolGroupNode)
@@ -92,7 +92,7 @@ func (o *AviObjectGraph) GetAviPools() []*AviPoolNode {
 	return aviPools
 }
 
-func (o *AviObjectGraph) GetHttpPolicies() []*AviHttpPolicySetNode {
+func (o *AviObjectGraph) GetAviHttpPolicies() []*AviHttpPolicySetNode {
 	var aviHttpPolicies []*AviHttpPolicySetNode
 	for _, model := range o.modelNodes {
 		http, ok := model.(*AviHttpPolicySetNode)
@@ -151,8 +151,13 @@ func (o *AviObjectGraph) evaluateHTTPPools(ns string, randString string, destina
 		poolName := serviceName + "-" + randString
 		// To be supported: obtain the servers for this service. Naming convention of the service is - svcname.ns.sub-domain
 		poolNode := &AviPoolNode{Name: poolName, Tenant: gatewayNs, Port: portNumber, Protocol: HTTP}
-		epObj, _ := utils.GetInformers().EpInformer.Lister().Endpoints(ns).Get(serviceName)
-		poolNode.Servers = o.extractServers(epObj, portNumber, portName)
+		epObj, err := utils.GetInformers().EpInformer.Lister().Endpoints(ns).Get(serviceName)
+		if err != nil || epObj == nil {
+			// There's no endpoint object for the service.
+			poolNode.Servers = nil
+		} else {
+			poolNode.Servers = o.extractServers(epObj, portNumber, portName)
+		}
 		if portName != "" {
 			poolNode.PortName = portName
 		} else if portNumber != 0 {
@@ -269,7 +274,7 @@ func (o *AviObjectGraph) ConstructAviPGPoolNodes(vs *istio_objs.IstioObject, mod
 	// Fetch the model if it exists for the AVI Vs.
 	found, aviModel := objects.SharedAviGraphLister().Get(model_name)
 	if found {
-		prevPoolGroupNodes = aviModel.(*AviObjectGraph).GetPoolGroups()
+		prevPoolGroupNodes = aviModel.(*AviObjectGraph).GetAviPoolGroups()
 	}
 	// HTTP route handling.
 
@@ -383,6 +388,7 @@ func (o *AviObjectGraph) ConstructAviHttpPolicyNodes(gatewayNs string, vsObj *is
 }
 
 func (o *AviObjectGraph) extractServers(epObj *corev1.Endpoints, port_num int32, port_name string) []AviPoolMetaServer {
+	//TODO: The POD based subsets will be handled subsequently.
 	var pool_meta []AviPoolMetaServer
 	for _, ss := range epObj.Subsets {
 		//var epp_port int32

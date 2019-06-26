@@ -1,26 +1,24 @@
 /*
-* [2013] - [2018] Avi Networks Incorporated
-* All Rights Reserved.
-* Licensed under the Apache License, Version 2.0 (the "License");
-* you may not use this file except in compliance with the License.
-* You may obtain a copy of the License at
-*   http://www.apache.org/licenses/LICENSE-2.0
-* Unless required by applicable law or agreed to in writing, software
-* distributed under the License is distributed on an "AS IS" BASIS,
-* WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-* See the License for the specific language governing permissions and
-* limitations under the License.
+ * [2013] - [2018] Avi Networks Incorporated
+ * All Rights Reserved.
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 
-package k8s
+package utils
 
 import (
 	"fmt"
 	"sync"
 	"time"
 
-	"github.com/avinetworks/servicemesh/pkg/istio/graph"
-	"github.com/avinetworks/servicemesh/pkg/utils"
 	"k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/util/workqueue"
@@ -28,7 +26,7 @@ import (
 
 var queuewrapper sync.Once
 var queueInstance *WorkQueueWrapper
-var fixedQueues = [...]WorkerQueue{WorkerQueue{NumWorkers: utils.NumWorkers, workqueueName: utils.ObjectIngestionLayer, syncFunc: SyncFromIngestionLayer}}
+var fixedQueues = [...]WorkerQueue{WorkerQueue{NumWorkers: NumWorkers, workqueueName: ObjectIngestionLayer}, WorkerQueue{NumWorkers: NumWorkers, workqueueName: GraphLayer}}
 
 type WorkQueueWrapper struct {
 	// This struct should manage a set of WorkerQueues for the various layers
@@ -45,7 +43,7 @@ func SharedWorkQueue() *WorkQueueWrapper {
 		queueInstance = &WorkQueueWrapper{}
 		queueInstance.queueCollection = make(map[string]*WorkerQueue)
 		for _, queue := range fixedQueues {
-			workqueue := NewWorkQueue(queue.NumWorkers, queue.workqueueName, queue.syncFunc)
+			workqueue := NewWorkQueue(queue.NumWorkers, queue.workqueueName)
 			queueInstance.queueCollection[queue.workqueueName] = workqueue
 		}
 	})
@@ -59,16 +57,16 @@ type WorkerQueue struct {
 	workqueueName string
 	workerIdMutex sync.Mutex
 	workerId      uint32
-	syncFunc      func(string) error
+	SyncFunc      func(string) error
 }
 
-func NewWorkQueue(num_workers uint32, workerQueueName string, syncFunc func(string) error) *WorkerQueue {
+func NewWorkQueue(num_workers uint32, workerQueueName string) *WorkerQueue {
 	queue := &WorkerQueue{}
 	queue.Workqueue = make([]workqueue.RateLimitingInterface, num_workers)
 	queue.workerId = (uint32(1) << num_workers) - 1
 	queue.NumWorkers = num_workers
 	queue.workqueueName = workerQueueName
-	queue.syncFunc = syncFunc
+	//queue.syncFunc = syncFunc
 	for i := uint32(0); i < num_workers; i++ {
 		queue.Workqueue[i] = workqueue.NewNamedRateLimitingQueue(workqueue.DefaultControllerRateLimiter(), fmt.Sprintf("avi-%s", workerQueueName))
 	}
@@ -76,12 +74,17 @@ func NewWorkQueue(num_workers uint32, workerQueueName string, syncFunc func(stri
 }
 
 func (c *WorkerQueue) Run(stopCh <-chan struct{}) error {
-	defer runtime.HandleCrash()
-	utils.AviLog.Info.Printf("Starting workers to drain the %s layer queues", c.workqueueName)
+	//defer runtime.HandleCrash()
+	AviLog.Info.Printf("Starting workers to drain the %s layer queues", c.workqueueName)
+	if c.SyncFunc == nil {
+		// This is a bad situation, the sync function is required.
+		AviLog.Error.Fatalf("Sync function is not set for workqueue: %s", c.workqueueName)
+		return nil
+	}
 	for i := uint32(0); i < c.NumWorkers; i++ {
 		go wait.Until(c.runWorker, time.Second, stopCh)
 	}
-	utils.AviLog.Info.Printf("Started the workers for: %s", c.workqueueName)
+	AviLog.Info.Printf("Started the workers for: %s", c.workqueueName)
 
 	return nil
 }
@@ -89,7 +92,7 @@ func (c *WorkerQueue) StopWorkers(stopCh <-chan struct{}) {
 	for i := uint32(0); i < c.NumWorkers; i++ {
 		c.Workqueue[i].ShutDown()
 	}
-	utils.AviLog.Info.Printf("Shutting down the workers for %s", c.workqueueName)
+	AviLog.Info.Printf("Shutting down the workers for %s", c.workqueueName)
 }
 
 // runWorker is a long-running function that will continually call the
@@ -106,7 +109,7 @@ func (c *WorkerQueue) runWorker() {
 		}
 	}
 	c.workerIdMutex.Unlock()
-	utils.AviLog.Info.Printf("Worker id %d", workerId)
+	AviLog.Info.Printf("Worker id %d", workerId)
 	for c.processNextWorkItem(workerId) {
 	}
 	c.workerIdMutex.Lock()
@@ -140,10 +143,10 @@ func (c *WorkerQueue) processNextWorkItem(worker_id uint32) bool {
 			return nil
 		}
 		// Run the syncToAvi, passing it the ev resource to be synced.
-		err := c.syncFunc(ev)
+		err := c.SyncFunc(ev)
 		if err != nil {
 			// TODO (sudswas): Do an add back logic via the retry layer here.
-			utils.AviLog.Error.Printf("There was an error while syncing the key: %s", ev)
+			AviLog.Error.Printf("There was an error while syncing the key: %s", ev)
 		}
 		c.Workqueue[worker_id].Forget(obj)
 
@@ -154,14 +157,4 @@ func (c *WorkerQueue) processNextWorkItem(worker_id uint32) bool {
 		return false
 	}
 	return true
-}
-
-func SyncFromIngestionLayer(key string) error {
-	// This method will do all necessary graph calculations on the Graph Layer
-	// Let's route the key to the graph layer.
-	// NOTE: There's no error propagation from the graph layer back to the workerqueue. We will evaluate
-	// This condition in the future and visit as needed. But right now, there's no necessity for it.
-	//sharedQueue := SharedWorkQueueWrappers().GetQueueByName(queue.GraphLayer)
-	graph.SyncToGraphLayer(key)
-	return nil
 }

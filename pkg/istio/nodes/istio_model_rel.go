@@ -12,7 +12,7 @@
 * limitations under the License.
  */
 
-package graph
+package nodes
 
 import (
 	"strings"
@@ -20,6 +20,39 @@ import (
 	istio_objs "github.com/avinetworks/servicemesh/pkg/istio/objects"
 	"github.com/avinetworks/servicemesh/pkg/utils"
 )
+
+var (
+	VirtualService = GraphSchema{
+		Type:              "virtual-service",
+		GetParentGateways: VSToGateway,
+	}
+	Gateway = GraphSchema{
+		Type:              "gateway",
+		GetParentGateways: DetectGatewayChanges,
+	}
+	Service = GraphSchema{
+		Type:              "Service",
+		GetParentGateways: SvcToGateway,
+	}
+	Endpoint = GraphSchema{
+		Type:              "Endpoints",
+		GetParentGateways: EPToGateway,
+	}
+	SupportedGraphTypes = GraphDescriptor{
+		VirtualService,
+		Gateway,
+		Service,
+		Endpoint,
+	}
+)
+
+type GraphSchema struct {
+	Type              string
+	GetParentGateways func(string, string) []string
+	UpdateRels        func(string, string) bool
+}
+
+type GraphDescriptor []GraphSchema
 
 func VSToGateway(vsName string, namespace string) []string {
 	// Given a VS Key - trace to the gateways that are associated with it.
@@ -81,7 +114,7 @@ func VSToGateway(vsName string, namespace string) []string {
 	}
 }
 
-func GwToGateway(gwName string, namespace string) []string {
+func DetectGatewayChanges(gwName string, namespace string) []string {
 	var gateways []string
 	found, _ := istio_objs.SharedGatewayLister().Gateway(namespace).Get(gwName)
 	if !found {
