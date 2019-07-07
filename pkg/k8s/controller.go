@@ -45,7 +45,7 @@ type AviController struct {
 func SharedAviController() *AviController {
 	ctrlonce.Do(func() {
 		controllerInstance = &AviController{
-			worker_id: (uint32(1) << utils.NumWorkers) - 1,
+			worker_id: (uint32(1) << utils.NumWorkersIngestion) - 1,
 			//recorder:  recorder,
 			informers: utils.GetInformers(),
 		}
@@ -67,6 +67,7 @@ func NewInformers(cs *kubernetes.Clientset) *utils.Informers {
 	informers := utils.Informers{
 		ServiceInformer: kubeInformerFactory.Core().V1().Services(),
 		EpInformer:      kubeInformerFactory.Core().V1().Endpoints(),
+		PodInformer:     kubeInformerFactory.Core().V1().Pods(),
 	}
 	return &informers
 }
@@ -126,6 +127,50 @@ func (c *AviController) SetupEventHandlers(cs *kubernetes.Clientset) {
 		},
 	}
 
+	pod_event_handler := cache.ResourceEventHandlerFuncs{
+		AddFunc: func(obj interface{}) {
+			pod := obj.(*corev1.Pod)
+			namespace, _, _ := cache.SplitMetaNamespaceKey(ObjKey(pod))
+			key := "Pods/" + ObjKey(pod)
+			bkt := utils.Bkt(namespace, numWorkers)
+			c.workqueue[bkt].AddRateLimited(key)
+			utils.AviLog.Info.Printf("Added ADD POD key from the kubernetes controller %s", key)
+		},
+		DeleteFunc: func(obj interface{}) {
+			pod, ok := obj.(*corev1.Pod)
+			if !ok {
+				// endpoints was deleted but its final state is unrecorded.
+				tombstone, ok := obj.(cache.DeletedFinalStateUnknown)
+				if !ok {
+					utils.AviLog.Error.Printf("couldn't get object from tombstone %#v", obj)
+					return
+				}
+				pod, ok = tombstone.Obj.(*corev1.Pod)
+				if !ok {
+					utils.AviLog.Error.Printf("Tombstone contained object that is not an Pods: %#v", obj)
+					return
+				}
+			}
+			pod = obj.(*corev1.Pod)
+			namespace, _, _ := cache.SplitMetaNamespaceKey(ObjKey(pod))
+			key := "Pods/" + ObjKey(pod)
+			bkt := utils.Bkt(namespace, numWorkers)
+			c.workqueue[bkt].AddRateLimited(key)
+			utils.AviLog.Info.Printf("Added DELETE POD key from the kubernetes controller %s", key)
+		},
+		UpdateFunc: func(old, cur interface{}) {
+			oPod := old.(*corev1.Pod)
+			cPod := cur.(*corev1.Pod)
+			if oPod.ResourceVersion != cPod.ResourceVersion {
+				namespace, _, _ := cache.SplitMetaNamespaceKey(ObjKey(cPod))
+				key := "Pods/" + ObjKey(cPod)
+				bkt := utils.Bkt(namespace, numWorkers)
+				c.workqueue[bkt].AddRateLimited(key)
+				utils.AviLog.Info.Printf("Added UPDATE POD key from the kubernetes controller %s", key)
+			}
+		},
+	}
+
 	svc_event_handler := cache.ResourceEventHandlerFuncs{
 		AddFunc: func(obj interface{}) {
 			svc := obj.(*corev1.Service)
@@ -173,16 +218,19 @@ func (c *AviController) SetupEventHandlers(cs *kubernetes.Clientset) {
 
 	c.informers.EpInformer.Informer().AddEventHandler(ep_event_handler)
 	c.informers.ServiceInformer.Informer().AddEventHandler(svc_event_handler)
+	c.informers.PodInformer.Informer().AddEventHandler(pod_event_handler)
 
 }
 
 func (c *AviController) Start(stopCh <-chan struct{}) {
 	go c.informers.ServiceInformer.Informer().Run(stopCh)
 	go c.informers.EpInformer.Informer().Run(stopCh)
+	go c.informers.PodInformer.Informer().Run(stopCh)
 
 	if !cache.WaitForCacheSync(stopCh,
 		c.informers.EpInformer.Informer().HasSynced,
 		c.informers.ServiceInformer.Informer().HasSynced,
+		c.informers.PodInformer.Informer().HasSynced,
 	) {
 		runtime.HandleError(fmt.Errorf("Timed out waiting for caches to sync"))
 	} else {

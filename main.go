@@ -116,5 +116,6 @@ func SyncFromIngestionLayer(key string) error {
 
 func SyncFromNodesLayer(key string) error {
 	// TBU
+	avirest.DeQueueNodes(key)
 	return nil
 }

@@ -142,6 +142,7 @@ func NewInformers(cs *kubernetes.Clientset) *Informers {
 		informerInstance = &Informers{
 			ServiceInformer: kubeInformerFactory.Core().V1().Services(),
 			EpInformer:      kubeInformerFactory.Core().V1().Endpoints(),
+			PodInformer:     kubeInformerFactory.Core().V1().Pods(),
 		}
 	})
 	return informerInstance
@@ -158,4 +159,12 @@ func GetInformers() *Informers {
 func Stringify(serialize interface{}) string {
 	json_marshalled, _ := json.Marshal(serialize)
 	return string(json_marshalled)
+}
+
+func ExtractGatewayNamespace(key string) (string, string) {
+	segments := strings.Split(key, "/")
+	if len(segments) == 2 {
+		return segments[0], segments[1]
+	}
+	return "", ""
 }

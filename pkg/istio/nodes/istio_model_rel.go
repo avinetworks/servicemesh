@@ -38,11 +38,16 @@ var (
 		Type:              "Endpoints",
 		GetParentGateways: EPToGateway,
 	}
+	DestinationRule = GraphSchema{
+		Type:              "destination-rule",
+		GetParentGateways: DRToGateway,
+	}
 	SupportedGraphTypes = GraphDescriptor{
 		VirtualService,
 		Gateway,
 		Service,
 		Endpoint,
+		DestinationRule,
 	}
 )
 
@@ -82,15 +87,15 @@ func VSToGateway(vsName string, namespace string) []string {
 		// Diff the two lists to see what are the gateways that could have possibly been removed from the VS.
 		for _, gateway := range gateways {
 			// Whatever is present in store, and not present in the current VS object, detect them
-			gatewayFound := false
+			gatewayDiff := false
 			for _, gatewayInStore := range gatewaysFromVSObj {
-				if gatewayInStore == gateway {
-					gatewayFound = true
+				if gatewayInStore != gateway {
+					gatewayDiff = true
 				}
 			}
-			if gatewayFound {
+			if gatewayDiff {
 				diffGateways = append(diffGateways, gateway)
-				gatewayFound = false
+				gatewayDiff = false
 			}
 		}
 		if len(diffGateways) > 0 {
@@ -149,6 +154,29 @@ func EPToGateway(epName string, namespace string) []string {
 	// The below call is safe to make since the ServiceToGateway does not update relationships at the moment.
 	gateways := SvcToGateway(epName, namespace)
 	utils.AviLog.Info.Printf("ep-%s-%s, total gateways retrieved:  %s", namespace, epName, gateways)
+	return gateways
+}
+
+func DRToGateway(drName string, namespace string) []string {
+	var gateways []string
+	found, istioObj := istio_objs.SharedDRLister().DestinationRule(namespace).Get(drName)
+	if !found {
+		utils.AviLog.Info.Printf("dr-%s-%s Object not found. It's a DELETED object.", namespace, drName)
+		// Let's find the impacted services
+		ok, svc := istio_objs.SharedDRLister().DestinationRule(namespace).GetSvcForDR(drName)
+		if !ok {
+			utils.AviLog.Warning.Printf("Couldn't find the service for DR: %s", drName)
+			return nil
+		}
+		istio_objs.SharedDRLister().DestinationRule(namespace).DeleteDRToSvc(drName)
+		istio_objs.SharedDRLister().DestinationRule(namespace).DeleteSVCToDRRefs(drName, namespace)
+		gateways = SvcToGateway(svc, namespace)
+	} else {
+		istio_objs.SharedDRLister().DestinationRule(namespace).UpdateSvcDRRefs(istioObj)
+		svc := istio_objs.SharedDRLister().DestinationRule(namespace).GetServiceFromDRObj(istioObj)
+		gateways = SvcToGateway(svc, namespace)
+	}
+	utils.AviLog.Info.Printf("dr-%s-%s, total gateways retrieved:  %s", namespace, drName, gateways)
 	return gateways
 }
 

@@ -16,6 +16,7 @@ package nodes
 
 import (
 	"fmt"
+	"sort"
 
 	avimodels "github.com/avinetworks/sdk/go/models"
 	"github.com/avinetworks/servicemesh/pkg/utils"
@@ -78,6 +79,7 @@ type AviPoolNode struct {
 	PortName         string
 	Servers          []AviPoolMetaServer
 	Protocol         string
+	lbPolicy         string
 }
 
 func (v *AviPoolNode) GetCheckSum() uint32 {
@@ -130,7 +132,13 @@ func (v *AviHttpPolicySetNode) GetCheckSum() uint32 {
 
 func (v *AviHttpPolicySetNode) CalculateCheckSum() {
 	// A sum of fields for this VS.
-	checksum := utils.Hash(utils.Stringify(v.HppMap))
+	var checksum uint32
+	for _, hpp := range v.HppMap {
+		sort.Strings(hpp.Host)
+		sort.Strings(hpp.Path)
+		checksum = checksum + utils.Hash(utils.Stringify(hpp))
+	}
+	utils.AviLog.Info.Printf("The HTTP rules during checksum calculation is: %s with checksum: %v", utils.Stringify(v.HppMap), checksum)
 	v.CloudConfigCksum = checksum
 }
 

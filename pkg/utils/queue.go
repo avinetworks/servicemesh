@@ -26,7 +26,7 @@ import (
 
 var queuewrapper sync.Once
 var queueInstance *WorkQueueWrapper
-var fixedQueues = [...]WorkerQueue{WorkerQueue{NumWorkers: NumWorkers, workqueueName: ObjectIngestionLayer}, WorkerQueue{NumWorkers: NumWorkers, workqueueName: GraphLayer}}
+var fixedQueues = [...]WorkerQueue{WorkerQueue{NumWorkers: NumWorkersIngestion, workqueueName: ObjectIngestionLayer}, WorkerQueue{NumWorkers: NumWorkersGraph, workqueueName: GraphLayer}}
 
 type WorkQueueWrapper struct {
 	// This struct should manage a set of WorkerQueues for the various layers

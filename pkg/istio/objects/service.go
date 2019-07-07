@@ -24,25 +24,30 @@ var svconce sync.Once
 func SharedSvcLister() *SvcLister {
 	svconce.Do(func() {
 		svcVsStore := NewObjectStore()
+		svcDrStore := NewObjectStore()
 		svclisterinstance = &SvcLister{}
 		svclisterinstance.svcVsStore = svcVsStore
+		svclisterinstance.svcDrStore = svcDrStore
 	})
 	return svclisterinstance
 }
 
 type SvcLister struct {
 	svcVsStore *ObjectStore
+	svcDrStore *ObjectStore
 }
 
 type SvcNSCache struct {
 	namespace    string
 	svcVsobjects *ObjectMapStore
+	svcDrObjects *ObjectMapStore
 }
 
 func (v *SvcLister) Service(ns string) *SvcNSCache {
-	namespacedObjects := v.svcVsStore.GetNSStore(ns)
+	namespacedsvcVsObjs := v.svcVsStore.GetNSStore(ns)
+	namespacedsvcDrObjs := v.svcDrStore.GetNSStore(ns)
 	//svcInstance := SharedSvcLister()
-	return &SvcNSCache{namespace: ns, svcVsobjects: namespacedObjects}
+	return &SvcNSCache{namespace: ns, svcVsobjects: namespacedsvcVsObjs, svcDrObjects: namespacedsvcDrObjs}
 }
 
 func (v *SvcNSCache) GetSvcToVS(svcName string) (bool, []string) {
@@ -62,4 +67,23 @@ func (v *SvcNSCache) DeleteSvcToVSMapping(svcName string) bool {
 
 func (v *SvcNSCache) UpdateSvcToVSMapping(svcName string, vsList []string) {
 	v.svcVsobjects.AddOrUpdate(svcName, vsList)
+}
+
+func (v *SvcNSCache) UpdateSvcToDR(svcName string, drList []string) {
+	v.svcDrObjects.AddOrUpdate(svcName, drList)
+}
+
+func (v *SvcNSCache) GetSvcToDR(svcName string) (bool, []string) {
+	// Need checks if it's found or not?
+	found, drNames := v.svcDrObjects.Get(svcName)
+	if !found {
+		return false, nil
+	}
+	return true, drNames.([]string)
+}
+
+func (v *SvcNSCache) DeleteSvcToDRMapping(svcName string) bool {
+	// Need checks if it's found or not?
+	success := v.svcDrObjects.Delete(svcName)
+	return success
 }

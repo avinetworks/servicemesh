@@ -15,6 +15,10 @@
 package utils
 
 const (
-	GraphLayer           = "GraphLayer"
-	ObjectIngestionLayer = "ObjectIngestionLayer"
+	GraphLayer            = "GraphLayer"
+	ObjectIngestionLayer  = "ObjectIngestionLayer"
+	LeastConnection       = "LEAST_CONN"
+	RandomConnection      = "RANDOM_CONN"
+	PassthroughConnection = "PASSTHROUGH_CONN"
+	RoundRobinConnection  = "ROUND_ROBIN_CONN"
 )
