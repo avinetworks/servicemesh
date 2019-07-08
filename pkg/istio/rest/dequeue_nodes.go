@@ -45,13 +45,18 @@ func DeQueueNodes(key string) {
 	//Decide pool create/delete/update
 	vs_cache_obj, ok := vs_cache.(*utils.AviVsCache)
 	if ok {
-		utils.AviLog.Info.Printf("The VS object was found in the cache: %v", utils.Stringify(vs_cache_obj))
-		pools_to_delete, rest_ops = PoolCU(pools, vs_cache_obj.PoolKeyCollection, gatewayNs, rest_ops)
-		pgs_to_delete, rest_ops = PoolGroupCU(poolGroups, vs_cache_obj.PGKeyCollection, gatewayNs, rest_ops)
-		https_to_delete, rest_ops = HTTPPolicyCU(HTTPPolicies, vs_cache_obj.HTTPKeyCollection, gatewayNs, rest_ops)
+		pools_in_cache := make([]utils.NamespaceName, len(vs_cache_obj.PoolKeyCollection))
+		copy(pools_in_cache, vs_cache_obj.PoolKeyCollection)
+		pools_to_delete, rest_ops = PoolCU(pools, pools_in_cache, gatewayNs, cache, rest_ops)
+		pgs_in_cache := make([]utils.NamespaceName, len(vs_cache_obj.PGKeyCollection))
+		copy(pgs_in_cache, vs_cache_obj.PGKeyCollection)
+		pgs_to_delete, rest_ops = PoolGroupCU(poolGroups, pgs_in_cache, gatewayNs, cache, rest_ops)
+		httpps_in_cache := make([]utils.NamespaceName, len(vs_cache_obj.HTTPKeyCollection))
+		copy(httpps_in_cache, vs_cache_obj.HTTPKeyCollection)
+		https_to_delete, rest_ops = HTTPPolicyCU(HTTPPolicies, httpps_in_cache, gatewayNs, rest_ops)
 	} else {
-		_, rest_ops = PoolCU(pools, nil, gatewayNs, rest_ops)
-		_, rest_ops = PoolGroupCU(poolGroups, nil, gatewayNs, rest_ops)
+		_, rest_ops = PoolCU(pools, nil, gatewayNs, cache, rest_ops)
+		_, rest_ops = PoolGroupCU(poolGroups, nil, gatewayNs, cache, rest_ops)
 		_, rest_ops = HTTPPolicyCU(HTTPPolicies, nil, gatewayNs, rest_ops)
 	}
 	aviVSes := avimodel.GetAviVS()
@@ -87,7 +92,7 @@ func DeQueueNodes(key string) {
 	utils.AviLog.Info.Printf("The list of REST OPS: %s", utils.Stringify(rest_ops))
 	err := avi_rest_client_pool.AviRestOperate(aviclient, rest_ops)
 	if err != nil {
-		utils.AviLog.Info.Fatalf("There was an error sending the macro %s", err)
+		utils.AviLog.Warning.Printf("There was an error sending the macro %s", err)
 
 		// Iterate over rest_ops in reverse and delete created objs
 		for i := len(rest_ops) - 1; i >= 0; i-- {
@@ -195,10 +200,9 @@ func PoolGroupDelete(pgs_to_delete []utils.NamespaceName, gatewayNs string, rest
 	return rest_ops
 }
 
-func PoolCU(pool_nodes []*nodes.AviPoolNode, cache_pool_nodes []utils.NamespaceName, gatewayNs string, rest_ops []*utils.RestOp) ([]utils.NamespaceName, []*utils.RestOp) {
+func PoolCU(pool_nodes []*nodes.AviPoolNode, cache_pool_nodes []utils.NamespaceName, gatewayNs string, cache *utils.AviObjCache, rest_ops []*utils.RestOp) ([]utils.NamespaceName, []*utils.RestOp) {
 	// Default is POST
 	if cache_pool_nodes != nil {
-		cache := utils.SharedAviObjCache()
 		for _, pool := range pool_nodes {
 			// check in the pool cache to see if this pool exists in AVI
 			pool_key := utils.NamespaceName{Namespace: gatewayNs, Name: pool.Name}
@@ -238,7 +242,8 @@ func PoolCU(pool_nodes []*nodes.AviPoolNode, cache_pool_nodes []utils.NamespaceN
 	return cache_pool_nodes, rest_ops
 }
 
-func PoolGroupCU(pg_nodes []*nodes.AviPoolGroupNode, cache_pg_nodes []utils.NamespaceName, gatewayNs string, rest_ops []*utils.RestOp) ([]utils.NamespaceName, []*utils.RestOp) {
+func PoolGroupCU(pg_nodes []*nodes.AviPoolGroupNode, cache_pg_nodes []utils.NamespaceName, gatewayNs string, cache *utils.AviObjCache, rest_ops []*utils.RestOp) ([]utils.NamespaceName, []*utils.RestOp) {
+	utils.AviLog.Info.Printf("Cached PoolGroups before CU :%v", cache_pg_nodes)
 	// Default is POST
 	if cache_pg_nodes != nil {
 		cache := utils.SharedAviObjCache()

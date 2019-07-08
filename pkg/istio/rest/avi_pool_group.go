@@ -122,6 +122,7 @@ func AviPGCacheAdd(cache *utils.AviObjCache, rest_op *utils.RestOp, vsKey utils.
 		if ok {
 			vs_cache_obj, found := vs_cache.(*utils.AviVsCache)
 			if found {
+				utils.AviLog.Info.Printf("The VS cache before modification by PG creation is :%v", utils.Stringify(vs_cache_obj))
 				if vs_cache_obj.PGKeyCollection == nil {
 					vs_cache_obj.PGKeyCollection = []utils.NamespaceName{k}
 				} else {

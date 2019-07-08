@@ -79,7 +79,7 @@ type AviPoolNode struct {
 	PortName         string
 	Servers          []AviPoolMetaServer
 	Protocol         string
-	lbPolicy         string
+	LbAlgorithm      string
 }
 
 func (v *AviPoolNode) GetCheckSum() uint32 {
@@ -89,7 +89,7 @@ func (v *AviPoolNode) GetCheckSum() uint32 {
 
 func (v *AviPoolNode) CalculateCheckSum() {
 	// A sum of fields for this VS.
-	checksum := utils.Hash(v.Protocol) + utils.Hash(fmt.Sprint(v.Port)) + utils.Hash(v.PortName) + utils.Hash(utils.Stringify(v.Servers))
+	checksum := utils.Hash(v.Protocol) + utils.Hash(fmt.Sprint(v.Port)) + utils.Hash(v.PortName) + utils.Hash(utils.Stringify(v.Servers)) + utils.Hash(utils.Stringify(v.LbAlgorithm))
 	v.CloudConfigCksum = checksum
 }
 

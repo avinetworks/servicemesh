@@ -34,9 +34,17 @@ func AviPoolBuild(pool_meta *nodes.AviPoolNode, cache_obj *utils.AviPoolCache) *
 	svc_mdata_json, _ := json.Marshal(&pool_meta.ServiceMetadata)
 	svc_mdata := string(svc_mdata_json)
 	cr := utils.OSHIFT_K8S_CLOUD_CONNECTOR
-
+	var poolAlgorithm string
+	if pool_meta.LbAlgorithm != "" {
+		utils.AviLog.Info.Printf("Pool algorithm obtained from Destination Rule :%s", poolAlgorithm)
+		poolAlgorithm = pool_meta.LbAlgorithm
+	} else {
+		// Default case
+		utils.AviLog.Info.Printf("Using Default pool algorithm :%s", poolAlgorithm)
+		poolAlgorithm = utils.LeastConnection
+	}
 	pool := avimodels.Pool{Name: &name, CloudConfigCksum: &cksumString,
-		CreatedBy: &cr, TenantRef: &tenant, ServiceMetadata: &svc_mdata}
+		CreatedBy: &cr, TenantRef: &tenant, ServiceMetadata: &svc_mdata, LbAlgorithm: &poolAlgorithm}
 
 	// TODO other fields like cloud_ref and lb algo
 
@@ -96,6 +104,7 @@ func AviPoolCacheAdd(cache *utils.AviObjCache, rest_op *utils.RestOp, vsKey util
 	}
 
 	resp_elems, ok := RestRespArrToObjByType(rest_op, "pool")
+	utils.AviLog.Warning.Printf("The pool object response %v", rest_op.Response)
 	if ok != nil || resp_elems == nil {
 		utils.AviLog.Warning.Printf("Unable to find pool obj in resp %v", rest_op.Response)
 		return errors.New("pool not found")
@@ -152,6 +161,7 @@ func AviPoolCacheAdd(cache *utils.AviObjCache, rest_op *utils.RestOp, vsKey util
 					vs_cache_obj.PoolKeyCollection = []utils.NamespaceName{k}
 				} else {
 					if !Contains(vs_cache_obj.PoolKeyCollection, k) {
+						utils.AviLog.Info.Printf("Before adding pool collection %v and key :%v", vs_cache_obj.PoolKeyCollection, k)
 						vs_cache_obj.PoolKeyCollection = append(vs_cache_obj.PoolKeyCollection, k)
 					}
 				}

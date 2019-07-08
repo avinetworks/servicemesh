@@ -155,6 +155,7 @@ func (o *AviObjectGraph) ProcessDRs(drList []string, poolNode *AviPoolNode, name
 						lbSettings := drSubset.TrafficPolicy.LoadBalancer
 						o.selectPolicy(poolNode, lbSettings)
 						// Return the labels to search for.
+						utils.AviLog.Info.Printf("The DR subset labels for the pool %s are: %v", poolNode.Name, drSubset.Labels)
 						return drSubset.Labels
 					}
 				}
@@ -177,13 +178,15 @@ func (o *AviObjectGraph) selectPolicy(poolNode *AviPoolNode, lbSettings *network
 	}
 	switch lbSettings.GetSimple() {
 	case networking.LoadBalancerSettings_LEAST_CONN:
-		poolNode.lbPolicy = utils.LeastConnection
+		poolNode.LbAlgorithm = utils.LeastConnection
 	case networking.LoadBalancerSettings_RANDOM:
-		poolNode.lbPolicy = utils.RandomConnection
+		// AVI does not support this - let's default to LEAST_CONN
+		poolNode.LbAlgorithm = utils.LeastConnection
 	case networking.LoadBalancerSettings_ROUND_ROBIN:
-		poolNode.lbPolicy = utils.RoundRobinConnection
+		poolNode.LbAlgorithm = utils.RoundRobinConnection
 	case networking.LoadBalancerSettings_PASSTHROUGH:
-		poolNode.lbPolicy = utils.PassthroughConnection
+		// AVI does not support this - let's default to LEAST_CONN
+		poolNode.LbAlgorithm = utils.LeastConnection
 	}
 	return
 }
@@ -206,6 +209,7 @@ func (o *AviObjectGraph) evaluateHTTPPools(ns string, randString string, destina
 		epObj, err := utils.GetInformers().EpInformer.Lister().Endpoints(ns).Get(serviceName)
 		// Get the destination rules for this service
 		found, destinationRules := istio_objs.SharedSvcLister().Service(ns).GetSvcToDR(serviceName)
+		utils.AviLog.Info.Printf(" Destination rules :%v obtained for service :%s", destinationRules, serviceName)
 		if found {
 			// We need to process Destination Rules for this service
 			labels = o.ProcessDRs(destinationRules, poolNode, ns, destination.Destination.Subset)
@@ -510,6 +514,7 @@ func (o *AviObjectGraph) extractServers(epObj *corev1.Endpoints, port_num int32,
 				if subsets != "" {
 					// Only qualify the servers that are part of the subsets
 					podObj, err := utils.GetInformers().PodInformer.Lister().Pods(ns).Get(addr.TargetRef.Name)
+					utils.AviLog.Info.Printf("The Pod Object labels during subset calculations is :%v and the subset labels from DR are: %v", podObj.Labels, subsetLabels)
 					if err == nil {
 						for labelkey, label := range podObj.Labels {
 							for subset_key, subset_label := range subsetLabels {
