@@ -88,12 +88,8 @@ The AMC service can be run standalone or inside the kubernetes cluster. If this 
  If you are running inside a kubernetes cluster, then a lot of automation is provided out of the box. Please follow the below steps to run it:
  
  - Clone the code.
- - cd servicemesh/k8s_tmpl
- - Edit the secret.yaml file and update it with the relevant information by encoding it to base64. These are:
-       - AVI CONTROLLER IP
-       - AVI CONTROLLER USERNAME
-       - AVI CONTROLLER PASSWORD
-       - AVI CONTROLLER VERSION
+ - `cd servicemesh/k8s_tmpl`
+ - Edit the secret.yaml file and update it with the relevant information by encoding it to base64. 
  - `kubectl create -f secret.yaml`
  - `kubectl create -f deployment.yaml`
  
