@@ -77,12 +77,25 @@ The AMC service can be run standalone or inside the kubernetes cluster. If this 
  
  `export CTRL_PASSWORD=<password>` - The AVI Controller password
  
- `export MCP_URL=<Galley_URL>/<GalleyNodePort>` - The endpoint to contact Galley.
+ `export MCP_URL=<Galley_URL>:<GalleyNodePort>` - The endpoint to contact Galley.
+
+ `export CTRL_IPADDRESS=<AVI_API_SERVER_ADDR>` - The AVI controller API endpoint with port if applicable.
  
  Post these steps - one can simply start the AMC service using: `./servicmesh`
 
 #### Running AMC inside the cluster
 
- If you are running inside a kubernetes cluster, then one can use Galley exposed via the in cluster fqdn and deploy the AMC service as a POD using the kubernetes templates available that takes care of setting the above enviroment variables by default.
+ If you are running inside a kubernetes cluster, then a lot of automation is provided out of the box. Please follow the below steps to run it:
  
-
+ - Clone the code.
+ - cd servicemesh/k8s_tmpl
+ - Edit the secret.yaml file and update it with the relevant information by encoding it to base64. These are:
+       - AVI CONTROLLER IP
+       - AVI CONTROLLER USERNAME
+       - AVI CONTROLLER PASSWORD
+       - AVI CONTROLLER VERSION
+ - `kubectl create -f secret.yaml`
+ - `kubectl create -f deployment.yaml`
+ 
+ The above should bring up a POD in your kubernetes cluster running the AVI Mesh Controller.
+ 
