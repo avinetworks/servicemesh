@@ -39,3 +39,12 @@ spec:
             secretKeyRef:
               name: avi-secret
               key: controller_version
+        - name: CTRL_VERSION
+          valueFrom:
+            secretKeyRef:
+              name: avi-secret
+              key: controller_version
+        - name: ISTIO_ENABLED
+          value: "True"
+        - name: MCP_URL
+          value: "mcp://<galley_cluster_ip>:9901
