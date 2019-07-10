@@ -118,6 +118,12 @@ func Bkt(key string, num_workers uint32) uint32 {
 	return bkt
 }
 
+// DeepCopy deepcopies a to b using json marshaling
+func DeepCopy(a, b interface{}) {
+	byt, _ := json.Marshal(a)
+	json.Unmarshal(byt, b)
+}
+
 func Hash(s string) uint32 {
 	h := fnv.New32a()
 	h.Write([]byte(s))
@@ -144,6 +150,7 @@ func NewInformers(cs *kubernetes.Clientset) *Informers {
 			ServiceInformer: kubeInformerFactory.Core().V1().Services(),
 			EpInformer:      kubeInformerFactory.Core().V1().Endpoints(),
 			PodInformer:     kubeInformerFactory.Core().V1().Pods(),
+			SecretInformer:  kubeInformerFactory.Core().V1().Secrets(),
 		}
 	})
 	return informerInstance

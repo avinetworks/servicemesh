@@ -36,6 +36,27 @@ type AviVsNode struct {
 	DefaultPoolGroup string
 	// This field will detect if the HTTP policy set rules have changed.
 	HTTPChecksum uint32
+	SNIParent    bool
+}
+
+type AviVsTLSNode struct {
+	VHParentName     string
+	VHDomainNames    []string
+	CloudConfigCksum uint32
+	Name             string
+	TLSKeyCert       []*AviTLSKeyCertNode
+	*AviVsNode
+}
+
+func (v *AviVsTLSNode) GetCheckSum() uint32 {
+	// Calculate checksum and return
+	return v.CloudConfigCksum
+}
+
+func (v *AviVsTLSNode) CalculateCheckSum() {
+	// A sum of fields for this VS.
+	checksum := utils.Hash(v.VHParentName) + utils.Hash(utils.Stringify(v.VHDomainNames))
+	v.CloudConfigCksum = checksum
 }
 
 func (v *AviVsNode) GetCheckSum() uint32 {
@@ -47,6 +68,25 @@ func (v *AviVsNode) CalculateCheckSum() {
 	// A sum of fields for this VS.
 	checksum := utils.Hash(v.ApplicationProfile) + utils.Hash(v.NetworkProfile) + utils.Hash(utils.Stringify(v.PortProto)) + utils.Hash(fmt.Sprint(v.HTTPChecksum))
 	v.CloudConfigCksum = checksum
+}
+
+type AviTLSKeyCertNode struct {
+	Name             string
+	Tenant           string
+	CloudConfigCksum uint32
+	Key              []byte
+	Cert             []byte
+	Port             int32
+}
+
+func (v *AviTLSKeyCertNode) CalculateCheckSum() {
+	// A sum of fields for this SSL cert.
+	checksum := utils.Hash(string(v.Key)) + utils.Hash(string(v.Cert))
+	v.CloudConfigCksum = checksum
+}
+
+func (v *AviTLSKeyCertNode) GetCheckSum() uint32 {
+	return v.CloudConfigCksum
 }
 
 type AviPoolGroupNode struct {
@@ -102,6 +142,7 @@ type AviPortHostProtocol struct {
 	Port     int32
 	Protocol string
 	Hosts    []string
+	Secret   string
 }
 
 type AviPortStrProtocol struct {

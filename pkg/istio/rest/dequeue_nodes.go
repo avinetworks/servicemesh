@@ -29,23 +29,43 @@ func DeQueueNodes(key string) {
 		utils.AviLog.Info.Printf("No model found for the key %s", key)
 		return
 	}
+	avimodel := avimodelIntf.(*nodes.AviObjectGraph)
+	gatewayNs, vsName := utils.ExtractGatewayNamespace(key)
+	sniNode := avimodel.GetAviSNIVS()
+	RestOperation(vsName, gatewayNs, avimodel, false)
+	if len(sniNode) != 0 {
+		utils.AviLog.Info.Printf("Found SNI nodes to process :%s", utils.Stringify(sniNode))
+		RestOperation(sniNode[0].Name, gatewayNs, avimodel, true)
+	}
+
+}
+
+func RestOperation(vsName string, gatewayNs string, avimodel *nodes.AviObjectGraph, sniNode bool) {
 	var rest_ops []*utils.RestOp
 	var pools_to_delete []utils.NamespaceName
 	var pgs_to_delete []utils.NamespaceName
 	var https_to_delete []utils.NamespaceName
-	avimodel := avimodelIntf.(*nodes.AviObjectGraph)
-	// Order would be this: 1. Pools 2. PGs  3. HTTPPolicies. 4. VS
-	// Get the pools
-	gatewayNs, vsName := utils.ExtractGatewayNamespace(key)
+	var sslkeys_to_delete []utils.NamespaceName
+	// Order would be this: 1. Pools 2. PGs  3. HTTPPolicies. 4. SSLKeyCert 5. VS
+
 	pools := avimodel.GetAviPools()
 	cache := utils.SharedAviObjCache()
 	vsKey := utils.NamespaceName{Namespace: gatewayNs, Name: vsName}
 	poolGroups := avimodel.GetAviPoolGroups()
 	HTTPPolicies := avimodel.GetAviHttpPolicies()
-	aviVSes := avimodel.GetAviVS()
-	if len(aviVSes) != 1 {
-		utils.AviLog.Error.Fatalf("More than one VS received. One Gateway should always map to one VS")
-		return
+	SSLCertKeys := avimodel.GetAviSSLCertKeys()
+
+	var aviVSes nodes.AviModelNode
+
+	if sniNode {
+		aviVSes = avimodel.GetAviSNIVS()[0]
+	} else {
+		aviVSes = avimodel.GetAviVS()[0]
+		if aviVSes.(*nodes.AviVsNode).SNIParent {
+			// For now - assume SNI parents won't have HTTP policies. We will further refine it for allowing HTTP traffic
+			// for SNIParents as well.
+			HTTPPolicies = nil
+		}
 	}
 	vs_cache, found := cache.VsCache.AviCacheGet(vsKey)
 
@@ -65,26 +85,42 @@ func DeQueueNodes(key string) {
 		httpps_in_cache := make([]utils.NamespaceName, len(vs_cache_obj.HTTPKeyCollection))
 		copy(httpps_in_cache, vs_cache_obj.HTTPKeyCollection)
 		https_to_delete, rest_ops = HTTPPolicyCU(HTTPPolicies, httpps_in_cache, gatewayNs, rest_ops)
-		// The VS cache was found.
-		// Cache found. Let's compare the checksums
-		if vs_cache_obj.CloudConfigCksum == fmt.Sprint(aviVSes[0].GetCheckSum()) {
+		sslkeys_in_cache := make([]utils.NamespaceName, len(vs_cache_obj.SSLKeyCertCollection))
+		copy(sslkeys_in_cache, vs_cache_obj.SSLKeyCertCollection)
+		sslkeys_to_delete, rest_ops = SSLKeyCertCU(SSLCertKeys, sslkeys_in_cache, gatewayNs, rest_ops)
+		if vs_cache_obj.CloudConfigCksum == fmt.Sprint(aviVSes.GetCheckSum()) {
 			utils.AviLog.Info.Printf("The checksums are same for VS %s, not doing anything", vs_cache_obj.Name)
 		} else {
-			utils.AviLog.Info.Printf("The stored checksum for VS is %v, and the obtained checksum for VS is: %v", vs_cache_obj.CloudConfigCksum, fmt.Sprint(aviVSes[0].GetCheckSum()))
+			utils.AviLog.Info.Printf("The stored checksum for VS is %v, and the obtained checksum for VS is: %v", vs_cache_obj.CloudConfigCksum, fmt.Sprint(aviVSes.GetCheckSum()))
 			// The checksums are different, so it should be a PUT call.
-			restOp := AviVsBuild(aviVSes[0], HTTPPolicies, utils.RestPut, vs_cache_obj)
-			rest_ops = append(rest_ops, restOp...)
+			if sniNode {
+				aviVSes := aviVSes.(*nodes.AviVsTLSNode)
+				restOp := AviVsSniBuild(aviVSes, HTTPPolicies, utils.RestPut, vs_cache_obj)
+				rest_ops = append(rest_ops, restOp...)
+			} else {
+				aviVSes := aviVSes.(*nodes.AviVsNode)
+				restOp := AviVsBuild(aviVSes, HTTPPolicies, utils.RestPut, vs_cache_obj)
+				rest_ops = append(rest_ops, restOp...)
+			}
 		}
 	} else {
 		_, rest_ops = PoolCU(pools, nil, gatewayNs, cache, rest_ops)
 		_, rest_ops = PoolGroupCU(poolGroups, nil, gatewayNs, cache, rest_ops)
 		_, rest_ops = HTTPPolicyCU(HTTPPolicies, nil, gatewayNs, rest_ops)
+		_, rest_ops = SSLKeyCertCU(SSLCertKeys, nil, gatewayNs, rest_ops)
 		// The cache was not found - it's a POST call.
-		restOp := AviVsBuild(aviVSes[0], HTTPPolicies, utils.RestPost, nil)
-		rest_ops = append(rest_ops, restOp...)
+		if sniNode {
+			restOp := AviVsSniBuild(aviVSes.(*nodes.AviVsTLSNode), HTTPPolicies, utils.RestPost, nil)
+			rest_ops = append(rest_ops, restOp...)
+		} else {
+			restOp := AviVsBuild(aviVSes.(*nodes.AviVsNode), HTTPPolicies, utils.RestPost, nil)
+			rest_ops = append(rest_ops, restOp...)
+		}
+
 	}
 
 	// Let's populate all the DELETE entries
+	rest_ops = SSLKeyCertDelete(sslkeys_to_delete, gatewayNs, rest_ops)
 	rest_ops = HTTPPolicyDelete(https_to_delete, gatewayNs, rest_ops)
 	rest_ops = PoolGroupDelete(pgs_to_delete, gatewayNs, rest_ops)
 	rest_ops = PoolDelete(pools_to_delete, gatewayNs, rest_ops)
@@ -138,6 +174,8 @@ func DeQueueNodes(key string) {
 					AviPGCacheAdd(cache, rest_op, vsKey)
 				} else if rest_op.Model == "HTTPPolicySet" {
 					AviHTTPPolicyCacheAdd(cache, rest_op, vsKey)
+				} else if rest_op.Model == "SSLKeyAndCertificate" {
+					AviSSLKeyCertAdd(cache, rest_op, vsKey)
 				}
 			} else {
 				if rest_op.Model == "Pool" {
@@ -148,6 +186,8 @@ func DeQueueNodes(key string) {
 					AviPGCacheDel(cache, rest_op, vsKey)
 				} else if rest_op.Model == "HTTPPolicySet" {
 					AviHTTPCacheDel(cache, rest_op, vsKey)
+				} else if rest_op.Model == "SSLKeyAndCertificate" {
+					AviSSLCacheDel(cache, rest_op, vsKey)
 				}
 			}
 		}
@@ -181,6 +221,22 @@ func HTTPPolicyDelete(https_to_delete []utils.NamespaceName, gatewayNs string, r
 			http_cache_obj, _ := http_cache.(*utils.AviHTTPCache)
 			restOp := AviHttpPolicyDel(http_cache_obj.Uuid, gatewayNs)
 			restOp.ObjName = del_http.Name
+			rest_ops = append(rest_ops, restOp)
+		}
+	}
+	return rest_ops
+}
+
+func SSLKeyCertDelete(ssl_to_delete []utils.NamespaceName, gatewayNs string, rest_ops []*utils.RestOp) []*utils.RestOp {
+	cache := utils.SharedAviObjCache()
+	for _, del_ssl := range ssl_to_delete {
+		// fetch trhe pool uuid from cache
+		ssl_key := utils.NamespaceName{Namespace: gatewayNs, Name: del_ssl.Name}
+		ssl_cache, ok := cache.SSLKeyCache.AviCacheGet(ssl_key)
+		if ok {
+			ssl_cache_obj, _ := ssl_cache.(*utils.AviSSLCache)
+			restOp := AviHttpPolicyDel(ssl_cache_obj.Uuid, gatewayNs)
+			restOp.ObjName = del_ssl.Name
 			rest_ops = append(rest_ops, restOp)
 		}
 	}
@@ -326,6 +382,43 @@ func HTTPPolicyCU(http_nodes []*nodes.AviHttpPolicySetNode, cache_http_nodes []u
 	}
 	utils.AviLog.Info.Printf("The HTTP Policies rest_op is %s", utils.Stringify(rest_ops))
 	return cache_http_nodes, rest_ops
+}
+
+func SSLKeyCertCU(sslkey_nodes []*nodes.AviTLSKeyCertNode, cache_ssl_nodes []utils.NamespaceName, gatewayNs string, rest_ops []*utils.RestOp) ([]utils.NamespaceName, []*utils.RestOp) {
+	// Default is POST
+	if cache_ssl_nodes != nil {
+		cache := utils.SharedAviObjCache()
+		for _, ssl := range sslkey_nodes {
+			ssl_key := utils.NamespaceName{Namespace: gatewayNs, Name: ssl.Name}
+			found := utils.HasElem(cache_ssl_nodes, ssl_key)
+			if found {
+				ssl_cache, ok := cache.SSLKeyCache.AviCacheGet(ssl_key)
+				if ok {
+					cache_ssl_nodes = Remove(cache_ssl_nodes, ssl_key)
+					ssl_cache_obj, _ := ssl_cache.(*utils.AviSSLCache)
+					// Cache found. Let's compare the checksums
+					// The checksums are different, so it should be a PUT call.
+					restOp := AviSSLBuild(ssl, ssl_cache_obj)
+					rest_ops = append(rest_ops, restOp)
+
+				}
+			} else {
+				// Not found - it should be a POST call.
+				restOp := AviSSLBuild(ssl, nil)
+				rest_ops = append(rest_ops, restOp)
+			}
+
+		}
+	} else {
+		// Everything is a POST call
+		for _, ssl := range sslkey_nodes {
+			restOp := AviSSLBuild(ssl, nil)
+			rest_ops = append(rest_ops, restOp)
+		}
+
+	}
+	//utils.AviLog.Info.Printf("The SSLKeyCert rest_op is %s", utils.Stringify(rest_ops))
+	return cache_ssl_nodes, rest_ops
 }
 
 func Remove(s []utils.NamespaceName, r utils.NamespaceName) []utils.NamespaceName {

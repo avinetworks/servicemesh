@@ -44,6 +44,7 @@ type Informers struct {
 	ServiceInformer coreinformers.ServiceInformer
 	EpInformer      coreinformers.EndpointsInformer
 	PodInformer     coreinformers.PodInformer
+	SecretInformer  coreinformers.SecretInformer
 }
 
 type AviRestObjMacro struct {
@@ -156,15 +157,16 @@ type AviPoolCache struct {
 }
 
 type AviVsCache struct {
-	Name              string
-	Tenant            string
-	Uuid              string
-	Vip               []*avimodels.Vip
-	ServiceMetadata   ServiceMetadataObj
-	CloudConfigCksum  string
-	PGKeyCollection   []NamespaceName
-	PoolKeyCollection []NamespaceName
-	HTTPKeyCollection []NamespaceName
+	Name                 string
+	Tenant               string
+	Uuid                 string
+	Vip                  []*avimodels.Vip
+	ServiceMetadata      ServiceMetadataObj
+	CloudConfigCksum     string
+	PGKeyCollection      []NamespaceName
+	PoolKeyCollection    []NamespaceName
+	HTTPKeyCollection    []NamespaceName
+	SSLKeyCertCollection []NamespaceName
 }
 
 type AviPGCache struct {
@@ -180,6 +182,13 @@ type AviHTTPCache struct {
 	Tenant           string
 	Uuid             string
 	CloudConfigCksum string
+}
+
+type AviSSLCache struct {
+	Name   string
+	Tenant string
+	Uuid   string
+	//CloudConfigCksum string
 }
 
 type AviHttpPolicySetMeta struct {

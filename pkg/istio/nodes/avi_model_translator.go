@@ -31,6 +31,8 @@ const (
 	HeaderMethod    = ":method"
 	HeaderAuthority = ":authority"
 	HeaderScheme    = ":scheme"
+	TLS             = "TLS"
+	HTTPS           = "HTTPS"
 )
 
 type AviModelNode interface {
@@ -87,6 +89,17 @@ func (o *AviObjectGraph) GetAviVS() []*AviVsNode {
 	return aviVs
 }
 
+func (o *AviObjectGraph) GetAviSNIVS() []*AviVsTLSNode {
+	var aviSniVs []*AviVsTLSNode
+	for _, model := range o.modelNodes {
+		vs, ok := model.(*AviVsTLSNode)
+		if ok {
+			aviSniVs = append(aviSniVs, vs)
+		}
+	}
+	return aviSniVs
+}
+
 func (o *AviObjectGraph) GetAviPools() []*AviPoolNode {
 	var aviPools []*AviPoolNode
 	for _, model := range o.modelNodes {
@@ -109,6 +122,17 @@ func (o *AviObjectGraph) GetAviHttpPolicies() []*AviHttpPolicySetNode {
 	return aviHttpPolicies
 }
 
+func (o *AviObjectGraph) GetAviSSLCertKeys() []*AviTLSKeyCertNode {
+	var aviSSLCertKeys []*AviTLSKeyCertNode
+	for _, model := range o.modelNodes {
+		http, ok := model.(*AviTLSKeyCertNode)
+		if ok {
+			aviSSLCertKeys = append(aviSSLCertKeys, http)
+		}
+	}
+	return aviSSLCertKeys
+}
+
 func (o *AviObjectGraph) constructProtocolPortMaps(gwSpec *networking.Gateway) []AviPortHostProtocol {
 	var portProtocols []AviPortHostProtocol
 	protocolPortMap := make(map[string][]int32)
@@ -123,6 +147,20 @@ func (o *AviObjectGraph) constructProtocolPortMaps(gwSpec *networking.Gateway) [
 				protocolPortMap[server.Port.Protocol] = []int32{int32(server.Port.Number)}
 			}
 			pp := AviPortHostProtocol{Port: int32(server.Port.Number), Protocol: HTTP, Hosts: server.Hosts}
+			portProtocols = append(portProtocols, pp)
+		} else if server.Port.Protocol == HTTPS {
+			_, ok := protocolPortMap[server.Port.Protocol]
+			secretName := ""
+			if ok {
+				// Append the port to protocol list
+				protocolPortMap[server.Port.Protocol] = append(protocolPortMap[server.Port.Protocol], int32(server.Port.Number))
+			} else {
+				protocolPortMap[server.Port.Protocol] = []int32{int32(server.Port.Number)}
+			}
+			if server.Tls != nil {
+				secretName = server.Tls.CredentialName
+			}
+			pp := AviPortHostProtocol{Port: int32(server.Port.Number), Protocol: HTTPS, Hosts: server.Hosts, Secret: secretName}
 			portProtocols = append(portProtocols, pp)
 		}
 	}
@@ -422,8 +460,21 @@ func (o *AviObjectGraph) ConstructAviVsNode(gwObj *istio_objs.IstioObject) *AviV
 	avi_vs_meta := &AviVsNode{Name: gatewayName, Tenant: namespace,
 		EastWest: false}
 	avi_vs_meta.PortProto = o.constructProtocolPortMaps(gwSpec)
-	// Hard coded right now but will change based as we support more app types.
-	avi_vs_meta.ApplicationProfile = "System-HTTP"
+	for _, pp := range avi_vs_meta.PortProto {
+		if pp.Protocol == HTTPS {
+			avi_vs_meta.ApplicationProfile = "System-Secure-HTTP"
+			tlsNode := &AviVsTLSNode{Name: "tls-" + gatewayName, VHParentName: gatewayName, VHDomainNames: pp.Hosts}
+			tlsNode.AviVsNode = avi_vs_meta
+			//avi_vs_meta.TLSProp = tlsProp
+			o.AddModelNode(tlsNode)
+			avi_vs_meta.SNIParent = true
+		}
+
+	}
+	// Default case.
+	if avi_vs_meta.ApplicationProfile == "" {
+		avi_vs_meta.ApplicationProfile = "System-HTTP"
+	}
 	// For HTTP it's always System-TCP-Proxy.
 	avi_vs_meta.NetworkProfile = "System-TCP-Proxy"
 	//o.AddModelNode(avi_vs_meta)
@@ -559,11 +610,51 @@ func (o *AviObjectGraph) extractServers(epObj *corev1.Endpoints, port_num int32,
 	return pool_meta
 }
 
+func (o *AviObjectGraph) ConstructAviSSLCert(vsNode *AviVsTLSNode) {
+	var keycertMap map[string][]byte
+	if vsNode.ApplicationProfile == "System-Secure-HTTP" {
+		//This means we need to create cert and key
+		for _, pp := range vsNode.PortProto {
+			if pp.Protocol == HTTPS {
+				if pp.Secret != "" {
+					// Let's retrieve the secret object
+					secretObj, err := utils.GetInformers().SecretInformer.Lister().Secrets(vsNode.Tenant).Get(pp.Secret)
+					if err != nil || secretObj == nil {
+						// We should check if there is a need to process a secret delete here.
+						utils.AviLog.Info.Printf("Secret Object not found for secret: %s", pp.Secret)
+						continue
+					} else {
+						tlsNode := &AviTLSKeyCertNode{Name: vsNode.Name + "-" + fmt.Sprint(pp.Port), Tenant: vsNode.Tenant, Port: pp.Port}
+						keycertMap = secretObj.Data
+						cert, ok := keycertMap["cert"]
+						if ok {
+							tlsNode.Cert = cert
+						} else {
+							utils.AviLog.Info.Printf("Certificate not found for secret: %s", secretObj.Name)
+						}
+						key, keyfound := keycertMap["key"]
+						if keyfound {
+							tlsNode.Key = key
+						} else {
+							utils.AviLog.Info.Printf("Key not found for secret: %s", secretObj.Name)
+						}
+						vsNode.TLSKeyCert = append(vsNode.TLSKeyCert, tlsNode)
+						o.AddModelNode(tlsNode)
+					}
+				}
+			}
+		}
+	}
+}
+
 func (o *AviObjectGraph) BuildAviObjectGraph(namespace string, gatewayNs string, gatewayName string, gwObj *istio_objs.IstioObject) {
 	// We use the gateway fields to arrive at various AVI VS Node object.
 	var VsNode *AviVsNode
 
 	VsNode = o.ConstructAviVsNode(gwObj)
+	if len(o.GetAviSNIVS()) != 0 {
+		o.ConstructAviSSLCert(o.GetAviSNIVS()[0])
+	}
 	// Let's see if the Gateway has associated VSes?
 	relExists, vsNames := istio_objs.SharedGatewayLister().Gateway(gatewayNs).GetVSMapping(gatewayName)
 	// Does the VS exist?

@@ -27,6 +27,7 @@ type AviObjCache struct {
 	VsCache        *AviCache
 	PgCache        *AviCache
 	HTTPCache      *AviCache
+	SSLKeyCache    *AviCache
 	PoolCache      *AviCache
 	SvcToPoolCache *AviMultiCache
 }
@@ -37,6 +38,7 @@ func NewAviObjCache() *AviObjCache {
 	c.PgCache = NewAviCache()
 	c.HTTPCache = NewAviCache()
 	c.PoolCache = NewAviCache()
+	c.SSLKeyCache = NewAviCache()
 	c.SvcToPoolCache = NewAviMultiCache()
 	return &c
 }
@@ -223,10 +225,12 @@ func (c *AviObjCache) AviObjVSCachePopulate(client *clients.AviClient,
 				pg_key_collection := c.AviPGCachePopulate(client, cloud, vs["uuid"].(string))
 				pool_key_collection := c.AviPoolCachePopulate(client, cloud, vs["uuid"].(string))
 				http_policy_collection := c.AviHTTPPolicyCachePopulate(client, cloud, vs["uuid"].(string))
+				ssl_key_collection := c.AviHTTPPolicyCachePopulate(client, cloud, vs["uuid"].(string))
 				vs_cache_obj := AviVsCache{Name: vs["name"].(string),
 					Tenant: tenant, Uuid: vs["uuid"].(string), Vip: nil,
 					CloudConfigCksum: vs["cloud_config_cksum"].(string),
-					ServiceMetadata:  svc_mdata_obj, PGKeyCollection: pg_key_collection, PoolKeyCollection: pool_key_collection, HTTPKeyCollection: http_policy_collection}
+					ServiceMetadata:  svc_mdata_obj, PGKeyCollection: pg_key_collection, PoolKeyCollection: pool_key_collection, HTTPKeyCollection: http_policy_collection,
+					SSLKeyCertCollection: ssl_key_collection}
 				k := NamespaceName{Namespace: tenant, Name: vs["name"].(string)}
 				c.VsCache.AviCacheAdd(k, &vs_cache_obj)
 
@@ -376,4 +380,61 @@ func (c *AviObjCache) AviHTTPPolicyCachePopulate(client *clients.AviClient,
 		}
 	}
 	return http_key_collection
+}
+func (c *AviObjCache) AviSSLKeyAndCertPopulate(client *clients.AviClient,
+	cloud string, vs_uuid string) []NamespaceName {
+	var rest_response interface{}
+	var ssl_key_collection []NamespaceName
+	uri := "/api/sslkeyandcertificate?include_name=true&referred_by=virtualservice:" + vs_uuid
+	err := client.AviSession.Get(uri, &rest_response)
+	if err != nil {
+		AviLog.Warning.Printf(`SSLKeyAndCert Get uri %v returned err %v`, uri, err)
+	} else {
+		resp, ok := rest_response.(map[string]interface{})
+		if !ok {
+			AviLog.Warning.Printf(`SSLKeyAndCert Get uri %v returned %v type %T`, uri,
+				rest_response, rest_response)
+		} else {
+			AviLog.Info.Printf("SSLKeyAndCert Get uri %v returned %v HTTP Policies", uri,
+				resp["count"])
+			results, ok := resp["results"].([]interface{})
+			if !ok {
+				AviLog.Warning.Printf(`results not of type []interface{}
+								 Instead of type %T for HTTP Policies`, resp["results"])
+				return nil
+			}
+			for _, ssl_intf := range results {
+				ssl_pol, ok := ssl_intf.(map[string]interface{})
+				if !ok {
+					AviLog.Warning.Printf(`ssl_intf not of type map[string]
+									 interface{}. Instead of type %T`, ssl_intf)
+					continue
+				}
+
+				var tenant string
+				url, err := url.Parse(ssl_pol["tenant_ref"].(string))
+				if err != nil {
+					AviLog.Warning.Printf(`Error parsing tenant_ref %v in
+					SSLKeyAndCert %v`, ssl_pol["tenant_ref"], ssl_pol)
+					continue
+				} else if url.Fragment == "" {
+					AviLog.Warning.Printf(`Error extracting name tenant_ref %v
+										 in SSLKeyAndCert set %v`, ssl_pol["tenant_ref"], ssl_pol)
+					continue
+				} else {
+					tenant = url.Fragment
+				}
+				if ssl_pol != nil {
+					ssl_cache_obj := AviSSLCache{Name: ssl_pol["name"].(string),
+						Tenant: tenant, Uuid: ssl_pol["uuid"].(string)}
+					k := NamespaceName{Namespace: tenant, Name: ssl_pol["name"].(string)}
+					c.SSLKeyCache.AviCacheAdd(k, &ssl_cache_obj)
+					AviLog.Info.Printf("Added SSLKeyAndCert cache key %v val %v",
+						k, ssl_cache_obj)
+					ssl_key_collection = append(ssl_key_collection, k)
+				}
+			}
+		}
+	}
+	return ssl_key_collection
 }
