@@ -25,26 +25,37 @@ import (
 func DeQueueNodes(key string) {
 	// Got the key from the Graph Layer - let's fetch the model
 	ok, avimodelIntf := objects.SharedAviGraphLister().Get(key)
+	if !ok {
+		utils.AviLog.Info.Printf("No model found for the key %s", key)
+		return
+	}
 	var rest_ops []*utils.RestOp
 	var pools_to_delete []utils.NamespaceName
 	var pgs_to_delete []utils.NamespaceName
 	var https_to_delete []utils.NamespaceName
 	avimodel := avimodelIntf.(*nodes.AviObjectGraph)
-	if !ok {
-		utils.AviLog.Info.Printf("No model found for the key %s", key)
-	}
 	// Order would be this: 1. Pools 2. PGs  3. HTTPPolicies. 4. VS
 	// Get the pools
 	gatewayNs, vsName := utils.ExtractGatewayNamespace(key)
 	pools := avimodel.GetAviPools()
 	cache := utils.SharedAviObjCache()
 	vsKey := utils.NamespaceName{Namespace: gatewayNs, Name: vsName}
-	vs_cache, ok := cache.VsCache.AviCacheGet(vsKey)
 	poolGroups := avimodel.GetAviPoolGroups()
 	HTTPPolicies := avimodel.GetAviHttpPolicies()
+	aviVSes := avimodel.GetAviVS()
+	if len(aviVSes) != 1 {
+		utils.AviLog.Error.Fatalf("More than one VS received. One Gateway should always map to one VS")
+		return
+	}
+	vs_cache, found := cache.VsCache.AviCacheGet(vsKey)
+
 	//Decide pool create/delete/update
-	vs_cache_obj, ok := vs_cache.(*utils.AviVsCache)
-	if ok {
+	if found {
+		vs_cache_obj, ok := vs_cache.(*utils.AviVsCache)
+		if !ok {
+			utils.AviLog.Warning.Printf("Invalid VS object. Cannot cast. Not doing anything")
+			return
+		}
 		pools_in_cache := make([]utils.NamespaceName, len(vs_cache_obj.PoolKeyCollection))
 		copy(pools_in_cache, vs_cache_obj.PoolKeyCollection)
 		pools_to_delete, rest_ops = PoolCU(pools, pools_in_cache, gatewayNs, cache, rest_ops)
@@ -54,20 +65,7 @@ func DeQueueNodes(key string) {
 		httpps_in_cache := make([]utils.NamespaceName, len(vs_cache_obj.HTTPKeyCollection))
 		copy(httpps_in_cache, vs_cache_obj.HTTPKeyCollection)
 		https_to_delete, rest_ops = HTTPPolicyCU(HTTPPolicies, httpps_in_cache, gatewayNs, rest_ops)
-	} else {
-		_, rest_ops = PoolCU(pools, nil, gatewayNs, cache, rest_ops)
-		_, rest_ops = PoolGroupCU(poolGroups, nil, gatewayNs, cache, rest_ops)
-		_, rest_ops = HTTPPolicyCU(HTTPPolicies, nil, gatewayNs, rest_ops)
-	}
-	aviVSes := avimodel.GetAviVS()
-	if len(aviVSes) != 1 {
-		utils.AviLog.Error.Fatalf("More than one VS received. One Gateway should always map to one VS")
-		return
-	}
-	// There should be only one VS to parse per model
-	if ok {
-		// The VS cache was found
-		vs_cache_obj, _ := vs_cache.(*utils.AviVsCache)
+		// The VS cache was found.
 		// Cache found. Let's compare the checksums
 		if vs_cache_obj.CloudConfigCksum == fmt.Sprint(aviVSes[0].GetCheckSum()) {
 			utils.AviLog.Info.Printf("The checksums are same for VS %s, not doing anything", vs_cache_obj.Name)
@@ -78,10 +76,14 @@ func DeQueueNodes(key string) {
 			rest_ops = append(rest_ops, restOp...)
 		}
 	} else {
+		_, rest_ops = PoolCU(pools, nil, gatewayNs, cache, rest_ops)
+		_, rest_ops = PoolGroupCU(poolGroups, nil, gatewayNs, cache, rest_ops)
+		_, rest_ops = HTTPPolicyCU(HTTPPolicies, nil, gatewayNs, rest_ops)
 		// The cache was not found - it's a POST call.
 		restOp := AviVsBuild(aviVSes[0], HTTPPolicies, utils.RestPost, nil)
 		rest_ops = append(rest_ops, restOp...)
 	}
+
 	// Let's populate all the DELETE entries
 	rest_ops = HTTPPolicyDelete(https_to_delete, gatewayNs, rest_ops)
 	rest_ops = PoolGroupDelete(pgs_to_delete, gatewayNs, rest_ops)
@@ -97,28 +99,30 @@ func DeQueueNodes(key string) {
 		// Iterate over rest_ops in reverse and delete created objs
 		for i := len(rest_ops) - 1; i >= 0; i-- {
 			if rest_ops[i].Err == nil {
-				resp_arr, ok := rest_ops[i].Response.([]interface{})
-				if !ok {
-					utils.AviLog.Warning.Printf("Invalid resp type for rest_op %v", rest_ops[i])
-					continue
-				}
-				resp, ok := resp_arr[0].(map[string]interface{})
-				if ok {
-					uuid, ok := resp["uuid"].(string)
+				if rest_ops[i].Method == utils.RestPost {
+					resp_arr, ok := rest_ops[i].Response.([]interface{})
 					if !ok {
-						utils.AviLog.Warning.Printf("Invalid resp type for uuid %v",
-							resp)
+						utils.AviLog.Warning.Printf("Invalid resp type for rest_op %v", rest_ops[i])
 						continue
 					}
-					url := utils.AviModelToUrl(rest_ops[i].Model) + "/" + uuid
-					err := aviclient.AviSession.Delete(url)
-					if err != nil {
-						utils.AviLog.Warning.Printf("Error %v deleting url %v", err, url)
+					resp, ok := resp_arr[0].(map[string]interface{})
+					if ok {
+						uuid, ok := resp["uuid"].(string)
+						if !ok {
+							utils.AviLog.Warning.Printf("Invalid resp type for uuid %v",
+								resp)
+							continue
+						}
+						url := utils.AviModelToUrl(rest_ops[i].Model) + "/" + uuid
+						err := aviclient.AviSession.Delete(url)
+						if err != nil {
+							utils.AviLog.Warning.Printf("Error %v deleting url %v", err, url)
+						} else {
+							utils.AviLog.Info.Printf("Success deleting url %v", url)
+						}
 					} else {
-						utils.AviLog.Info.Printf("Success deleting url %v", url)
+						utils.AviLog.Warning.Printf("Invalid resp for rest_op %v", rest_ops[i])
 					}
-				} else {
-					utils.AviLog.Warning.Printf("Invalid resp for rest_op %v", rest_ops[i])
 				}
 			}
 		}
@@ -206,7 +210,7 @@ func PoolCU(pool_nodes []*nodes.AviPoolNode, cache_pool_nodes []utils.NamespaceN
 		for _, pool := range pool_nodes {
 			// check in the pool cache to see if this pool exists in AVI
 			pool_key := utils.NamespaceName{Namespace: gatewayNs, Name: pool.Name}
-			found := Contains(cache_pool_nodes, pool_key)
+			found := utils.HasElem(cache_pool_nodes, pool_key)
 			if found {
 				cache_pool_nodes = Remove(cache_pool_nodes, pool_key)
 				utils.AviLog.Info.Printf("The cache pool nodes are: %v", cache_pool_nodes)
@@ -249,7 +253,7 @@ func PoolGroupCU(pg_nodes []*nodes.AviPoolGroupNode, cache_pg_nodes []utils.Name
 		cache := utils.SharedAviObjCache()
 		for _, pg := range pg_nodes {
 			pg_key := utils.NamespaceName{Namespace: gatewayNs, Name: pg.Name}
-			found := Contains(cache_pg_nodes, pg_key)
+			found := utils.HasElem(cache_pg_nodes, pg_key)
 			if found {
 				cache_pg_nodes = Remove(cache_pg_nodes, pg_key)
 				pg_cache, ok := cache.PgCache.AviCacheGet(pg_key)
@@ -290,7 +294,7 @@ func HTTPPolicyCU(http_nodes []*nodes.AviHttpPolicySetNode, cache_http_nodes []u
 		cache := utils.SharedAviObjCache()
 		for _, http := range http_nodes {
 			http_key := utils.NamespaceName{Namespace: gatewayNs, Name: http.Name}
-			found := Contains(cache_http_nodes, http_key)
+			found := utils.HasElem(cache_http_nodes, http_key)
 			if found {
 				http_cache, ok := cache.HTTPCache.AviCacheGet(http_key)
 				if ok {
@@ -322,15 +326,6 @@ func HTTPPolicyCU(http_nodes []*nodes.AviHttpPolicySetNode, cache_http_nodes []u
 	}
 	utils.AviLog.Info.Printf("The HTTP Policies rest_op is %s", utils.Stringify(rest_ops))
 	return cache_http_nodes, rest_ops
-}
-
-func Contains(s []utils.NamespaceName, e utils.NamespaceName) bool {
-	for _, a := range s {
-		if a == e {
-			return true
-		}
-	}
-	return false
 }
 
 func Remove(s []utils.NamespaceName, r utils.NamespaceName) []utils.NamespaceName {

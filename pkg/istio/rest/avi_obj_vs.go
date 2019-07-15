@@ -56,14 +56,12 @@ func AviVsBuild(vs_meta *nodes.AviVsNode, httppolicynode []*nodes.AviHttpPolicyS
 	cksum := vs_meta.CloudConfigCksum
 	checksumstr := fmt.Sprint(cksum)
 	cr := utils.OSHIFT_K8S_CLOUD_CONNECTOR
-	tenant_ref := "https://10.52.2.37:9443/api/tenant/tenant-902769f1-f427-436c-a35c-fd0502b05269#istio-system"
 	vs := avimodels.VirtualService{Name: &name,
 		NetworkProfileRef:     &network_prof,
 		ApplicationProfileRef: &app_prof,
 		CloudConfigCksum:      &checksumstr,
 		CreatedBy:             &cr,
-		EastWestPlacement:     &east_west,
-		TenantRef:             &tenant_ref}
+		EastWestPlacement:     &east_west}
 
 	if vs_meta.DefaultPoolGroup != "" {
 		pool_ref := "/api/poolgroup/?name=" + vs_meta.DefaultPoolGroup

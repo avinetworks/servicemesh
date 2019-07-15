@@ -126,7 +126,7 @@ func AviPGCacheAdd(cache *utils.AviObjCache, rest_op *utils.RestOp, vsKey utils.
 				if vs_cache_obj.PGKeyCollection == nil {
 					vs_cache_obj.PGKeyCollection = []utils.NamespaceName{k}
 				} else {
-					if !Contains(vs_cache_obj.PGKeyCollection, k) {
+					if !utils.HasElem(vs_cache_obj.PGKeyCollection, k) {
 						vs_cache_obj.PGKeyCollection = append(vs_cache_obj.PGKeyCollection, k)
 					}
 				}

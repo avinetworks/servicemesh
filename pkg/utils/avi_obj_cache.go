@@ -207,8 +207,6 @@ func (c *AviObjCache) AviObjVSCachePopulate(client *clients.AviClient,
 						}
 					}
 				}
-				//vsvip_intf, _ := vs["vip"].(map[string]interface{})
-				AviLog.Info.Printf("MY GOD :%v", vs["vip"])
 				var tenant string
 				url, err := url.Parse(vs["tenant_ref"].(string))
 				if err != nil {

@@ -160,7 +160,7 @@ func (v *DRNSCache) UpdateSvcDRRefs(obj *IstioObject) {
 	var drList []string
 	service := v.GetServiceFromDRObj(obj)
 	_, drList = v.svcInstance.Service(obj.ConfigMeta.Namespace).GetSvcToDR(service)
-	if !Contains(drList, obj.ConfigMeta.Name) {
+	if !utils.HasElem(drList, obj.ConfigMeta.Name) {
 		drList = append(drList, obj.ConfigMeta.Name)
 	}
 	v.svcInstance.Service(obj.ConfigMeta.Namespace).UpdateSvcToDR(service, drList)

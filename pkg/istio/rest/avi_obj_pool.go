@@ -160,7 +160,7 @@ func AviPoolCacheAdd(cache *utils.AviObjCache, rest_op *utils.RestOp, vsKey util
 				if vs_cache_obj.PoolKeyCollection == nil {
 					vs_cache_obj.PoolKeyCollection = []utils.NamespaceName{k}
 				} else {
-					if !Contains(vs_cache_obj.PoolKeyCollection, k) {
+					if !utils.HasElem(vs_cache_obj.PoolKeyCollection, k) {
 						utils.AviLog.Info.Printf("Before adding pool collection %v and key :%v", vs_cache_obj.PoolKeyCollection, k)
 						vs_cache_obj.PoolKeyCollection = append(vs_cache_obj.PoolKeyCollection, k)
 					}

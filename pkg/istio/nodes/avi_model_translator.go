@@ -530,7 +530,7 @@ func (o *AviObjectGraph) extractServers(epObj *corev1.Endpoints, port_num int32,
 									if addr.NodeName != nil {
 										server.ServerNode = *addr.NodeName
 									}
-									if !Contains(pool_meta, server) {
+									if !utils.HasElem(pool_meta, server) {
 										pool_meta = append(pool_meta, server)
 									}
 								}
@@ -593,13 +593,4 @@ func (o *AviObjectGraph) BuildAviObjectGraph(namespace string, gatewayNs string,
 	o.GraphChecksum = o.GraphChecksum + VsNode.GetCheckSum()
 	utils.AviLog.Info.Printf("Checksum  for AVI VS object %v", VsNode.GetCheckSum())
 	utils.AviLog.Info.Printf("Computed Graph Checksum for VS is: %v", o.GraphChecksum)
-}
-
-func Contains(s []AviPoolMetaServer, e AviPoolMetaServer) bool {
-	for _, a := range s {
-		if a == e {
-			return true
-		}
-	}
-	return false
 }

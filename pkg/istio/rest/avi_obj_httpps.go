@@ -148,7 +148,7 @@ func AviHTTPPolicyCacheAdd(cache *utils.AviObjCache, rest_op *utils.RestOp, vsKe
 				if vs_cache_obj.HTTPKeyCollection == nil {
 					vs_cache_obj.HTTPKeyCollection = []utils.NamespaceName{k}
 				} else {
-					if !Contains(vs_cache_obj.HTTPKeyCollection, k) {
+					if !utils.HasElem(vs_cache_obj.HTTPKeyCollection, k) {
 						vs_cache_obj.HTTPKeyCollection = append(vs_cache_obj.HTTPKeyCollection, k)
 					}
 				}
