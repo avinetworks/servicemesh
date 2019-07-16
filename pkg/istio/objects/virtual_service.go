@@ -204,11 +204,15 @@ func (v *VirtualServiceNSCache) UpdateSvcVSRefs(obj *IstioObject) {
 	utils.AviLog.Info.Printf("The Services associated with VS: %s is %s ", obj.ConfigMeta.Name, services)
 	for _, service := range services {
 		_, vsList := v.svcInstance.Service(obj.ConfigMeta.Namespace).GetSvcToVS(service)
-		vsList = append(vsList, obj.ConfigMeta.Name)
-		v.svcInstance.Service(obj.ConfigMeta.Namespace).UpdateSvcToVSMapping(service, vsList)
+		if !Contains(vsList, obj.ConfigMeta.Name) {
+			vsList = append(vsList, obj.ConfigMeta.Name)
+			v.svcInstance.Service(obj.ConfigMeta.Namespace).UpdateSvcToVSMapping(service, vsList)
+		}
 	}
 	// Now update the VS to SVC relationship
-	v.vsToSvcInstance.AddOrUpdate(obj.ConfigMeta.Name, services)
+	if !Contains(services, obj.ConfigMeta.Name) {
+		v.vsToSvcInstance.AddOrUpdate(obj.ConfigMeta.Name, services)
+	}
 }
 
 func (v *VirtualServiceNSCache) DeleteSvcToVs(vsName string) {

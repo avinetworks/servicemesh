@@ -82,15 +82,15 @@ func VSToGateway(vsName string, namespace string) []string {
 		// Diff the two lists to see what are the gateways that could have possibly been removed from the VS.
 		for _, gateway := range gateways {
 			// Whatever is present in store, and not present in the current VS object, detect them
-			gatewayFound := false
+			gatewayDiff := false
 			for _, gatewayInStore := range gatewaysFromVSObj {
-				if gatewayInStore == gateway {
-					gatewayFound = true
+				if gatewayInStore != gateway {
+					gatewayDiff = true
 				}
 			}
-			if gatewayFound {
+			if gatewayDiff {
 				diffGateways = append(diffGateways, gateway)
-				gatewayFound = false
+				gatewayDiff = false
 			}
 		}
 		if len(diffGateways) > 0 {
