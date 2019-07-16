@@ -21,6 +21,7 @@ import (
 	"net"
 	"net/url"
 	"os"
+	"reflect"
 	"strings"
 	"sync"
 	"time"
@@ -142,6 +143,7 @@ func NewInformers(cs *kubernetes.Clientset) *Informers {
 		informerInstance = &Informers{
 			ServiceInformer: kubeInformerFactory.Core().V1().Services(),
 			EpInformer:      kubeInformerFactory.Core().V1().Endpoints(),
+			PodInformer:     kubeInformerFactory.Core().V1().Pods(),
 		}
 	})
 	return informerInstance
@@ -158,4 +160,28 @@ func GetInformers() *Informers {
 func Stringify(serialize interface{}) string {
 	json_marshalled, _ := json.Marshal(serialize)
 	return string(json_marshalled)
+}
+
+func ExtractGatewayNamespace(key string) (string, string) {
+	segments := strings.Split(key, "/")
+	if len(segments) == 2 {
+		return segments[0], segments[1]
+	}
+	return "", ""
+}
+
+func HasElem(s interface{}, elem interface{}) bool {
+	arrV := reflect.ValueOf(s)
+
+	if arrV.Kind() == reflect.Slice {
+		for i := 0; i < arrV.Len(); i++ {
+			// XXX - panics if slice element points to an unexported struct field
+			// see https://golang.org/pkg/reflect/#Value.Interface
+			if arrV.Index(i).Interface() == elem {
+				return true
+			}
+		}
+	}
+
+	return false
 }

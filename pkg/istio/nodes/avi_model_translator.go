@@ -44,8 +44,14 @@ type AviObjectGraphIntf interface {
 }
 
 type AviObjectGraph struct {
-	modelNodes []AviModelNode
-	Name       string
+	modelNodes    []AviModelNode
+	Name          string
+	GraphChecksum uint32
+}
+
+func (v *AviObjectGraph) GetCheckSum() uint32 {
+	// Calculate checksum and return
+	return v.GraphChecksum
 }
 
 func NewAviObjectGraph() *AviObjectGraph {
@@ -137,9 +143,58 @@ func (o *AviObjectGraph) evaluateHTTPMatch(matchrule []*networking.HTTPMatchRequ
 	return checksum
 }
 
+func (o *AviObjectGraph) ProcessDRs(drList []string, poolNode *AviPoolNode, namespace string, subset string) map[string]string {
+	for _, drName := range drList {
+		found, istioObj := istio_objs.SharedDRLister().DestinationRule(namespace).Get(drName)
+		drSpec := istioObj.Spec.(*networking.DestinationRule)
+		if found {
+			if subset != "" {
+				// We need to apply the DR's specific subset rule for this pool
+				for _, drSubset := range drSpec.Subsets {
+					if subset == drSubset.Name {
+						lbSettings := drSubset.TrafficPolicy.LoadBalancer
+						o.selectPolicy(poolNode, lbSettings)
+						// Return the labels to search for.
+						utils.AviLog.Info.Printf("The DR subset labels for the pool %s are: %v", poolNode.Name, drSubset.Labels)
+						return drSubset.Labels
+					}
+				}
+			} else {
+				lbSettings := drSpec.TrafficPolicy.LoadBalancer
+				o.selectPolicy(poolNode, lbSettings)
+				return nil
+			}
+			// TODO: Add support for consistent hash
+		} else {
+			utils.AviLog.Warning.Printf("DR object not found for DR name: %s", drName)
+		}
+	}
+	return nil
+}
+
+func (o *AviObjectGraph) selectPolicy(poolNode *AviPoolNode, lbSettings *networking.LoadBalancerSettings) {
+	if lbSettings == nil {
+		return
+	}
+	switch lbSettings.GetSimple() {
+	case networking.LoadBalancerSettings_LEAST_CONN:
+		poolNode.LbAlgorithm = utils.LeastConnection
+	case networking.LoadBalancerSettings_RANDOM:
+		// AVI does not support this - let's default to LEAST_CONN
+		poolNode.LbAlgorithm = utils.LeastConnection
+	case networking.LoadBalancerSettings_ROUND_ROBIN:
+		poolNode.LbAlgorithm = utils.RoundRobinConnection
+	case networking.LoadBalancerSettings_PASSTHROUGH:
+		// AVI does not support this - let's default to LEAST_CONN
+		poolNode.LbAlgorithm = utils.LeastConnection
+	}
+	return
+}
+
 func (o *AviObjectGraph) evaluateHTTPPools(ns string, randString string, destinations []*networking.HTTPRouteDestination, gatewayNs string) []*AviPoolNode {
 	var poolNodes []*AviPoolNode
 	for _, destination := range destinations {
+		var labels map[string]string
 		// For each destination, generate one pool. If weight is not present evalute it to 100.
 		serviceName := destination.Destination.Host
 		weight := destination.Weight
@@ -152,11 +207,18 @@ func (o *AviObjectGraph) evaluateHTTPPools(ns string, randString string, destina
 		// To be supported: obtain the servers for this service. Naming convention of the service is - svcname.ns.sub-domain
 		poolNode := &AviPoolNode{Name: poolName, Tenant: gatewayNs, Port: portNumber, Protocol: HTTP}
 		epObj, err := utils.GetInformers().EpInformer.Lister().Endpoints(ns).Get(serviceName)
+		// Get the destination rules for this service
+		found, destinationRules := istio_objs.SharedSvcLister().Service(ns).GetSvcToDR(serviceName)
+		utils.AviLog.Info.Printf(" Destination rules :%v obtained for service :%s", destinationRules, serviceName)
+		if found {
+			// We need to process Destination Rules for this service
+			labels = o.ProcessDRs(destinationRules, poolNode, ns, destination.Destination.Subset)
+		}
 		if err != nil || epObj == nil {
 			// There's no endpoint object for the service.
 			poolNode.Servers = nil
 		} else {
-			poolNode.Servers = o.extractServers(epObj, portNumber, portName)
+			poolNode.Servers = o.extractServers(epObj, portNumber, portName, destination.Destination.Subset, ns, labels)
 		}
 		if portName != "" {
 			poolNode.PortName = portName
@@ -164,6 +226,8 @@ func (o *AviObjectGraph) evaluateHTTPPools(ns string, randString string, destina
 			poolNode.Port = portNumber
 		}
 		poolNode.CalculateCheckSum()
+		o.GraphChecksum = o.GraphChecksum + poolNode.GetCheckSum()
+		utils.AviLog.Info.Printf("Computed Graph Checksum after calculating pool nodes is :%v", o.GraphChecksum)
 		o.AddModelNode(poolNode)
 		poolNodes = append(poolNodes, poolNode)
 	}
@@ -223,7 +287,20 @@ func (o *AviObjectGraph) evaluateMatchCriteria(matches []*networking.HTTPMatchRe
 	return matchCriteria
 }
 
-func checkPGExists(pgNodes []*AviPoolGroupNode, evalchecksum uint32) (bool, *AviPoolGroupNode) {
+func checkPGExistsInCache(pgNodes []*utils.AviPGCache, evalchecksum uint32) (bool, *utils.AviPGCache) {
+	// Iterate through the PG nodes and check if the node exists with the checksum.
+	utils.AviLog.Info.Printf("Evaluated checksum for PG is %v", evalchecksum)
+	for _, pgNode := range pgNodes {
+		if pgNode.CloudConfigCksum == fmt.Sprint(evalchecksum) {
+			//Node exists - return true
+			utils.AviLog.Info.Printf("Match found for PGNode :%s", pgNode.Name)
+			return true, pgNode
+		}
+	}
+	return false, nil
+}
+
+func checkPGExistsInModel(pgNodes []*AviPoolGroupNode, evalchecksum uint32) (bool, *AviPoolGroupNode) {
 	// Iterate through the PG nodes and check if the node exists with the checksum.
 	for _, pgNode := range pgNodes {
 		if pgNode.RuleChecksum == evalchecksum {
@@ -270,11 +347,33 @@ func (o *AviObjectGraph) ConstructAviPGPoolNodes(vs *istio_objs.IstioObject, mod
 	vsObj, _ := vs.Spec.(*networking.VirtualService)
 	vsName := vs.ConfigMeta.Name
 	var poolGroupNodes []*AviPoolGroupNode
-	var prevPoolGroupNodes []*AviPoolGroupNode
+	var prevPoolGroupNodes []*utils.AviPGCache
+	var prevModelPoolGroupNodes []*AviPoolGroupNode
 	// Fetch the model if it exists for the AVI Vs.
+	cache := utils.SharedAviObjCache()
+	gwNs, gw := utils.ExtractGatewayNamespace(model_name)
+	vsKey := utils.NamespaceName{Namespace: gwNs, Name: gw}
+	vs_cache, ok := cache.VsCache.AviCacheGet(vsKey)
+	vs_cache_obj, ok := vs_cache.(*utils.AviVsCache)
+	utils.AviLog.Info.Printf("The VS Obj is in translate %v", utils.Stringify(vs_cache_obj))
+	if ok {
+		// There's a VS Cache - let's check the PGs
+		if vs_cache_obj.PGKeyCollection != nil {
+			for _, pg_key := range vs_cache_obj.PGKeyCollection {
+				utils.AviLog.Info.Printf("The pg key to search in cache is %v", pg_key)
+				pg_cache, ok := cache.PgCache.AviCacheGet(pg_key)
+				if ok {
+					pg_cache_obj, _ := pg_cache.(*utils.AviPGCache)
+					prevPoolGroupNodes = append(prevPoolGroupNodes, pg_cache_obj)
+					utils.AviLog.Info.Printf("Added node to prev PG nodes :%v", utils.Stringify(prevPoolGroupNodes))
+				}
+			}
+		}
+	}
+
 	found, aviModel := objects.SharedAviGraphLister().Get(model_name)
 	if found {
-		prevPoolGroupNodes = aviModel.(*AviObjectGraph).GetAviPoolGroups()
+		prevModelPoolGroupNodes = aviModel.(*AviObjectGraph).GetAviPoolGroups()
 	}
 	// HTTP route handling.
 
@@ -282,10 +381,17 @@ func (o *AviObjectGraph) ConstructAviPGPoolNodes(vs *istio_objs.IstioObject, mod
 		// Generate the PG to Rules map
 		rulechecksum := o.evaluateHTTPMatch(httpRoute.Match)
 		// Check if the PG already exists or needs to be created
-		exists, presentPGNode := checkPGExists(prevPoolGroupNodes, rulechecksum)
+		exists, presentPGNode := checkPGExistsInCache(prevPoolGroupNodes, rulechecksum)
 		var pgName string
 		if !exists {
-			pgName = o.generateRandomStringName(vsName)
+			// Check if it exists in the in memory model or not.
+			found, pgNodeFromModel := checkPGExistsInModel(prevModelPoolGroupNodes, rulechecksum)
+			if found {
+				utils.AviLog.Info.Printf("Found PG in the model nodes that has a match checksum, using name :%s", pgNodeFromModel.Name)
+				pgName = pgNodeFromModel.Name
+			} else {
+				pgName = o.generateRandomStringName(vsName)
+			}
 		} else {
 			utils.AviLog.Info.Printf("The PG %s exists in cache with the same checksum", presentPGNode.Name)
 			pgName = presentPGNode.Name
@@ -299,8 +405,10 @@ func (o *AviObjectGraph) ConstructAviPGPoolNodes(vs *istio_objs.IstioObject, mod
 			pgNode.Members = append(pgNode.Members, &avimodels.PoolGroupMember{PoolRef: &pool_ref})
 		}
 		pgNode.CalculateCheckSum()
+		o.GraphChecksum = o.GraphChecksum + pgNode.GetCheckSum()
 		o.AddModelNode(pgNode)
 		utils.AviLog.Info.Printf("Evaluated the PG :%v", utils.Stringify(pgNode))
+		utils.AviLog.Info.Printf("Computed Graph Checksum after PG node creation is %v", o.GraphChecksum)
 		poolGroupNodes = append(poolGroupNodes, pgNode)
 	}
 	return poolGroupNodes
@@ -318,9 +426,6 @@ func (o *AviObjectGraph) ConstructAviVsNode(gwObj *istio_objs.IstioObject) *AviV
 	avi_vs_meta.ApplicationProfile = "System-HTTP"
 	// For HTTP it's always System-TCP-Proxy.
 	avi_vs_meta.NetworkProfile = "System-TCP-Proxy"
-	avi_vs_meta.CalculateCheckSum()
-	utils.AviLog.Info.Printf("Checksum  for AVI VS object %v", avi_vs_meta.GetCheckSum())
-	utils.AviLog.Info.Printf("Evaluated PortProto %v", avi_vs_meta.PortProto)
 	//o.AddModelNode(avi_vs_meta)
 	return avi_vs_meta
 }
@@ -381,13 +486,15 @@ func (o *AviObjectGraph) ConstructAviHttpPolicyNodes(gatewayNs string, vsObj *is
 	}
 	policyNode := &AviHttpPolicySetNode{Name: vsObj.ConfigMeta.Name, HppMap: httpPolicySet, Tenant: gatewayNs}
 	policyNode.CalculateCheckSum()
+	o.GraphChecksum = o.GraphChecksum + policyNode.GetCheckSum()
 	utils.AviLog.Info.Printf("The value of HTTP Policy Set is :%s", utils.Stringify(policyNode))
 	utils.AviLog.Info.Printf("Computed Checksum for HTTP Policy Set is %v", policyNode.GetCheckSum())
+	utils.AviLog.Info.Printf("Computed Graph Checksum after evaluating nodes for HTTP Policy Set is %v", o.GraphChecksum)
 	o.AddModelNode(policyNode)
 	return policyNode
 }
 
-func (o *AviObjectGraph) extractServers(epObj *corev1.Endpoints, port_num int32, port_name string) []AviPoolMetaServer {
+func (o *AviObjectGraph) extractServers(epObj *corev1.Endpoints, port_num int32, port_name string, subsets string, ns string, subsetLabels map[string]string) []AviPoolMetaServer {
 	//TODO: The POD based subsets will be handled subsequently.
 	var pool_meta []AviPoolMetaServer
 	for _, ss := range epObj.Subsets {
@@ -404,18 +511,48 @@ func (o *AviObjectGraph) extractServers(epObj *corev1.Endpoints, port_num int32,
 			//pool_meta.Port = epp_port
 			for _, addr := range ss.Addresses {
 				var atype string
-				ip := addr.IP
-				if utils.IsV4(addr.IP) {
-					atype = "V4"
+				if subsets != "" {
+					// Only qualify the servers that are part of the subsets
+					podObj, err := utils.GetInformers().PodInformer.Lister().Pods(ns).Get(addr.TargetRef.Name)
+					utils.AviLog.Info.Printf("The Pod Object labels during subset calculations is :%v and the subset labels from DR are: %v", podObj.Labels, subsetLabels)
+					if err == nil {
+						for labelkey, label := range podObj.Labels {
+							for subset_key, subset_label := range subsetLabels {
+								if labelkey == subset_key && label == subset_label {
+									ip := addr.IP
+									if utils.IsV4(addr.IP) {
+										atype = "V4"
+									} else {
+										atype = "V6"
+									}
+									a := avimodels.IPAddr{Type: &atype, Addr: &ip}
+									server := AviPoolMetaServer{Ip: a}
+									if addr.NodeName != nil {
+										server.ServerNode = *addr.NodeName
+									}
+									if !utils.HasElem(pool_meta, server) {
+										pool_meta = append(pool_meta, server)
+									}
+								}
+								utils.AviLog.Info.Printf("The POD object labels :%s", label)
+							}
+						}
+					}
+
 				} else {
-					atype = "V6"
+					ip := addr.IP
+					if utils.IsV4(addr.IP) {
+						atype = "V4"
+					} else {
+						atype = "V6"
+					}
+					a := avimodels.IPAddr{Type: &atype, Addr: &ip}
+					server := AviPoolMetaServer{Ip: a}
+					if addr.NodeName != nil {
+						server.ServerNode = *addr.NodeName
+					}
+					pool_meta = append(pool_meta, server)
 				}
-				a := avimodels.IPAddr{Type: &atype, Addr: &ip}
-				server := AviPoolMetaServer{Ip: a}
-				if addr.NodeName != nil {
-					server.ServerNode = *addr.NodeName
-				}
-				pool_meta = append(pool_meta, server)
 			}
 		}
 	}
@@ -451,5 +588,9 @@ func (o *AviObjectGraph) BuildAviObjectGraph(namespace string, gatewayNs string,
 			}
 		}
 	}
-
+	o.AddModelNode(VsNode)
+	VsNode.CalculateCheckSum()
+	o.GraphChecksum = o.GraphChecksum + VsNode.GetCheckSum()
+	utils.AviLog.Info.Printf("Checksum  for AVI VS object %v", VsNode.GetCheckSum())
+	utils.AviLog.Info.Printf("Computed Graph Checksum for VS is: %v", o.GraphChecksum)
 }

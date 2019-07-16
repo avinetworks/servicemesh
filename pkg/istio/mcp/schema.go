@@ -52,11 +52,23 @@ var (
 		Collection: "istio/networking/v1alpha3/serviceentries",
 	}
 
+	DestinationRule = ProtoSchema{
+		Type:        "destination-rule",
+		Plural:      "destination-rules",
+		Group:       "networking",
+		Version:     "v1alpha3",
+		MessageName: "istio.networking.v1alpha3.DestinationRule",
+		// Will change to ProcessSE, once we have the store updates in place.
+		Store:      ProcessDR,
+		GetAll:     GetAllDRs,
+		Collection: "istio/networking/v1alpha3/destinationrules",
+	}
 	// IstioConfigTypes lists all Istio config types with schemas and validation
 	IstioConfigTypes = ConfigDescriptor{
 		VirtualService,
 		Gateway,
 		ServiceEntry,
+		DestinationRule,
 	}
 )
 
@@ -74,6 +86,13 @@ func GetAllGateways() map[string]map[string]string {
 	return StoredGateways
 }
 
+func GetAllDRs() map[string]map[string]string {
+	// Obtain all the DR across namespaces. This should be of the form:
+	// {ns : {obj_name1: rvs, obj_name2: rv}}
+	StoredDRs := istio_objs.SharedDRLister().GetAllDRs()
+	return StoredDRs
+}
+
 func ProcessVS(currStore map[string]map[string]*istio_objs.IstioObject, prevStore map[string]map[string]string) {
 	// Let's make an update call with whatever we have in presentStore
 	for namespace, currObjMap := range currStore {
@@ -86,6 +105,23 @@ func ProcessVS(currStore map[string]map[string]*istio_objs.IstioObject, prevStor
 			if !found {
 				// This is a DELETE case
 				istio_objs.SharedVirtualServiceLister().VirtualService(namespace).Delete(objName)
+			}
+		}
+	}
+}
+
+func ProcessDR(currStore map[string]map[string]*istio_objs.IstioObject, prevStore map[string]map[string]string) {
+	// Let's make an update call with whatever we have in presentStore
+	for namespace, currObjMap := range currStore {
+		for _, obj := range currObjMap {
+			istio_objs.SharedDRLister().DestinationRule(namespace).Update(obj)
+		}
+		prevObjMap := prevStore[namespace]
+		for objName, _ := range prevObjMap {
+			_, found := currObjMap[objName]
+			if !found {
+				// This is a DELETE case
+				istio_objs.SharedDRLister().DestinationRule(namespace).Delete(objName)
 			}
 		}
 	}

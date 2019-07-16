@@ -165,7 +165,7 @@ func (v *VirtualServiceNSCache) DeleteVSToGw(vsName string) {
 
 func (v *VirtualServiceNSCache) DeleteGwToVsRefs(gwName string, vsName string) {
 	_, vsList := v.gwInstance.Gateway(v.namespace).GetVSMapping(gwName)
-	if Contains(vsList, vsName) {
+	if utils.HasElem(vsList, vsName) {
 		vsList = Remove(vsList, vsName)
 	}
 	v.gwInstance.Gateway(v.namespace).UpdateGWVSMapping(gwName, vsList)
@@ -186,7 +186,7 @@ func (v *VirtualServiceNSCache) UpdateGatewayVsRefs(obj *IstioObject) {
 		_, vsList := v.gwInstance.Gateway(ns).GetVSMapping(gateway)
 		// Update the VS with it's own namespace.
 		vsName := obj.ConfigMeta.Namespace + "/" + obj.ConfigMeta.Name
-		if Contains(vsList, vsName) {
+		if utils.HasElem(vsList, vsName) {
 			// The vsName is already added, continue
 			continue
 		}
@@ -204,18 +204,22 @@ func (v *VirtualServiceNSCache) UpdateSvcVSRefs(obj *IstioObject) {
 	utils.AviLog.Info.Printf("The Services associated with VS: %s is %s ", obj.ConfigMeta.Name, services)
 	for _, service := range services {
 		_, vsList := v.svcInstance.Service(obj.ConfigMeta.Namespace).GetSvcToVS(service)
-		vsList = append(vsList, obj.ConfigMeta.Name)
-		v.svcInstance.Service(obj.ConfigMeta.Namespace).UpdateSvcToVSMapping(service, vsList)
+		if !utils.HasElem(vsList, obj.ConfigMeta.Name) {
+			vsList = append(vsList, obj.ConfigMeta.Name)
+			v.svcInstance.Service(obj.ConfigMeta.Namespace).UpdateSvcToVSMapping(service, vsList)
+		}
 	}
 	// Now update the VS to SVC relationship
-	v.vsToSvcInstance.AddOrUpdate(obj.ConfigMeta.Name, services)
+	if !utils.HasElem(services, obj.ConfigMeta.Name) {
+		v.vsToSvcInstance.AddOrUpdate(obj.ConfigMeta.Name, services)
+	}
 }
 
 func (v *VirtualServiceNSCache) DeleteSvcToVs(vsName string) {
 	services := v.GetVSToSVC(vsName)
 	for _, service := range services {
 		_, vsList := v.svcInstance.Service(v.namespace).GetSvcToVS(service)
-		if Contains(vsList, vsName) {
+		if utils.HasElem(vsList, vsName) {
 			vsList = Remove(vsList, vsName)
 		}
 		v.svcInstance.Service(v.namespace).UpdateSvcToVSMapping(service, vsList)
@@ -284,15 +288,6 @@ func (v *VirtualServiceNSCache) GetServiceForVS(vs *IstioObject) []string {
 
 	return svcs
 
-}
-
-func Contains(s []string, e string) bool {
-	for _, a := range s {
-		if a == e {
-			return true
-		}
-	}
-	return false
 }
 
 func Remove(s []string, r string) []string {

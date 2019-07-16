@@ -19,17 +19,16 @@ import (
 
 	avimodels "github.com/avinetworks/sdk/go/models"
 	coreinformers "k8s.io/client-go/informers/core/v1"
-	extinformers "k8s.io/client-go/informers/extensions/v1beta1"
 )
 
 type EvType string
 
-const NumWorkers uint32 = 2
-
 const (
-	CreateEv EvType = "CREATE"
-	UpdateEv EvType = "UPDATE"
-	DeleteEv EvType = "DELETE"
+	CreateEv            EvType = "CREATE"
+	UpdateEv            EvType = "UPDATE"
+	DeleteEv            EvType = "DELETE"
+	NumWorkersIngestion uint32 = 1
+	NumWorkersGraph     uint32 = 2
 )
 
 const (
@@ -44,7 +43,7 @@ const (
 type Informers struct {
 	ServiceInformer coreinformers.ServiceInformer
 	EpInformer      coreinformers.EndpointsInformer
-	IngInformer     extinformers.IngressInformer
+	PodInformer     coreinformers.PodInformer
 }
 
 type AviRestObjMacro struct {
@@ -72,6 +71,7 @@ type RestOp struct {
 	Err      error
 	Model    string
 	Version  string
+	ObjName  string // Optional field - right only to be used for delete.
 }
 
 type ServiceMetadataObj struct {
@@ -156,11 +156,15 @@ type AviPoolCache struct {
 }
 
 type AviVsCache struct {
-	Name             string
-	Tenant           string
-	Uuid             string
-	ServiceMetadata  ServiceMetadataObj
-	CloudConfigCksum string
+	Name              string
+	Tenant            string
+	Uuid              string
+	Vip               []*avimodels.Vip
+	ServiceMetadata   ServiceMetadataObj
+	CloudConfigCksum  string
+	PGKeyCollection   []NamespaceName
+	PoolKeyCollection []NamespaceName
+	HTTPKeyCollection []NamespaceName
 }
 
 type AviPGCache struct {
@@ -168,6 +172,13 @@ type AviPGCache struct {
 	Tenant           string
 	Uuid             string
 	ServiceMetadata  ServiceMetadataObj
+	CloudConfigCksum string
+}
+
+type AviHTTPCache struct {
+	Name             string
+	Tenant           string
+	Uuid             string
 	CloudConfigCksum string
 }
 

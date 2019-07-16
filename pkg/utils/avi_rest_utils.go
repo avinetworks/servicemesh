@@ -41,7 +41,7 @@ func SharedAVIClients() *AviRestClientPool {
 		AviLog.Error.Panic(`AVI controller information missing. Update them in kubernetes secret or via environment variables.`)
 	}
 	clientonce.Do(func() {
-		AviClientInstance, _ = NewAviRestClientPool(NumWorkers,
+		AviClientInstance, _ = NewAviRestClientPool(NumWorkersGraph,
 			ctrlIpAddress, ctrlUsername, ctrlPassword)
 	})
 	return AviClientInstance

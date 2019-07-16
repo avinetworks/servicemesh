@@ -17,6 +17,7 @@ package nodes
 import (
 	"strings"
 
+	"github.com/avinetworks/servicemesh/pkg/istio/objects"
 	istio_objs "github.com/avinetworks/servicemesh/pkg/istio/objects"
 	"github.com/avinetworks/servicemesh/pkg/utils"
 )
@@ -68,6 +69,18 @@ func DequeueIngestion(key string) {
 			aviModelGraph.BuildAviObjectGraph(namespace, gatewayNs, gateway, gwObj)
 			if len(aviModelGraph.GetOrderedNodes()) != 0 {
 				model_name := gatewayNs + "/" + gateway
+				// First see if there's another instance of the same model in the store
+				found, aviModel := objects.SharedAviGraphLister().Get(model_name)
+				if found {
+					prevChecksum := aviModel.(*AviObjectGraph).GetCheckSum()
+					utils.AviLog.Info.Printf("The model: %s has a previous checksum: %v", model_name, prevChecksum)
+					presentChecksum := aviModelGraph.GetCheckSum()
+					utils.AviLog.Info.Printf("The model: %s has a present checksum: %v", model_name, presentChecksum)
+					if prevChecksum == presentChecksum {
+						utils.AviLog.Info.Printf("The model: %s has identical checksums, hence not processing. Checksum value: %v", model_name, presentChecksum)
+						continue
+					}
+				}
 				// TODO (sudswas): Lots of checksum optimization goes here
 				istio_objs.SharedAviGraphLister().Save(model_name, aviModelGraph)
 				utils.AviLog.Info.Printf("%s: The list of ordered nodes :%s", key, utils.Stringify(aviModelGraph.GetOrderedNodes()))
