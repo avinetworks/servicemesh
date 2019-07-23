@@ -83,7 +83,7 @@ func publishKeyToRestLayer(aviGraph *AviObjectGraph, gatewayNs string, gatewayNa
 	model_name := gatewayNs + "/" + gatewayName
 	// First see if there's another instance of the same model in the store
 	found, aviModel := objects.SharedAviGraphLister().Get(model_name)
-	if found {
+	if found && aviModel != nil {
 		prevChecksum := aviModel.(*AviObjectGraph).GetCheckSum()
 		utils.AviLog.Info.Printf("The model: %s has a previous checksum: %v", model_name, prevChecksum)
 		presentChecksum := aviGraph.GetCheckSum()

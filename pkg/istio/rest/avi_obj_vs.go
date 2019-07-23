@@ -18,6 +18,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"regexp"
 
 	avimodels "github.com/avinetworks/sdk/go/models"
 	"github.com/avinetworks/servicemesh/pkg/istio/nodes"
@@ -249,7 +250,27 @@ func AviVsCacheAdd(cache *utils.AviObjCache, rest_op *utils.RestOp) error {
 				resp)
 			svc_mdata_obj = utils.ServiceMetadataObj{}
 		}
-
+		vh_parent_uuid, found_parent := resp["vh_parent_vs_ref"]
+		if found_parent {
+			// the uuid is expected to be in the format: "https://IP:PORT/api/virtualservice/virtualservice-88fd9718-f4f9-4e2b-9552-d31336330e0e#mygateway"
+			vs_uuid := ExtractVsUuid(vh_parent_uuid.(string))
+			utils.AviLog.Info.Printf("Extracted the vs uuid from parent ref: %s", vs_uuid)
+			// Now let's get the VS key from this uuid
+			vsKey, foundvscache := cache.VsCache.AviCacheGetKeyByUuid(vs_uuid)
+			utils.AviLog.Info.Printf("Extracted the VS key from the uuid :%s", vsKey)
+			if foundvscache {
+				vs_obj := getVsCacheObj(vsKey.(utils.NamespaceName))
+				if !utils.HasElem(vs_obj.SNIChildCollection, uuid) {
+					vs_obj.SNIChildCollection = append(vs_obj.SNIChildCollection, uuid)
+				}
+			} else {
+				vs_cache_obj := utils.AviVsCache{Name: ExtractVsName(vh_parent_uuid.(string)), Tenant: rest_op.Tenant,
+					SNIChildCollection: []string{uuid}}
+				cache.VsCache.AviCacheAdd(vsKey, &vs_cache_obj)
+				utils.AviLog.Info.Print(spew.Sprintf("Added VS cache key during SNI update %v val %v\n", vsKey,
+					vs_cache_obj))
+			}
+		}
 		k := utils.NamespaceName{Namespace: rest_op.Tenant, Name: name}
 		vs_cache, ok := cache.VsCache.AviCacheGet(k)
 		if ok {
@@ -274,10 +295,37 @@ func AviVsCacheAdd(cache *utils.AviObjCache, rest_op *utils.RestOp) error {
 	return nil
 }
 
+func ExtractVsUuid(word string) string {
+	r, _ := regexp.Compile("virtualservice-.*.#")
+	result := r.FindAllString(word, -1)
+	if len(result) == 1 {
+		return result[0][:len(result[0])-1]
+	}
+	return ""
+}
+
+func ExtractVsName(word string) string {
+	r, _ := regexp.Compile("#.*")
+	result := r.FindAllString(word, -1)
+	if len(result) == 1 {
+		return result[0][1:]
+	}
+	return ""
+}
+
 func AviVsCacheDel(vs_cache *utils.AviCache, rest_op *utils.RestOp) error {
 
 	key := utils.NamespaceName{Namespace: rest_op.Tenant, Name: rest_op.ObjName}
 	vs_cache.AviCacheDelete(key)
 
 	return nil
+}
+
+func AviVSDel(uuid string, tenant string) *utils.RestOp {
+	path := "/api/virtualservice/" + uuid
+	rest_op := utils.RestOp{Path: path, Method: "DELETE",
+		Tenant: tenant, Model: "VirtualService", Version: utils.CtrlVersion}
+	utils.AviLog.Info.Print(spew.Sprintf("VirtualService DELETE Restop %v \n",
+		utils.Stringify(rest_op)))
+	return &rest_op
 }

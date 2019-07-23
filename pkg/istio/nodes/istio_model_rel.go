@@ -42,12 +42,17 @@ var (
 		Type:              "destination-rule",
 		GetParentGateways: DRToGateway,
 	}
+	Secret = GraphSchema{
+		Type:              "Secrets",
+		GetParentGateways: SecretToGateway,
+	}
 	SupportedGraphTypes = GraphDescriptor{
 		VirtualService,
 		Gateway,
 		Service,
 		Endpoint,
 		DestinationRule,
+		Secret,
 	}
 )
 

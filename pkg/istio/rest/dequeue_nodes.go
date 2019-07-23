@@ -29,18 +29,101 @@ func DeQueueNodes(key string) {
 		utils.AviLog.Info.Printf("No model found for the key %s", key)
 		return
 	}
-	avimodel := avimodelIntf.(*nodes.AviObjectGraph)
+	cache := utils.SharedAviObjCache()
 	gatewayNs, vsName := utils.ExtractGatewayNamespace(key)
+	vsKey := utils.NamespaceName{Namespace: gatewayNs, Name: vsName}
+	vs_cache_obj := getVsCacheObj(vsKey)
+	if ok && avimodelIntf == nil {
+		// This is a VS delete event.
+		if vs_cache_obj != nil {
+			deleteVSOper(vs_cache_obj, gatewayNs, cache)
+		}
+		return
+	}
+	avimodel := avimodelIntf.(*nodes.AviObjectGraph)
 	sniNode := avimodel.GetAviSNIVS()
-	RestOperation(vsName, gatewayNs, avimodel, false)
+	// Check for SNI child delete cases
+	if len(sniNode) == 0 && vs_cache_obj != nil && vs_cache_obj.SNIChildCollection != nil {
+		// The SNI nodes in the current model is 0 however, the cache contains a child collection.
+		for _, sni_uuid := range vs_cache_obj.SNIChildCollection {
+			sni_vs_key, ok := cache.VsCache.AviCacheGetKeyByUuid(sni_uuid)
+			if !ok {
+				utils.AviLog.Info.Printf("No SNI child key found in the VS cache.")
+			} else {
+				sni_vs_obj := getVsCacheObj(sni_vs_key.(utils.NamespaceName))
+				if sni_vs_obj != nil {
+					success := deleteVSOper(sni_vs_obj, gatewayNs, cache)
+					if success {
+						// Update the parent VS SNI info
+						vs_cache_obj.SNIChildCollection = filterKeyFromStringSlice(vs_cache_obj.SNIChildCollection, sni_uuid)
+						utils.AviLog.Info.Printf("Updated VS cache for SNI info :%s", utils.Stringify(vs_cache_obj))
+					}
+				} else {
+					utils.AviLog.Info.Printf("Couldn't find a SNI VS objects")
+				}
+			}
+		}
+	}
+
+	RestOperation(vsName, gatewayNs, avimodel, false, cache)
+
 	if len(sniNode) != 0 {
 		utils.AviLog.Info.Printf("Found SNI nodes to process :%s", utils.Stringify(sniNode))
-		RestOperation(sniNode[0].Name, gatewayNs, avimodel, true)
+		RestOperation(sniNode[0].Name, gatewayNs, avimodel, true, cache)
 	}
 
 }
 
-func RestOperation(vsName string, gatewayNs string, avimodel *nodes.AviObjectGraph, sniNode bool) {
+func getVsCacheObj(vsKey utils.NamespaceName) *utils.AviVsCache {
+	cache := utils.SharedAviObjCache()
+	vs_cache, found := cache.VsCache.AviCacheGet(vsKey)
+	if found {
+		vs_cache_obj, ok := vs_cache.(*utils.AviVsCache)
+		if !ok {
+			utils.AviLog.Warning.Printf("Invalid VS object found. Cannot cast. Not doing anything")
+			return nil
+		}
+		return vs_cache_obj
+	}
+	return nil
+}
+
+func deleteVSOper(vs_cache_obj *utils.AviVsCache, gatewayNs string, cache *utils.AviObjCache) bool {
+	var rest_ops []*utils.RestOp
+	avi_rest_client_pool := utils.SharedAVIClients()
+	aviclient := avi_rest_client_pool.AviClient[0]
+	if vs_cache_obj != nil {
+		rest_op := AviVSDel(vs_cache_obj.Uuid, gatewayNs)
+		rest_ops = append(rest_ops, rest_op)
+		err := avi_rest_client_pool.AviRestOperate(aviclient, rest_ops)
+		if err != nil {
+			// Just log it for now. TODO (sudswas): Should perform a retry
+			utils.AviLog.Info.Printf("Failed to DELETE VirtualService :%s", vs_cache_obj.Uuid)
+			return false
+		} else {
+			// Clear all the cache objests assuming they are deleted?
+			// Clear it from the model as well.
+			for _, pool := range vs_cache_obj.PoolKeyCollection {
+				cache.PoolCache.AviCacheDelete(pool)
+			}
+			for _, PG := range vs_cache_obj.PGKeyCollection {
+				cache.PgCache.AviCacheDelete(PG)
+			}
+			for _, httpKey := range vs_cache_obj.HTTPKeyCollection {
+				cache.HTTPCache.AviCacheDelete(httpKey)
+			}
+			for _, sslKey := range vs_cache_obj.SSLKeyCertCollection {
+				cache.SSLKeyCache.AviCacheDelete(sslKey)
+			}
+			AviVsCacheDel(cache.VsCache, rest_op)
+		}
+		return true
+	}
+	return false
+}
+
+func RestOperation(vsName string, gatewayNs string, avimodel *nodes.AviObjectGraph, sniNode bool, cache *utils.AviObjCache) {
+	avi_rest_client_pool := utils.SharedAVIClients()
 	var rest_ops []*utils.RestOp
 	var pools_to_delete []utils.NamespaceName
 	var pgs_to_delete []utils.NamespaceName
@@ -49,11 +132,11 @@ func RestOperation(vsName string, gatewayNs string, avimodel *nodes.AviObjectGra
 	// Order would be this: 1. Pools 2. PGs  3. HTTPPolicies. 4. SSLKeyCert 5. VS
 
 	pools := avimodel.GetAviPools()
-	cache := utils.SharedAviObjCache()
-	vsKey := utils.NamespaceName{Namespace: gatewayNs, Name: vsName}
 	poolGroups := avimodel.GetAviPoolGroups()
 	HTTPPolicies := avimodel.GetAviHttpPolicies()
 	SSLCertKeys := avimodel.GetAviSSLCertKeys()
+	vsKey := utils.NamespaceName{Namespace: gatewayNs, Name: vsName}
+	vs_cache, found := cache.VsCache.AviCacheGet(vsKey)
 
 	var aviVSes nodes.AviModelNode
 
@@ -67,8 +150,6 @@ func RestOperation(vsName string, gatewayNs string, avimodel *nodes.AviObjectGra
 			HTTPPolicies = nil
 		}
 	}
-	vs_cache, found := cache.VsCache.AviCacheGet(vsKey)
-
 	//Decide pool create/delete/update
 	if found {
 		vs_cache_obj, ok := vs_cache.(*utils.AviVsCache)
@@ -125,7 +206,6 @@ func RestOperation(vsName string, gatewayNs string, avimodel *nodes.AviObjectGra
 	rest_ops = PoolGroupDelete(pgs_to_delete, gatewayNs, rest_ops)
 	rest_ops = PoolDelete(pools_to_delete, gatewayNs, rest_ops)
 
-	avi_rest_client_pool := utils.SharedAVIClients()
 	aviclient := avi_rest_client_pool.AviClient[0]
 	utils.AviLog.Info.Printf("The list of REST OPS: %s", utils.Stringify(rest_ops))
 	err := avi_rest_client_pool.AviRestOperate(aviclient, rest_ops)
@@ -235,7 +315,7 @@ func SSLKeyCertDelete(ssl_to_delete []utils.NamespaceName, gatewayNs string, res
 		ssl_cache, ok := cache.SSLKeyCache.AviCacheGet(ssl_key)
 		if ok {
 			ssl_cache_obj, _ := ssl_cache.(*utils.AviSSLCache)
-			restOp := AviHttpPolicyDel(ssl_cache_obj.Uuid, gatewayNs)
+			restOp := AviSSLKeyCertDel(ssl_cache_obj.Uuid, gatewayNs)
 			restOp.ObjName = del_ssl.Name
 			rest_ops = append(rest_ops, restOp)
 		}
@@ -422,6 +502,15 @@ func SSLKeyCertCU(sslkey_nodes []*nodes.AviTLSKeyCertNode, cache_ssl_nodes []uti
 }
 
 func Remove(s []utils.NamespaceName, r utils.NamespaceName) []utils.NamespaceName {
+	for i, v := range s {
+		if v == r {
+			return append(s[:i], s[i+1:]...)
+		}
+	}
+	return s
+}
+
+func filterKeyFromStringSlice(s []string, r string) []string {
 	for i, v := range s {
 		if v == r {
 			return append(s[:i], s[i+1:]...)

@@ -99,7 +99,7 @@ func AviSSLKeyCertAdd(cache *utils.AviObjCache, rest_op *utils.RestOp, vsKey uti
 				if vs_cache_obj.SSLKeyCertCollection == nil {
 					vs_cache_obj.SSLKeyCertCollection = []utils.NamespaceName{k}
 				} else {
-					if !utils.HasElem(vs_cache_obj.PGKeyCollection, k) {
+					if !utils.HasElem(vs_cache_obj.SSLKeyCertCollection, k) {
 						vs_cache_obj.SSLKeyCertCollection = append(vs_cache_obj.SSLKeyCertCollection, k)
 					}
 				}

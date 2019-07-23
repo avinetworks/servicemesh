@@ -167,6 +167,7 @@ type AviVsCache struct {
 	PoolKeyCollection    []NamespaceName
 	HTTPKeyCollection    []NamespaceName
 	SSLKeyCertCollection []NamespaceName
+	SNIChildCollection   []string
 }
 
 type AviPGCache struct {

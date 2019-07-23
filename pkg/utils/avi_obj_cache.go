@@ -226,11 +226,19 @@ func (c *AviObjCache) AviObjVSCachePopulate(client *clients.AviClient,
 				pool_key_collection := c.AviPoolCachePopulate(client, cloud, vs["uuid"].(string))
 				http_policy_collection := c.AviHTTPPolicyCachePopulate(client, cloud, vs["uuid"].(string))
 				ssl_key_collection := c.AviHTTPPolicyCachePopulate(client, cloud, vs["uuid"].(string))
+				var sni_child_collection []string
+				vh_child, found := vs["vh_child_vs_uuid"]
+				if found {
+					for _, child := range vh_child.([]interface{}) {
+						sni_child_collection = append(sni_child_collection, child.(string))
+					}
+
+				}
 				vs_cache_obj := AviVsCache{Name: vs["name"].(string),
 					Tenant: tenant, Uuid: vs["uuid"].(string), Vip: nil,
 					CloudConfigCksum: vs["cloud_config_cksum"].(string),
 					ServiceMetadata:  svc_mdata_obj, PGKeyCollection: pg_key_collection, PoolKeyCollection: pool_key_collection, HTTPKeyCollection: http_policy_collection,
-					SSLKeyCertCollection: ssl_key_collection}
+					SSLKeyCertCollection: ssl_key_collection, SNIChildCollection: sni_child_collection}
 				k := NamespaceName{Namespace: tenant, Name: vs["name"].(string)}
 				c.VsCache.AviCacheAdd(k, &vs_cache_obj)
 

@@ -42,3 +42,8 @@ func (a *AviGraphLister) Get(vsName string) (bool, interface{}) {
 	ok, obj := a.AviGraphStore.Get(vsName)
 	return ok, obj
 }
+
+func (a *AviGraphLister) Delete(vsName string) {
+	a.AviGraphStore.Delete(vsName)
+
+}
