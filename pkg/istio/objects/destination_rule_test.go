@@ -28,6 +28,7 @@ func TestGetDRObject(t *testing.T) {
 	drLister.DestinationRule("default").Update(drObj)
 	drLister.DestinationRule("default").Update(drObj1)
 	dr := drLister.DestinationRule("default").GetAllDRNameVers()
+	// Obtaining a list of all the DR objects
 	drList := []string{}
 	for key := range dr {
 		drList = append(drList, key)

@@ -62,6 +62,7 @@ func checksumSetup() {
 
 	// Setting up a new Avi Object Graph
 	aviObjGraph = NewAviObjectGraph()
+	// Adding nodes to the Avi Object Graph
 	aviObjGraph.AddModelNode(aviVSNode)
 	aviObjGraph.AddModelNode(aviVSNode1)
 	aviObjGraph.AddModelNode(aviPGNode)

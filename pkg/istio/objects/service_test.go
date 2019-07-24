@@ -31,13 +31,13 @@ func TestGetServiceObject(t *testing.T) {
 	VSObj := MakeVirtualService("default", "vs_1", 1)
 	drLister.DestinationRule("default").Update(drObj)
 	vsVers := vsLister.VirtualService("default").GetAllVSNamesVers()
-	// Obtaining all the VS's in the default namespace
+	// Obtaining all the VS objects in the default namespace
 	vsList := []string{}
 	for key := range vsVers {
 		vsList = append(vsList, key)
 	}
 	dr := drLister.DestinationRule("default").GetAllDRNameVers()
-	// Obtaining all the DR's in the default namespace
+	// Obtaining all the DR objects in the default namespace
 	drList := []string{}
 	for key := range dr {
 		drList = append(drList, key)
