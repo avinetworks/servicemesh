@@ -229,6 +229,7 @@ func RestOperation(vsName string, gatewayNs string, avimodel *nodes.AviObjectGra
 								resp)
 							continue
 						}
+						utils.AviLog.Info.Printf("Model returned from REST call : %s", rest_ops[i].Model)
 						url := utils.AviModelToUrl(rest_ops[i].Model) + "/" + uuid
 						err := aviclient.AviSession.Delete(url)
 						if err != nil {

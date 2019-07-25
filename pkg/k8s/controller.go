@@ -91,7 +91,7 @@ func (c *AviController) SetupEventHandlers(cs *kubernetes.Clientset) {
 			key := "Endpoints/" + ObjKey(ep)
 			bkt := utils.Bkt(namespace, numWorkers)
 			c.workqueue[bkt].AddRateLimited(key)
-			utils.AviLog.Info.Printf("Added ADD Endpoint key from the kubernetes controller %s", key)
+			utils.AviLog.Info.Printf("ADD Endpoint key: %s", key)
 		},
 		DeleteFunc: func(obj interface{}) {
 			ep, ok := obj.(*corev1.Endpoints)
@@ -113,7 +113,7 @@ func (c *AviController) SetupEventHandlers(cs *kubernetes.Clientset) {
 			key := "Endpoints/" + ObjKey(ep)
 			bkt := utils.Bkt(namespace, numWorkers)
 			c.workqueue[bkt].AddRateLimited(key)
-			utils.AviLog.Info.Printf("Added DELETE Endpoint key from the kubernetes controller %s", key)
+			utils.AviLog.Info.Printf("DELETE Endpoint key: %s", key)
 		},
 		UpdateFunc: func(old, cur interface{}) {
 			oep := old.(*corev1.Endpoints)
@@ -123,7 +123,7 @@ func (c *AviController) SetupEventHandlers(cs *kubernetes.Clientset) {
 				key := "Endpoints/" + ObjKey(cep)
 				bkt := utils.Bkt(namespace, numWorkers)
 				c.workqueue[bkt].AddRateLimited(key)
-				utils.AviLog.Info.Printf("Added UPDATE Endpoint key from the kubernetes controller %s", key)
+				utils.AviLog.Info.Printf("UPDATE Endpoint key: %s", key)
 			}
 		},
 	}
@@ -135,7 +135,7 @@ func (c *AviController) SetupEventHandlers(cs *kubernetes.Clientset) {
 			key := "Pods/" + ObjKey(pod)
 			bkt := utils.Bkt(namespace, numWorkers)
 			c.workqueue[bkt].AddRateLimited(key)
-			utils.AviLog.Info.Printf("Added ADD POD key from the kubernetes controller %s", key)
+			utils.AviLog.Info.Printf("ADD POD key: %s", key)
 		},
 		DeleteFunc: func(obj interface{}) {
 			pod, ok := obj.(*corev1.Pod)
@@ -157,7 +157,7 @@ func (c *AviController) SetupEventHandlers(cs *kubernetes.Clientset) {
 			key := "Pods/" + ObjKey(pod)
 			bkt := utils.Bkt(namespace, numWorkers)
 			c.workqueue[bkt].AddRateLimited(key)
-			utils.AviLog.Info.Printf("Added DELETE POD key from the kubernetes controller %s", key)
+			utils.AviLog.Info.Printf("DELETE POD key: %s", key)
 		},
 		UpdateFunc: func(old, cur interface{}) {
 			oPod := old.(*corev1.Pod)
@@ -167,7 +167,7 @@ func (c *AviController) SetupEventHandlers(cs *kubernetes.Clientset) {
 				key := "Pods/" + ObjKey(cPod)
 				bkt := utils.Bkt(namespace, numWorkers)
 				c.workqueue[bkt].AddRateLimited(key)
-				utils.AviLog.Info.Printf("Added UPDATE POD key from the kubernetes controller %s", key)
+				utils.AviLog.Info.Printf("UPDATE POD key: %s", key)
 			}
 		},
 	}
@@ -179,7 +179,7 @@ func (c *AviController) SetupEventHandlers(cs *kubernetes.Clientset) {
 			key := "Secrets/" + ObjKey(secret)
 			bkt := utils.Bkt(namespace, numWorkers)
 			c.workqueue[bkt].AddRateLimited(key)
-			utils.AviLog.Info.Printf("Added ADD SECRET key from the kubernetes controller %s", key)
+			utils.AviLog.Info.Printf("ADD SECRET key: %s", key)
 		},
 		DeleteFunc: func(obj interface{}) {
 			secret, ok := obj.(*corev1.Secret)
@@ -201,7 +201,7 @@ func (c *AviController) SetupEventHandlers(cs *kubernetes.Clientset) {
 			key := "Secrets/" + ObjKey(secret)
 			bkt := utils.Bkt(namespace, numWorkers)
 			c.workqueue[bkt].AddRateLimited(key)
-			utils.AviLog.Info.Printf("Added DELETE secret key from the kubernetes controller %s", key)
+			utils.AviLog.Info.Printf("DELETE secret key: %s", key)
 		},
 		UpdateFunc: func(old, cur interface{}) {
 			oSecret := old.(*corev1.Secret)
@@ -211,7 +211,7 @@ func (c *AviController) SetupEventHandlers(cs *kubernetes.Clientset) {
 				key := "Secrets/" + ObjKey(cSecret)
 				bkt := utils.Bkt(namespace, numWorkers)
 				c.workqueue[bkt].AddRateLimited(key)
-				utils.AviLog.Info.Printf("Added UPDATE secret key from the kubernetes controller %s", key)
+				utils.AviLog.Info.Printf("UPDATE secret key: %s", key)
 			}
 		},
 	}
@@ -223,7 +223,7 @@ func (c *AviController) SetupEventHandlers(cs *kubernetes.Clientset) {
 			key := "Service/" + ObjKey(svc)
 			bkt := utils.Bkt(namespace, numWorkers)
 			c.workqueue[bkt].AddRateLimited(key)
-			utils.AviLog.Info.Printf("Added ADD Service key from the kubernetes controller %s", key)
+			utils.AviLog.Info.Printf("ADD Service key: %s", key)
 		},
 		DeleteFunc: func(obj interface{}) {
 			svc, ok := obj.(*corev1.Service)
@@ -245,7 +245,7 @@ func (c *AviController) SetupEventHandlers(cs *kubernetes.Clientset) {
 			key := "Service/" + ObjKey(svc)
 			bkt := utils.Bkt(namespace, numWorkers)
 			c.workqueue[bkt].AddRateLimited(key)
-			utils.AviLog.Info.Printf("Added DELETE Service key from the kubernetes controller %s", key)
+			utils.AviLog.Info.Printf("DELETE Service key: %s", key)
 		},
 		UpdateFunc: func(old, cur interface{}) {
 			oldobj := old.(*corev1.Service)
@@ -256,7 +256,7 @@ func (c *AviController) SetupEventHandlers(cs *kubernetes.Clientset) {
 				key := "Service/" + ObjKey(svc)
 				bkt := utils.Bkt(namespace, numWorkers)
 				c.workqueue[bkt].AddRateLimited(key)
-				utils.AviLog.Info.Printf("Added UPDATE service key from the kubernetes controller %s", key)
+				utils.AviLog.Info.Printf("UPDATE service key: %s", key)
 			}
 		},
 	}

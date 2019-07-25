@@ -152,7 +152,7 @@ func (v *GatewayNSCache) List() map[string]*IstioObject {
 
 func (v *GatewayNSCache) UpdateSecretGWRefs(obj *IstioObject) {
 
-	secrets := v.GetSecretFromGW(obj)
+	secrets := v.GetSecretsFromGW(obj)
 	v.gwToSecretInstance.AddOrUpdate(obj.ConfigMeta.Name, secrets)
 	utils.AviLog.Info.Printf("The Secrets associated with GW: %s is %s ", obj.ConfigMeta.Name, secrets)
 	for _, secret := range secrets {
@@ -175,7 +175,7 @@ func (v *GatewayNSCache) GetSecretsForGateway(gwName string) []string {
 
 func (v *GatewayNSCache) RemoveSecretGWRefs(gwName string, gwNs string) {
 	_, secrets := v.gwToSecretInstance.Get(gwName)
-	utils.AviLog.Info.Printf("The Secrets associated with GW during DELETE: %s is %s ", gwName, secrets)
+	utils.AviLog.Info.Printf("Gateway/%s associated secrets are %s ", gwName, secrets)
 	for _, secret := range secrets.([]string) {
 		_, gwList := v.secretInstance.Secret(gwNs).GetSecretToGW(secret)
 		if utils.HasElem(gwList, gwName) {
@@ -190,7 +190,7 @@ func (v *GatewayNSCache) DeleteGwSecretMapping(gwName string) {
 	v.gwToSecretInstance.Delete(gwName)
 }
 
-func (v *GatewayNSCache) GetSecretFromGW(obj *IstioObject) []string {
+func (v *GatewayNSCache) GetSecretsFromGW(obj *IstioObject) []string {
 	// The secret is present in the tls section
 	/*
 		apiVersion: networking.istio.io/v1alpha3
@@ -211,19 +211,20 @@ func (v *GatewayNSCache) GetSecretFromGW(obj *IstioObject) []string {
 		    hosts:
 			- "httpbin.example.com" */
 
+	// We don't support the file mount based secrets.
 	gwObj, ok := obj.Spec.(*networking.Gateway)
 	if !ok {
 		// This is not the right object to cast to VirtualService return error.
 		utils.AviLog.Warning.Printf("Wrong object passed. Expecting a Gateway object %v", gwObj)
 		return nil
 	}
-	var secretName []string
+	var secretNameList []string
 	for _, server := range gwObj.Servers {
 		if server.Tls != nil {
 			if server.Tls.Mode == networking.Server_TLSOptions_SIMPLE {
-				secretName = append(secretName, server.Tls.CredentialName)
+				secretNameList = append(secretNameList, server.Tls.CredentialName)
 			}
 		}
 	}
-	return secretName
+	return secretNameList
 }

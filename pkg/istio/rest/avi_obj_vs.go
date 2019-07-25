@@ -46,28 +46,35 @@ func AviVsSniBuild(vs_meta *nodes.AviVsTLSNode, httppolicynode []*nodes.AviHttpP
 	sniChild.VhDomainName = vs_meta.VHDomainNames
 	ignPool := true
 	sniChild.IgnPoolNetReach = &ignPool
-	for _, sslkeycert := range vs_meta.TLSKeyCert {
-		certName := "/api/sslkeyandcertificate/?name=" + sslkeycert.Name
-		sniChild.SslKeyAndCertificateRefs = append(sniChild.SslKeyAndCertificateRefs, certName)
-	}
 	svc_meta_json, _ := json.Marshal(vs_meta.AviVsNode.ServiceMetadata)
 	svc_meta := string(svc_meta_json)
 	sniChild.ServiceMetadata = &svc_meta
-	var rest_ops []*utils.RestOp
 
-	var i int32
-	i = 0
-	var httpPolicyCollection []*avimodels.HTTPPolicies
-	for _, http := range httppolicynode {
-		// Update them on the VS object
-		var j int32
-		j = i + 11
-		i = i + 1
-		httpPolicy := fmt.Sprintf("/api/httppolicyset/?name=%s", http.Name)
-		httpPolicies := &avimodels.HTTPPolicies{HTTPPolicySetRef: &httpPolicy, Index: &j}
-		httpPolicyCollection = append(httpPolicyCollection, httpPolicies)
+	if vs_meta.DefaultPool != "" {
+		pool_ref := "/api/pool/?name=" + vs_meta.DefaultPool
+		sniChild.PoolRef = &pool_ref
 	}
-	sniChild.HTTPPolicies = httpPolicyCollection
+	var rest_ops []*utils.RestOp
+	// No need of HTTP rules for TLS passthrough.
+	if vs_meta.TLSType != "PASSTHROUGH" {
+		for _, sslkeycert := range vs_meta.TLSKeyCert {
+			certName := "/api/sslkeyandcertificate/?name=" + sslkeycert.Name
+			sniChild.SslKeyAndCertificateRefs = append(sniChild.SslKeyAndCertificateRefs, certName)
+		}
+		var i int32
+		i = 0
+		var httpPolicyCollection []*avimodels.HTTPPolicies
+		for _, http := range httppolicynode {
+			// Update them on the VS object
+			var j int32
+			j = i + 11
+			i = i + 1
+			httpPolicy := fmt.Sprintf("/api/httppolicyset/?name=%s", http.Name)
+			httpPolicies := &avimodels.HTTPPolicies{HTTPPolicySetRef: &httpPolicy, Index: &j}
+			httpPolicyCollection = append(httpPolicyCollection, httpPolicies)
+		}
+		sniChild.HTTPPolicies = httpPolicyCollection
+	}
 	var rest_op utils.RestOp
 	var path string
 	if rest_method == utils.RestPut {
@@ -87,7 +94,7 @@ func AviVsSniBuild(vs_meta *nodes.AviVsTLSNode, httppolicynode []*nodes.AviHttpP
 
 	}
 
-	utils.AviLog.Info.Print(spew.Sprintf("VS Restop %v K8sAviVsMeta %v\n", utils.Stringify(rest_op),
+	utils.AviLog.Info.Print(spew.Sprintf("TLS VS Restop %v K8sAviVsMeta %v\n", utils.Stringify(rest_op),
 		*vs_meta))
 	return rest_ops
 }
@@ -160,7 +167,7 @@ func AviVsBuild(vs_meta *nodes.AviVsNode, httppolicynode []*nodes.AviHttpPolicyS
 			onw_profile := "/api/networkprofile/?name=System-UDP-Fast-Path"
 			svc.OverrideNetworkProfileRef = &onw_profile
 		}
-		if pp.Secret != "" {
+		if pp.Secret != "" || pp.Passthrough {
 			ssl_enabled := true
 			svc.EnableSsl = &ssl_enabled
 		}

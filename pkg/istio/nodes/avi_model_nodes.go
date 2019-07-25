@@ -45,6 +45,9 @@ type AviVsTLSNode struct {
 	CloudConfigCksum uint32
 	Name             string
 	TLSKeyCert       []*AviTLSKeyCertNode
+	DefaultPool      string
+	TLSType          string
+	Tenant           string
 	*AviVsNode
 }
 
@@ -139,10 +142,11 @@ type AviPoolMetaServer struct {
 }
 
 type AviPortHostProtocol struct {
-	Port     int32
-	Protocol string
-	Hosts    []string
-	Secret   string
+	Port        int32
+	Protocol    string
+	Hosts       []string
+	Secret      string
+	Passthrough bool
 }
 
 type AviPortStrProtocol struct {

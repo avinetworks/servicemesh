@@ -139,7 +139,7 @@ func DetectGatewayChanges(gwName string, namespace string) ([]string, bool) {
 		return gateways, false
 	} else {
 		// Check if this gateway has a TLS route.
-		secrets := istio_objs.SharedGatewayLister().Gateway(namespace).GetSecretFromGW(gwObj)
+		secrets := istio_objs.SharedGatewayLister().Gateway(namespace).GetSecretsFromGW(gwObj)
 		if len(secrets) > 0 {
 			istio_objs.SharedGatewayLister().Gateway(namespace).UpdateSecretGWRefs(gwObj)
 		}
@@ -163,6 +163,9 @@ func SvcToGateway(svcName string, namespace string) ([]string, bool) {
 		gateways = append(gateways, vsGw...)
 	}
 	utils.AviLog.Info.Printf("svc-%s-%s, total gateways retrieved:  %s", namespace, svcName, gateways)
+	if len(gateways) == 0 {
+		return nil, false
+	}
 	return gateways, true
 }
 
