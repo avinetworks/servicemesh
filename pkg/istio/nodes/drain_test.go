@@ -189,6 +189,7 @@ func TestSvcToGateway(t *testing.T) {
 	}
 }
 
+// Testing endpoint to gateway
 func TestEPToGateway(t *testing.T) {
 	g := gomega.NewGomegaWithT(t)
 	v := vsLister.VirtualService("default")
