@@ -128,6 +128,13 @@ func AviVsBuild(vs_meta *nodes.AviVsNode, httppolicynode []*nodes.AviHttpPolicyS
 	app_prof := "/api/applicationprofile/?name=" + vs_meta.ApplicationProfile
 	// TODO use PoolGroup and use policies if there are > 1 pool, etc.
 	name := vs_meta.Name
+	var dns_info_arr []*avimodels.DNSInfo
+	// Form the DNS_Info name_of_vs.namespace.<dns_ipam>
+	cache := utils.SharedAviObjCache()
+	cloud, _ := cache.CloudKeyCache.AviCacheGet("Default-Cloud")
+	fqdn := name + "." + vs_meta.Tenant + "." + cloud.(*utils.AviCloudPropertyCache).NSIpamDNS
+	dns_info := avimodels.DNSInfo{Fqdn: &fqdn}
+	dns_info_arr = append(dns_info_arr, &dns_info)
 	cksum := vs_meta.CloudConfigCksum
 	checksumstr := fmt.Sprint(cksum)
 	cr := utils.OSHIFT_K8S_CLOUD_CONNECTOR
@@ -136,6 +143,7 @@ func AviVsBuild(vs_meta *nodes.AviVsNode, httppolicynode []*nodes.AviHttpPolicyS
 		ApplicationProfileRef: &app_prof,
 		CloudConfigCksum:      &checksumstr,
 		CreatedBy:             &cr,
+		DNSInfo:               dns_info_arr,
 		EastWestPlacement:     &east_west}
 
 	if vs_meta.DefaultPoolGroup != "" {

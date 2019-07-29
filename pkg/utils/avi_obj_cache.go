@@ -17,6 +17,7 @@ package utils
 import (
 	"encoding/json"
 	"net/url"
+	"regexp"
 	"sync"
 
 	"github.com/avinetworks/sdk/go/clients"
@@ -28,6 +29,7 @@ type AviObjCache struct {
 	PgCache        *AviCache
 	HTTPCache      *AviCache
 	SSLKeyCache    *AviCache
+	CloudKeyCache  *AviCache
 	PoolCache      *AviCache
 	SvcToPoolCache *AviMultiCache
 }
@@ -39,6 +41,7 @@ func NewAviObjCache() *AviObjCache {
 	c.HTTPCache = NewAviCache()
 	c.PoolCache = NewAviCache()
 	c.SSLKeyCache = NewAviCache()
+	c.CloudKeyCache = NewAviCache()
 	c.SvcToPoolCache = NewAviMultiCache()
 	return &c
 }
@@ -152,6 +155,7 @@ func (c *AviObjCache) AviObjCachePopulate(client *clients.AviClient,
 
 	// Populate the VS cache
 	c.AviObjVSCachePopulate(client, cloud)
+	c.AviCloudPropertiesPopulate(client, cloud)
 
 }
 
@@ -389,6 +393,7 @@ func (c *AviObjCache) AviHTTPPolicyCachePopulate(client *clients.AviClient,
 	}
 	return http_key_collection
 }
+
 func (c *AviObjCache) AviSSLKeyAndCertPopulate(client *clients.AviClient,
 	cloud string, vs_uuid string) []NamespaceName {
 	var rest_response interface{}
@@ -445,4 +450,103 @@ func (c *AviObjCache) AviSSLKeyAndCertPopulate(client *clients.AviClient,
 		}
 	}
 	return ssl_key_collection
+}
+
+func (c *AviObjCache) AviCloudPropertiesPopulate(client *clients.AviClient,
+	cloud string) {
+	var rest_response interface{}
+	uri := "/api/cloud"
+	err := client.AviSession.Get(uri, &rest_response)
+	if err != nil {
+		AviLog.Warning.Printf(`CloudProperties Get uri %v returned err %v`, uri, err)
+	} else {
+		resp, ok := rest_response.(map[string]interface{})
+		if !ok {
+			AviLog.Warning.Printf(`CloudProperties Get uri %v returned %v type %T`, uri,
+				rest_response, rest_response)
+		} else {
+			AviLog.Info.Printf("CloudProperties Get uri %v returned %v ", uri,
+				resp["count"])
+			results, ok := resp["results"].([]interface{})
+			if !ok {
+				AviLog.Warning.Printf(`results not of type []interface{}
+								 Instead of type %T `, resp["results"])
+			}
+			for _, cloud_intf := range results {
+				cloud_pol, ok := cloud_intf.(map[string]interface{})
+				if !ok {
+					AviLog.Warning.Printf(`cloud_intf not of type map[string]
+									 interface{}. Instead of type %T`, cloud_intf)
+					continue
+				}
+
+				if cloud == cloud_pol["name"] {
+
+					cloud_obj := &AviCloudPropertyCache{Name: cloud, VType: "CLOUD_OSHIFT_K8S"}
+					if cloud_pol["dns_provider_ref"] != nil {
+						dns_uuid := ExtractDNSUuid(cloud_pol["dns_provider_ref"].(string))
+						cloud_obj.NSIpamDNS = c.AviDNSPropertyPopulate(client, dns_uuid)
+					}
+					c.CloudKeyCache.AviCacheAdd(cloud, cloud_obj)
+					AviLog.Info.Printf("Added CloudKeyCache cache key %v val %v",
+						cloud, cloud_obj)
+				}
+			}
+		}
+	}
+}
+
+func (c *AviObjCache) AviDNSPropertyPopulate(client *clients.AviClient,
+	nsDNSIpam string) string {
+	var rest_response interface{}
+	uri := "/api/ipamdnsproviderprofile/"
+	err := client.AviSession.Get(uri, &rest_response)
+	if err != nil {
+		AviLog.Warning.Printf(`DNSProperty Get uri %v returned err %v`, uri, err)
+		return ""
+	} else {
+		resp, ok := rest_response.(map[string]interface{})
+		if !ok {
+			AviLog.Warning.Printf(`DNSProperty Get uri %v returned %v type %T`, uri,
+				rest_response, rest_response)
+		} else {
+			AviLog.Info.Printf("DNSProperty Get uri %v returned %v ", uri,
+				resp["count"])
+			results, ok := resp["results"].([]interface{})
+			if !ok {
+				AviLog.Warning.Printf(`results not of type []interface{}
+								 Instead of type %T `, resp["results"])
+			}
+			for _, dns_intf := range results {
+				dns_pol, ok := dns_intf.(map[string]interface{})
+				if !ok {
+					AviLog.Warning.Printf(`dns_intf not of type map[string]
+									 interface{}. Instead of type %T`, dns_intf)
+					continue
+				}
+				if dns_pol["uuid"] == nsDNSIpam {
+
+					dns_profile := dns_pol["internal_profile"]
+					dns_profile_pol, dns_found := dns_profile.(map[string]interface{})
+					if dns_found {
+						dns_ipam := dns_profile_pol["dns_service_domain"].([]interface{})[0].(map[string]interface{})
+						// Pick the first dns profile
+						AviLog.Info.Printf("Found DNS_IPAM: %v", dns_ipam["domain_name"])
+						return dns_ipam["domain_name"].(string)
+					}
+
+				}
+			}
+		}
+	}
+	return ""
+}
+
+func ExtractDNSUuid(word string) string {
+	r, _ := regexp.Compile("ipamdnsproviderprofile-.*")
+	result := r.FindAllString(word, -1)
+	if len(result) == 1 {
+		return result[0][:len(result[0])]
+	}
+	return ""
 }
