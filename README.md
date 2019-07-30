@@ -4,12 +4,17 @@
 
 The AVI Mesh Controller is a layered collection of independent interoperable units that are used in conjunction to constitute a multi-cluster service mesh using AVI's Enterprise Grade LoadBalancers and Istio.
 
-The controller ingests the Kubernetes API server object updates, Istio's Galley object updates and pumps them into a unified queue. It translates these objects into AVI's API model by interacting with the AVI Controller over HTTP. AVI Controller then programs the Service Engines deployed in your kubernetes cluster to program all the rules that are expressed in the form of Istio traffic rules. As a first phase of implementation, the AMC works in conjunction with the Istio Gateway functionality by replacing the functionality of Envoy at the edge with AVI's Enterprise grade Service Engines,  with a 0 touch object manipulation of the existing Istio Infrastructure. 
+The controller ingests the Kubernetes API server object updates, Istio's Galley object updates and pumps them into a unified queue. In order to ensure completness of information to formulate an AVI REST API call, every kubernetes or Istio resource is traced back to a Gateway resource. For example, for a kubernetes update of an endpoint, AMC traces to the gateways that are impacted by this change. If the gateway relationship cannot be established, then it's assumed that a gateway resource is not directly or indirectly related to this resource update and that leads to discarding the update for any further action. However, if the gateway can be traced, then a complete walk of the relationships is performed as follows:
+
+    Gateways --> VirtualServices --> Services (Applicable Destination Rules) --> Endpoints --> Servers (based on pod labels)
+
+A bunch of AVI object nodes are generated corresponding to these Istio/K8s objects in the "Object Graph Transformation" layer and these are published to another queue that is eventually consumed by the API execution layer. These AVI object nodes are the `intended` AVI objects that are compared with the AMC cache to arrive at a decision of either CREATE, UPDATE or DELETE a corresponding AVI object via the API execution layer. The API execution layer calls the appropriate REST APIs of the AVI controller to create the corresponding objects in AVI. 
+
+As a consequence to this, the AVI controller  programs the Service Engines deployed in your kubernetes cluster to program all the rules that are expressed in the form of Istio traffic rules. As a first phase of implementation, the AMC works in conjunction with the Istio Gateway functionality by replacing the functionality of Envoy at the edge with AVI's Enterprise grade Service Engines, with a 0 touch object manipulation of the existing Istio Infrastructure. 
 
 The AMC flow can be visualized as follows:
 
 ![Alt text](Arch_AVI_Layers.png?raw=true "Title")
-
 
 ## Getting started
 
