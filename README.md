@@ -16,6 +16,9 @@ The AMC flow can be visualized as follows:
 
 ![Alt text](Arch_AVI_Layers.png?raw=true "Title")
 
+The object translation from Istio to AVI roughly looks like the below diagram (for HTTP based routes):
+
+![Alt text](AVI_Object_Transform.png?raw=true "Title")
 ## Getting started
 
 ##  Build process
