@@ -65,28 +65,28 @@ func setup() {
 
 func TestVSServiceCreate(t *testing.T) {
 	g := gomega.NewGomegaWithT(t)
-	gateways := VSToGateway("vs_1", "default")
+	gateways, _ := VSToGateway("vs_1", "default")
 	g.Expect(gateways).To(gomega.ContainElement("ns/gw1"))
 	svcs := vsLister.VirtualService("default").GetVSToSVC("vs_1")
 	expectedSvcs := []string{"reviews", "reviews.prod"}
 	g.Expect(svcs).To(gomega.Equal(expectedSvcs))
-	gateways = SvcToGateway("reviews", "default")
+	gateways, _ = SvcToGateway("reviews", "default")
 	g.Expect(gateways).To(gomega.ContainElement("ns/gw1"))
 
-	gateways = VSToGateway("vs_2", "default")
+	gateways, _ = VSToGateway("vs_2", "default")
 	g.Expect(gateways).To(gomega.ContainElement("ns/gw1"))
 	svcs = vsLister.VirtualService("default").GetVSToSVC("vs_2")
 	expectedSvcs = []string{"reviews", "reviews.prod"}
 	g.Expect(svcs).To(gomega.Equal(expectedSvcs))
-	gateways = SvcToGateway("reviews", "default")
+	gateways, _ = SvcToGateway("reviews", "default")
 	g.Expect(gateways).To(gomega.ContainElement("ns/gw1"))
 
 	//Testing whether values for a VS which was not created get returned correctly
-	gateways = VSToGateway("vs_5", "default")
+	gateways, _ = VSToGateway("vs_5", "default")
 	g.Expect(gateways).To(gomega.Equal([]string{}))
 	svcs = vsLister.VirtualService("default").GetVSToSVC("vs_5")
 	g.Expect(svcs).To(gomega.Equal([]string{}))
-	gateways = SvcToGateway("", "default")
+	gateways, _ = SvcToGateway("", "default")
 	g.Expect(gateways).To(gomega.BeNil())
 
 }
@@ -94,7 +94,7 @@ func TestVSServiceCreate(t *testing.T) {
 func TestVSToGateway(t *testing.T) {
 	g := gomega.NewGomegaWithT(t)
 	// get the associated gateways to the corresponding VS from the VSToGateway() method
-	gateways := VSToGateway("vs_1", "default")
+	gateways, _ := VSToGateway("vs_1", "default")
 	v := vsLister.VirtualService("default")
 
 	// get the gateways associated with the corresponding VS using the GetGatewaysForVS() method
@@ -112,7 +112,7 @@ func TestVSToGateway(t *testing.T) {
 	g.Expect(len(gateways)).To(gomega.Equal(1))
 
 	// Testing if an empty string array is returned by the VSToGateway() method when we pass a VS which has not been created
-	gateways = VSToGateway("vs_5", "default")
+	gateways, _ = VSToGateway("vs_5", "default")
 	check, gws2 := v.GetGatewaysForVS("vs_5")
 	if !check {
 		g.Expect(gateways).To(gomega.Equal(gws2))
@@ -149,7 +149,7 @@ func TestSvcToGateway(t *testing.T) {
 	svcs := v.GetVSToSVC("vs_1")
 
 	for _, service := range svcs {
-		gateways := SvcToGateway(service, "default")
+		gateways, _ := SvcToGateway(service, "default")
 		flag, vs := istio_objs.SharedSvcLister().Service("default").GetSvcToVS(service)
 		if flag {
 			for _, vsName := range vs {
@@ -171,7 +171,7 @@ func TestSvcToGateway(t *testing.T) {
 		g.Expect(SvcToGateway("", "default")).To(gomega.BeNil())
 	} else {
 		for _, service := range svcs {
-			gateways := SvcToGateway(service, "default")
+			gateways, _ := SvcToGateway(service, "default")
 			flag, vs := istio_objs.SharedSvcLister().Service("default").GetSvcToVS(service)
 			if flag {
 				for _, vsName := range vs {
@@ -197,7 +197,7 @@ func TestEPToGateway(t *testing.T) {
 
 	// Testing whether or not the EPToGateway() method works when we iterate over all the EP's and access the associated gateways
 	for _, ep := range svcs {
-		gateways := EPToGateway(ep, "default")
+		gateways, _ := EPToGateway(ep, "default")
 		flag, vs := istio_objs.SharedSvcLister().Service("default").GetSvcToVS(ep)
 		if flag {
 			for _, vsName := range vs {
@@ -218,10 +218,11 @@ func TestEPToGateway(t *testing.T) {
 	svcs = v.GetVSToSVC("vs_5")
 
 	if len(svcs) == 0 {
-		g.Expect(EPToGateway("", "default")).To(gomega.BeNil())
+		_, found := EPToGateway("", "default")
+		g.Expect(found).To(gomega.Equal(false))
 	} else {
 		for _, ep := range svcs {
-			gateways := EPToGateway(ep, "default")
+			gateways, _ := EPToGateway(ep, "default")
 			flag, vs := istio_objs.SharedSvcLister().Service("default").GetSvcToVS(ep)
 			if flag {
 				for _, vsName := range vs {
@@ -245,49 +246,50 @@ func TestGatewayChanges(t *testing.T) {
 	g := gomega.NewGomegaWithT(t)
 
 	// Checking whether or not a current Gateway is added/exists in the list of Gateways
-	gateways := DetectGatewayChanges("gw_1", "default")
+	gateways, _ := DetectGatewayChanges("gw_1", "default")
 	g.Expect(gateways).To(gomega.ContainElement("gw_1"))
 
 	//Deleting a current Gateway and checking if the DetectGatewayChanges() method returns nil or not
 	v := gwLister.Gateway("default")
 	if v.Delete("gw_1") {
-		g.Expect(DetectGatewayChanges("gw_1", "default")).To(gomega.BeNil())
+		_, found := DetectGatewayChanges("gw_1", "default")
+		g.Expect(found).To(gomega.Equal(false))
 	}
 
 	//Checking if the DetectGatewayChanges() method returns nil on checking if there is a Gateway which doesn't exist
-	gateways = DetectGatewayChanges("gw_3", "default")
-	g.Expect(gateways).To(gomega.BeNil())
+	_, found := DetectGatewayChanges("gw_3", "default")
+	g.Expect(found).To(gomega.Equal(false))
 }
 
 func TestVSServiceDelete(t *testing.T) {
 	// First delete it from the store - simulating the Ingestion Layer function.
 	vsLister.VirtualService("default").Delete("vs_1")
 	g := gomega.NewGomegaWithT(t)
-	gateways := VSToGateway("vs_1", "default")
+	gateways, _ := VSToGateway("vs_1", "default")
 	g.Expect(gateways).To(gomega.ContainElement("ns/gw1"))
 	svcs := vsLister.VirtualService("default").GetVSToSVC("vs_1")
 	// We don't expect the relationship to exist anymore.
 	g.Expect(len(svcs)).To(gomega.Equal(0))
-	gateways = SvcToGateway("reviews", "default")
+	gateways, _ = SvcToGateway("reviews", "default")
 	g.Expect(len(gateways)).To(gomega.Equal(1))
 
 	vsLister.VirtualService("default").Delete("vs_2")
-	gateways = VSToGateway("vs_2", "default")
+	gateways, _ = VSToGateway("vs_2", "default")
 	g.Expect(gateways).To(gomega.ContainElement("ns/gw1"))
 	svcs = vsLister.VirtualService("default").GetVSToSVC("vs_2")
 	g.Expect(len(svcs)).To(gomega.Equal(0))
 	// Now the service will not be able to trace to the gateway
-	gateways = SvcToGateway("reviews", "default")
+	gateways, _ = SvcToGateway("reviews", "default")
 	g.Expect(len(gateways)).To(gomega.Equal(0))
 
 	// Testing whether or not the correct values are returned when one tries to delete a VS which has already been deleted
 	emptyStringArray := []string{}
 	vsLister.VirtualService("default").Delete("vs_2")
-	gateways = VSToGateway("vs_2", "default")
+	gateways, _ = VSToGateway("vs_2", "default")
 	g.Expect(gateways).To(gomega.Equal(emptyStringArray))
 	svcs = vsLister.VirtualService("default").GetVSToSVC("vs_2")
 	g.Expect(len(svcs)).To(gomega.Equal(0))
-	gateways = SvcToGateway("reviews", "default")
+	gateways, _ = SvcToGateway("reviews", "default")
 	g.Expect(len(gateways)).To(gomega.Equal(0))
 
 }

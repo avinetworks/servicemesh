@@ -33,15 +33,17 @@ func DequeueIngestion(key string) {
 		return
 	}
 	sharedQueue := utils.SharedWorkQueue().GetQueueByName(utils.GraphLayer)
-	gatewayNames := schema.GetParentGateways(name, namespace)
+	gatewayNames, gateway_found := schema.GetParentGateways(name, namespace)
 	// Update the relationships associated with this object
-	if gatewayNames == nil && objType == "gateway" {
-		model_name := namespace + "/" + name
-		// This is a special case, Gateway delete event. We need to delete the entire VS.
-		// Short circuit and publish the VS key for deletion to Layer 3.
-		istio_objs.SharedAviGraphLister().Save(model_name, nil)
-		bkt := utils.Bkt(model_name, sharedQueue.NumWorkers)
-		sharedQueue.Workqueue[bkt].AddRateLimited(model_name)
+	if !gateway_found && objType == "gateway" {
+		for _, gwName := range gatewayNames {
+			model_name := namespace + "/" + gwName
+			// This is a special case, Gateway delete event. We need to delete the entire VS.
+			// Short circuit and publish the VS key for deletion to Layer 3.
+			istio_objs.SharedAviGraphLister().Save(model_name, nil)
+			bkt := utils.Bkt(model_name, sharedQueue.NumWorkers)
+			sharedQueue.Workqueue[bkt].AddRateLimited(model_name)
+		}
 		return
 	}
 	if len(gatewayNames) == 0 {
@@ -68,28 +70,33 @@ func DequeueIngestion(key string) {
 			aviModelGraph := NewAviObjectGraph()
 			aviModelGraph.BuildAviObjectGraph(namespace, gatewayNs, gateway, gwObj)
 			if len(aviModelGraph.GetOrderedNodes()) != 0 {
-				model_name := gatewayNs + "/" + gateway
-				// First see if there's another instance of the same model in the store
-				found, aviModel := objects.SharedAviGraphLister().Get(model_name)
-				if found {
-					prevChecksum := aviModel.(*AviObjectGraph).GetCheckSum()
-					utils.AviLog.Info.Printf("The model: %s has a previous checksum: %v", model_name, prevChecksum)
-					presentChecksum := aviModelGraph.GetCheckSum()
-					utils.AviLog.Info.Printf("The model: %s has a present checksum: %v", model_name, presentChecksum)
-					if prevChecksum == presentChecksum {
-						utils.AviLog.Info.Printf("The model: %s has identical checksums, hence not processing. Checksum value: %v", model_name, presentChecksum)
-						continue
-					}
-				}
-				// TODO (sudswas): Lots of checksum optimization goes here
-				istio_objs.SharedAviGraphLister().Save(model_name, aviModelGraph)
+				publishKeyToRestLayer(aviModelGraph, gatewayNs, gateway, sharedQueue)
 				utils.AviLog.Info.Printf("%s: The list of ordered nodes :%s", key, utils.Stringify(aviModelGraph.GetOrderedNodes()))
-				bkt := utils.Bkt(model_name, sharedQueue.NumWorkers)
-				sharedQueue.Workqueue[bkt].AddRateLimited(model_name)
+
 			}
 		}
 
 	}
+}
+
+func publishKeyToRestLayer(aviGraph *AviObjectGraph, gatewayNs string, gatewayName string, sharedQueue *utils.WorkerQueue) {
+	model_name := gatewayNs + "/" + gatewayName
+	// First see if there's another instance of the same model in the store
+	found, aviModel := objects.SharedAviGraphLister().Get(model_name)
+	if found && aviModel != nil {
+		prevChecksum := aviModel.(*AviObjectGraph).GetCheckSum()
+		utils.AviLog.Info.Printf("The model: %s has a previous checksum: %v", model_name, prevChecksum)
+		presentChecksum := aviGraph.GetCheckSum()
+		utils.AviLog.Info.Printf("The model: %s has a present checksum: %v", model_name, presentChecksum)
+		if prevChecksum == presentChecksum {
+			utils.AviLog.Info.Printf("The model: %s has identical checksums, hence not processing. Checksum value: %v", model_name, presentChecksum)
+			return
+		}
+	}
+	// TODO (sudswas): Lots of checksum optimization goes here
+	istio_objs.SharedAviGraphLister().Save(model_name, aviGraph)
+	bkt := utils.Bkt(model_name, sharedQueue.NumWorkers)
+	sharedQueue.Workqueue[bkt].AddRateLimited(model_name)
 }
 
 func BuildAviGraph(gws []string) {

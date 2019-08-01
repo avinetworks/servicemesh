@@ -68,6 +68,7 @@ func NewInformers(cs *kubernetes.Clientset) *utils.Informers {
 		ServiceInformer: kubeInformerFactory.Core().V1().Services(),
 		EpInformer:      kubeInformerFactory.Core().V1().Endpoints(),
 		PodInformer:     kubeInformerFactory.Core().V1().Pods(),
+		SecretInformer:  kubeInformerFactory.Core().V1().Secrets(),
 	}
 	return &informers
 }
@@ -90,7 +91,7 @@ func (c *AviController) SetupEventHandlers(cs *kubernetes.Clientset) {
 			key := "Endpoints/" + ObjKey(ep)
 			bkt := utils.Bkt(namespace, numWorkers)
 			c.workqueue[bkt].AddRateLimited(key)
-			utils.AviLog.Info.Printf("Added ADD Endpoint key from the kubernetes controller %s", key)
+			utils.AviLog.Info.Printf("ADD Endpoint key: %s", key)
 		},
 		DeleteFunc: func(obj interface{}) {
 			ep, ok := obj.(*corev1.Endpoints)
@@ -112,7 +113,7 @@ func (c *AviController) SetupEventHandlers(cs *kubernetes.Clientset) {
 			key := "Endpoints/" + ObjKey(ep)
 			bkt := utils.Bkt(namespace, numWorkers)
 			c.workqueue[bkt].AddRateLimited(key)
-			utils.AviLog.Info.Printf("Added DELETE Endpoint key from the kubernetes controller %s", key)
+			utils.AviLog.Info.Printf("DELETE Endpoint key: %s", key)
 		},
 		UpdateFunc: func(old, cur interface{}) {
 			oep := old.(*corev1.Endpoints)
@@ -122,7 +123,7 @@ func (c *AviController) SetupEventHandlers(cs *kubernetes.Clientset) {
 				key := "Endpoints/" + ObjKey(cep)
 				bkt := utils.Bkt(namespace, numWorkers)
 				c.workqueue[bkt].AddRateLimited(key)
-				utils.AviLog.Info.Printf("Added UPDATE Endpoint key from the kubernetes controller %s", key)
+				utils.AviLog.Info.Printf("UPDATE Endpoint key: %s", key)
 			}
 		},
 	}
@@ -134,7 +135,7 @@ func (c *AviController) SetupEventHandlers(cs *kubernetes.Clientset) {
 			key := "Pods/" + ObjKey(pod)
 			bkt := utils.Bkt(namespace, numWorkers)
 			c.workqueue[bkt].AddRateLimited(key)
-			utils.AviLog.Info.Printf("Added ADD POD key from the kubernetes controller %s", key)
+			utils.AviLog.Info.Printf("ADD POD key: %s", key)
 		},
 		DeleteFunc: func(obj interface{}) {
 			pod, ok := obj.(*corev1.Pod)
@@ -156,7 +157,7 @@ func (c *AviController) SetupEventHandlers(cs *kubernetes.Clientset) {
 			key := "Pods/" + ObjKey(pod)
 			bkt := utils.Bkt(namespace, numWorkers)
 			c.workqueue[bkt].AddRateLimited(key)
-			utils.AviLog.Info.Printf("Added DELETE POD key from the kubernetes controller %s", key)
+			utils.AviLog.Info.Printf("DELETE POD key: %s", key)
 		},
 		UpdateFunc: func(old, cur interface{}) {
 			oPod := old.(*corev1.Pod)
@@ -166,7 +167,51 @@ func (c *AviController) SetupEventHandlers(cs *kubernetes.Clientset) {
 				key := "Pods/" + ObjKey(cPod)
 				bkt := utils.Bkt(namespace, numWorkers)
 				c.workqueue[bkt].AddRateLimited(key)
-				utils.AviLog.Info.Printf("Added UPDATE POD key from the kubernetes controller %s", key)
+				utils.AviLog.Info.Printf("UPDATE POD key: %s", key)
+			}
+		},
+	}
+
+	secret_event_handler := cache.ResourceEventHandlerFuncs{
+		AddFunc: func(obj interface{}) {
+			secret := obj.(*corev1.Secret)
+			namespace, _, _ := cache.SplitMetaNamespaceKey(ObjKey(secret))
+			key := "Secrets/" + ObjKey(secret)
+			bkt := utils.Bkt(namespace, numWorkers)
+			c.workqueue[bkt].AddRateLimited(key)
+			utils.AviLog.Info.Printf("ADD SECRET key: %s", key)
+		},
+		DeleteFunc: func(obj interface{}) {
+			secret, ok := obj.(*corev1.Secret)
+			if !ok {
+				// endpoints was deleted but its final state is unrecorded.
+				tombstone, ok := obj.(cache.DeletedFinalStateUnknown)
+				if !ok {
+					utils.AviLog.Error.Printf("couldn't get object from tombstone %#v", obj)
+					return
+				}
+				secret, ok = tombstone.Obj.(*corev1.Secret)
+				if !ok {
+					utils.AviLog.Error.Printf("Tombstone contained object that is not an Pods: %#v", obj)
+					return
+				}
+			}
+			secret = obj.(*corev1.Secret)
+			namespace, _, _ := cache.SplitMetaNamespaceKey(ObjKey(secret))
+			key := "Secrets/" + ObjKey(secret)
+			bkt := utils.Bkt(namespace, numWorkers)
+			c.workqueue[bkt].AddRateLimited(key)
+			utils.AviLog.Info.Printf("DELETE secret key: %s", key)
+		},
+		UpdateFunc: func(old, cur interface{}) {
+			oSecret := old.(*corev1.Secret)
+			cSecret := cur.(*corev1.Secret)
+			if oSecret.ResourceVersion != cSecret.ResourceVersion {
+				namespace, _, _ := cache.SplitMetaNamespaceKey(ObjKey(cSecret))
+				key := "Secrets/" + ObjKey(cSecret)
+				bkt := utils.Bkt(namespace, numWorkers)
+				c.workqueue[bkt].AddRateLimited(key)
+				utils.AviLog.Info.Printf("UPDATE secret key: %s", key)
 			}
 		},
 	}
@@ -178,7 +223,7 @@ func (c *AviController) SetupEventHandlers(cs *kubernetes.Clientset) {
 			key := "Service/" + ObjKey(svc)
 			bkt := utils.Bkt(namespace, numWorkers)
 			c.workqueue[bkt].AddRateLimited(key)
-			utils.AviLog.Info.Printf("Added ADD Service key from the kubernetes controller %s", key)
+			utils.AviLog.Info.Printf("ADD Service key: %s", key)
 		},
 		DeleteFunc: func(obj interface{}) {
 			svc, ok := obj.(*corev1.Service)
@@ -200,7 +245,7 @@ func (c *AviController) SetupEventHandlers(cs *kubernetes.Clientset) {
 			key := "Service/" + ObjKey(svc)
 			bkt := utils.Bkt(namespace, numWorkers)
 			c.workqueue[bkt].AddRateLimited(key)
-			utils.AviLog.Info.Printf("Added DELETE Service key from the kubernetes controller %s", key)
+			utils.AviLog.Info.Printf("DELETE Service key: %s", key)
 		},
 		UpdateFunc: func(old, cur interface{}) {
 			oldobj := old.(*corev1.Service)
@@ -211,7 +256,7 @@ func (c *AviController) SetupEventHandlers(cs *kubernetes.Clientset) {
 				key := "Service/" + ObjKey(svc)
 				bkt := utils.Bkt(namespace, numWorkers)
 				c.workqueue[bkt].AddRateLimited(key)
-				utils.AviLog.Info.Printf("Added UPDATE service key from the kubernetes controller %s", key)
+				utils.AviLog.Info.Printf("UPDATE service key: %s", key)
 			}
 		},
 	}
@@ -219,6 +264,7 @@ func (c *AviController) SetupEventHandlers(cs *kubernetes.Clientset) {
 	c.informers.EpInformer.Informer().AddEventHandler(ep_event_handler)
 	c.informers.ServiceInformer.Informer().AddEventHandler(svc_event_handler)
 	c.informers.PodInformer.Informer().AddEventHandler(pod_event_handler)
+	c.informers.SecretInformer.Informer().AddEventHandler(secret_event_handler)
 
 }
 
@@ -226,11 +272,13 @@ func (c *AviController) Start(stopCh <-chan struct{}) {
 	go c.informers.ServiceInformer.Informer().Run(stopCh)
 	go c.informers.EpInformer.Informer().Run(stopCh)
 	go c.informers.PodInformer.Informer().Run(stopCh)
+	go c.informers.SecretInformer.Informer().Run(stopCh)
 
 	if !cache.WaitForCacheSync(stopCh,
 		c.informers.EpInformer.Informer().HasSynced,
 		c.informers.ServiceInformer.Informer().HasSynced,
 		c.informers.PodInformer.Informer().HasSynced,
+		c.informers.SecretInformer.Informer().HasSynced,
 	) {
 		runtime.HandleError(fmt.Errorf("Timed out waiting for caches to sync"))
 	} else {

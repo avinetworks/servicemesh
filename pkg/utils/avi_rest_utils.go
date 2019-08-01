@@ -113,6 +113,10 @@ func AviModelToUrl(model string) string {
 		return "/api/virtualservice"
 	case "PoolGroup":
 		return "/api/poolgroup"
+	case "SSLKeyAndCertificate":
+		return "/api/sslkeyandcertificate"
+	case "HTTPPolicySet":
+		return "/api/httppolicyset"
 	default:
 		AviLog.Warning.Printf("Unknown model %v", model)
 		return ""

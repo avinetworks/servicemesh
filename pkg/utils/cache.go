@@ -42,6 +42,20 @@ func (c *AviCache) AviCacheGet(k interface{}) (interface{}, bool) {
 	return val, ok
 }
 
+func (c *AviCache) AviCacheGetKeyByUuid(uuid string) (interface{}, bool) {
+	c.cache_lock.RLock()
+	defer c.cache_lock.RUnlock()
+	for key, value := range c.cache {
+		switch value.(type) {
+		case *AviVsCache:
+			if value.(*AviVsCache).Uuid == uuid {
+				return key, true
+			}
+		}
+	}
+	return nil, false
+}
+
 func (c *AviCache) AviCacheAdd(k interface{}, val interface{}) {
 	c.cache_lock.Lock()
 	defer c.cache_lock.Unlock()

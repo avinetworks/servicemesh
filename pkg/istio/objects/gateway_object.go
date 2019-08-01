@@ -18,6 +18,9 @@ package objects
 
 import (
 	"sync"
+
+	"github.com/avinetworks/servicemesh/pkg/utils"
+	networking "istio.io/api/networking/v1alpha3"
 )
 
 var gwlisterinstance *GatewayLister
@@ -30,6 +33,7 @@ func SharedGatewayLister() *GatewayLister {
 		gwlisterinstance = &GatewayLister{}
 		gwlisterinstance.gwvsstore = gwvsStore
 		gwlisterinstance.gwstore = GWStore
+		gwlisterinstance.gwsecretstore = NewObjectStore()
 	})
 	return gwlisterinstance
 }
@@ -40,14 +44,17 @@ type IstioGateway interface {
 }
 
 type GatewayLister struct {
-	gwstore   *ObjectStore
-	gwvsstore *ObjectStore
+	gwstore       *ObjectStore
+	gwvsstore     *ObjectStore
+	gwsecretstore *ObjectStore
 }
 
 func (v *GatewayLister) Gateway(ns string) *GatewayNSCache {
 	nsGwObjects := v.gwstore.GetNSStore(ns)
 	nsGwVsObjects := v.gwvsstore.GetNSStore(ns)
-	return &GatewayNSCache{namespace: ns, gwobjects: nsGwObjects, gwvsobjects: nsGwVsObjects}
+	gwToSecretInstance := v.gwsecretstore.GetNSStore(ns)
+	secretInstance := SharedSecretLister()
+	return &GatewayNSCache{namespace: ns, gwobjects: nsGwObjects, gwvsobjects: nsGwVsObjects, gwToSecretInstance: gwToSecretInstance, secretInstance: secretInstance}
 }
 
 func (v *GatewayLister) GetAllGateways() map[string]map[string]string {
@@ -74,9 +81,11 @@ type GatewayNameSpaceIntf interface {
 }
 
 type GatewayNSCache struct {
-	namespace   string
-	gwobjects   *ObjectMapStore
-	gwvsobjects *ObjectMapStore
+	namespace          string
+	gwobjects          *ObjectMapStore
+	gwvsobjects        *ObjectMapStore
+	gwToSecretInstance *ObjectMapStore
+	secretInstance     *SecretLister
 }
 
 func (v *GatewayNSCache) GetAllGatewayNameVers() map[string]string {
@@ -110,6 +119,10 @@ func (v *GatewayNSCache) GetVSMapping(gwname string) (bool, []string) {
 	}
 }
 
+func (v *GatewayNSCache) DeleteGwVSMapping(gwname string) bool {
+	return v.gwvsobjects.Delete(gwname)
+}
+
 func (v *GatewayNSCache) Update(obj *IstioObject) {
 	v.gwobjects.AddOrUpdate(obj.Name, obj)
 }
@@ -133,4 +146,85 @@ func (v *GatewayNSCache) List() map[string]*IstioObject {
 		convertedMap[key] = value.(*IstioObject)
 	}
 	return convertedMap
+}
+
+// --> All Secrets relationships follow
+
+func (v *GatewayNSCache) UpdateSecretGWRefs(obj *IstioObject) {
+
+	secrets := v.GetSecretsFromGW(obj)
+	v.gwToSecretInstance.AddOrUpdate(obj.ConfigMeta.Name, secrets)
+	utils.AviLog.Info.Printf("The Secrets associated with GW: %s is %s ", obj.ConfigMeta.Name, secrets)
+	for _, secret := range secrets {
+		_, gwList := v.secretInstance.Secret(obj.ConfigMeta.Namespace).GetSecretToGW(secret)
+		if !utils.HasElem(gwList, obj.ConfigMeta.Name) {
+			gwList = append(gwList, obj.ConfigMeta.Name)
+			v.secretInstance.Secret(obj.ConfigMeta.Namespace).UpdateSecretToGwMapping(secret, gwList)
+		}
+	}
+}
+
+func (v *GatewayNSCache) GetSecretsForGateway(gwName string) []string {
+	found, secrets := v.gwToSecretInstance.Get(gwName)
+	if found {
+		return secrets.([]string)
+	} else {
+		return nil
+	}
+}
+
+func (v *GatewayNSCache) RemoveSecretGWRefs(gwName string, gwNs string) {
+	_, secrets := v.gwToSecretInstance.Get(gwName)
+	utils.AviLog.Info.Printf("Gateway/%s associated secrets are %s ", gwName, secrets)
+	for _, secret := range secrets.([]string) {
+		_, gwList := v.secretInstance.Secret(gwNs).GetSecretToGW(secret)
+		if utils.HasElem(gwList, gwName) {
+			gwList = Remove(gwList, gwName)
+			v.secretInstance.Secret(gwNs).UpdateSecretToGwMapping(secret, gwList)
+		}
+	}
+}
+
+func (v *GatewayNSCache) DeleteGwSecretMapping(gwName string) {
+	// First update the SVC to VS relationship
+	v.gwToSecretInstance.Delete(gwName)
+}
+
+func (v *GatewayNSCache) GetSecretsFromGW(obj *IstioObject) []string {
+	// The secret is present in the tls section
+	/*
+		apiVersion: networking.istio.io/v1alpha3
+		kind: Gateway
+		metadata:
+		  name: mygateway
+		spec:
+		  selector:
+		    istio: ingressgateway # use istio default ingress gateway
+		  servers:
+		  - port:
+		      number: 443
+		      name: https
+		      protocol: HTTPS
+		    tls:
+		      mode: SIMPLE
+		      credentialName: "httpbin-credential" # must be the same as secret
+		    hosts:
+			- "httpbin.example.com" */
+
+	// We don't support the file mount based secrets.
+	gwObj, ok := obj.Spec.(*networking.Gateway)
+	if !ok {
+		// This is not the right object to cast to VirtualService return error.
+		utils.AviLog.Warning.Printf("Wrong object passed. Expecting a Gateway object %v", gwObj)
+		return nil
+	}
+	var secretNameList []string
+	for _, server := range gwObj.Servers {
+		if server.Tls != nil {
+			if server.Tls.Mode == networking.Server_TLSOptions_SIMPLE {
+				secretNameList = append(secretNameList, server.Tls.CredentialName)
+			}
+		}
+	}
+	return secretNameList
 }
