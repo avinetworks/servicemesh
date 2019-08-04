@@ -334,24 +334,27 @@ func (o *AviObjectGraph) evaluateHTTPMatchCriteria(matches []*networking.HTTPMat
 	return matchCriteria
 }
 
-func (o *AviObjectGraph) evaluateTLSMatchCriteria(matches []*networking.TLSMatchAttributes, vsNode *AviVsNode) []*AviVsTLSNode {
-	var tlsNodes []*AviVsTLSNode
+func (o *AviObjectGraph) evaluateTLSMatchCriteria(matches []*networking.TLSMatchAttributes, vsNode *AviVsNode, destinations []*networking.RouteDestination) {
 	for _, match := range matches {
-		utils.AviLog.Info.Printf("EVAL TLS")
+		randString := o.generateRandomStringName(fmt.Sprint(match.Port))
 		// Each Match criteria forms a SNI child
-		tlsVSNode := &AviVsTLSNode{Name: "tls-passthrough-" + vsNode.Name, TLSType: "PASSTHROUGH", VHParentName: vsNode.Name, Tenant: vsNode.Tenant, VHDomainNames: match.SniHosts}
+		tlsVSNode := &AviVsTLSNode{Name: "tls-passthrough-" + randString, TLSType: "PASSTHROUGH", VHParentName: vsNode.Name, Tenant: vsNode.Tenant, VHDomainNames: match.SniHosts}
 		tlsVSNode.AviVsNode = vsNode
+		pools := o.evaluateTLSPools(tlsVSNode.Tenant, "tls-pool-"+randString, destinations)
+		o.GraphChecksum = o.GraphChecksum + tlsVSNode.GetCheckSum()
+		if len(pools) == 1 {
+			tlsVSNode.DefaultPool = pools[0].Name
+		}
+		tlsVSNode.PoolRefs = pools
 		o.AddModelNode(tlsVSNode)
-		tlsNodes = append(tlsNodes, tlsVSNode)
 	}
-	// Should be either 0 nodes or 1 node, can't be more than 1.
-	return tlsNodes
 }
 
 func checkPGExistsInCache(pgNodes []*utils.AviPGCache, evalchecksum uint32) (bool, *utils.AviPGCache) {
 	// Iterate through the PG nodes and check if the node exists with the checksum.
 	utils.AviLog.Info.Printf("Evaluated checksum for PG is %v", evalchecksum)
 	for _, pgNode := range pgNodes {
+		utils.AviLog.Info.Printf("Checksum in store for PG is %v", pgNode.CloudConfigCksum)
 		if pgNode.CloudConfigCksum == fmt.Sprint(evalchecksum) {
 			//Node exists - return true
 			utils.AviLog.Info.Printf("Match found for PGNode :%s", pgNode.Name)
@@ -372,7 +375,7 @@ func checkPGExistsInModel(pgNodes []*AviPoolGroupNode, evalchecksum uint32) (boo
 	return false, nil
 }
 
-func (o *AviObjectGraph) ConstructAviPGPoolNodes(vs *istio_objs.IstioObject, model_name string, gatewayNs string, vsNode *AviVsNode) []*AviPoolGroupNode {
+func (o *AviObjectGraph) ConstructAviHTTPPGPoolNodes(vs *istio_objs.IstioObject, model_name string, AviVsName string, gatewayNs string, vsNode AviModelNode, isSniNode bool) []*AviPoolGroupNode {
 	// spec:
 	//   hosts:
 	//   - reviews.prod.svc.cluster.local
@@ -412,8 +415,7 @@ func (o *AviObjectGraph) ConstructAviPGPoolNodes(vs *istio_objs.IstioObject, mod
 	var prevModelPoolGroupNodes []*AviPoolGroupNode
 	// Fetch the model if it exists for the AVI Vs.
 	cache := utils.SharedAviObjCache()
-	gwNs, gw := utils.ExtractGatewayNamespace(model_name)
-	vsKey := utils.NamespaceName{Namespace: gwNs, Name: gw}
+	vsKey := utils.NamespaceName{Namespace: gatewayNs, Name: AviVsName}
 	vs_cache, ok := cache.VsCache.AviCacheGet(vsKey)
 	vs_cache_obj, ok := vs_cache.(*utils.AviVsCache)
 	if ok {
@@ -433,8 +435,17 @@ func (o *AviObjectGraph) ConstructAviPGPoolNodes(vs *istio_objs.IstioObject, mod
 
 	found, aviModel := objects.SharedAviGraphLister().Get(model_name)
 	if found && aviModel != nil {
-		prevModelPoolGroupNodes = aviModel.(*AviObjectGraph).GetAviPoolGroups()
+		if !isSniNode {
+			prevModelPoolGroupNodes = aviModel.(*AviObjectGraph).GetAviVS()[0].PoolGroupRefs
+			utils.AviLog.Info.Printf("Evaluating for non-SNI VS. The prevModel PGs are: %v", prevModelPoolGroupNodes)
+		} else {
+			for _, sniNode := range aviModel.(*AviObjectGraph).GetAviSNIVS() {
+				utils.AviLog.Info.Printf("Evaluating for SNI VS. The prevModel PGs are: %v", prevModelPoolGroupNodes)
+				prevModelPoolGroupNodes = append(prevModelPoolGroupNodes, sniNode.PoolGroupRefs...)
+			}
+		}
 	}
+
 	// HTTP route handling.
 
 	for _, httpRoute := range vsObj.Http {
@@ -450,7 +461,11 @@ func (o *AviObjectGraph) ConstructAviPGPoolNodes(vs *istio_objs.IstioObject, mod
 				utils.AviLog.Info.Printf("Found PG in the model nodes that has a match checksum, using name :%s", pgNodeFromModel.Name)
 				pgName = pgNodeFromModel.Name
 			} else {
-				pgName = o.generateRandomStringName(vsName)
+				if !isSniNode {
+					pgName = o.generateRandomStringName(vsName)
+				} else {
+					pgName = "tls-" + o.generateRandomStringName(vsName)
+				}
 			}
 		} else {
 			utils.AviLog.Info.Printf("The PG %s exists in cache with the same checksum", presentPGNode.Name)
@@ -469,15 +484,24 @@ func (o *AviObjectGraph) ConstructAviPGPoolNodes(vs *istio_objs.IstioObject, mod
 		o.AddModelNode(pgNode)
 		utils.AviLog.Info.Printf("Evaluated the PG :%v", utils.Stringify(pgNode))
 		utils.AviLog.Info.Printf("Computed Graph Checksum after PG node creation is %v", o.GraphChecksum)
+		if !isSniNode {
+			vsNode.(*AviVsNode).PoolGroupRefs = append(vsNode.(*AviVsNode).PoolGroupRefs, pgNode)
+			vsNode.(*AviVsNode).PoolRefs = append(vsNode.(*AviVsNode).PoolRefs, pools...)
+			utils.AviLog.Info.Printf("Updating PoolGroupRefs for Parent Node :%v", len(vsNode.(*AviVsNode).PoolGroupRefs))
+		} else {
+			vsNode.(*AviVsTLSNode).PoolGroupRefs = append(vsNode.(*AviVsTLSNode).PoolGroupRefs, pgNode)
+			vsNode.(*AviVsTLSNode).PoolRefs = append(vsNode.(*AviVsTLSNode).PoolRefs, pools...)
+			utils.AviLog.Info.Printf("Updating PoolGroupRefs for SNI child Node :%v", len(vsNode.(*AviVsTLSNode).PoolGroupRefs))
+		}
 		poolGroupNodes = append(poolGroupNodes, pgNode)
 	}
 	// Right now the assumption is that the TLS SNI Child will have only one pool, hence there's no need of a PG
 	// But if we have requirement where there are more than one pool, then we should change this code to include a PG.
-	o.ConstructTLSPassthroughPGs(vsObj, gwNs, vsNode)
+	//o.ConstructTLSPassthroughPGs(vsObj, gwNs, vsNode)
 	return poolGroupNodes
 }
 
-func (o *AviObjectGraph) evaluateTLSPools(ns string, randString string, destinations []*networking.RouteDestination, gatewayNs string) []*AviPoolNode {
+func (o *AviObjectGraph) evaluateTLSPools(ns string, randString string, destinations []*networking.RouteDestination) []*AviPoolNode {
 	var poolNodes []*AviPoolNode
 	for _, destination := range destinations {
 		var labels map[string]string
@@ -492,7 +516,7 @@ func (o *AviObjectGraph) evaluateTLSPools(ns string, randString string, destinat
 		poolName := serviceName + "-" + randString
 		// To be supported: obtain the servers for this service. Naming convention of the service is - svcname.ns.sub-domain
 		// TODO(sudswas): Does the protocol need to change?
-		poolNode := &AviPoolNode{Name: poolName, Tenant: gatewayNs, Port: portNumber, Protocol: HTTP}
+		poolNode := &AviPoolNode{Name: poolName, Tenant: ns, Port: portNumber, Protocol: HTTP}
 		epObj, err := utils.GetInformers().EpInformer.Lister().Endpoints(ns).Get(serviceName)
 		// Get the destination rules for this service
 		found, destinationRules := istio_objs.SharedSvcLister().Service(ns).GetSvcToDR(serviceName)
@@ -515,7 +539,6 @@ func (o *AviObjectGraph) evaluateTLSPools(ns string, randString string, destinat
 		poolNode.CalculateCheckSum()
 		o.GraphChecksum = o.GraphChecksum + poolNode.GetCheckSum()
 		utils.AviLog.Info.Printf("Computed Graph Checksum after calculating pool nodes is :%v", o.GraphChecksum)
-		o.AddModelNode(poolNode)
 		poolNodes = append(poolNodes, poolNode)
 	}
 	utils.AviLog.Info.Printf("Evaluated TLS Pools: %v", utils.Stringify(poolNodes))
@@ -524,33 +547,7 @@ func (o *AviObjectGraph) evaluateTLSPools(ns string, randString string, destinat
 
 func (o *AviObjectGraph) ConstructTLSPassthroughPGs(vsObj *networking.VirtualService, gatewayNs string, vsNode *AviVsNode) {
 	for _, tlsRoute := range vsObj.Tls {
-		// rulechecksum := o.evaluateTLSMatch(tlsRoute.Match)
-		// exists, presentPGNode := checkPGExistsInCache(prevPoolGroupNodes, rulechecksum)
-		// if !exists {
-		// 	// Check if it exists in the in memory model or not.
-		// 	found, pgNodeFromModel := checkPGExistsInModel(prevModelPoolGroupNodes, rulechecksum)
-		// 	if found {
-		// 		utils.AviLog.Info.Printf("Found TLS PG in the model nodes that has a match checksum, using name :%s", pgNodeFromModel.Name)
-		// 		pgName = pgNodeFromModel.Name
-		// 	} else {
-		// 		pgName = o.generateRandomStringName(vsName)
-		// 	}
-		// } else {
-		// 	utils.AviLog.Info.Printf("The TLS PG %s exists in cache with the same checksum", presentPGNode.Name)
-		// 	pgName = presentPGNode.Name
-		// }
-		utils.AviLog.Info.Printf("TLS route eval")
-		tlsNodes := o.evaluateTLSMatchCriteria(tlsRoute.Match, vsNode)
-		if len(tlsNodes) == 1 {
-			poolName := o.generateRandomStringName(tlsNodes[0].Name)
-			pools := o.evaluateTLSPools(tlsNodes[0].Tenant, poolName, tlsRoute.Route, gatewayNs)
-			//pgNode.CalculateCheckSum()
-			o.GraphChecksum = o.GraphChecksum + tlsNodes[0].GetCheckSum()
-			if len(pools) == 1 {
-				tlsNodes[0].DefaultPool = pools[0].Name
-			}
-		}
-		//o.AddModelNode(pgNode)
+		o.evaluateTLSMatchCriteria(tlsRoute.Match, vsNode, tlsRoute.Route)
 	}
 }
 
@@ -572,21 +569,23 @@ func (o *AviObjectGraph) ConstructAviVsNode(gwObj *istio_objs.IstioObject) *AviV
 	return avi_vs_meta
 }
 
-func matchHosts(vshosts []string, hostPortList []AviPortHostProtocol) []string {
+func matchHttpHosts(vshosts []string, hostprot AviPortHostProtocol) []string {
 	// Find out the qualifying hosts that should be part of the VS
 	qualifiedHostsMap := make(map[string]bool)
 	for _, vshost := range vshosts {
-		for _, hostprot := range hostPortList {
+		// Only process the hosts that are either HTTP or are part of Non-passthrough TLS
+		if hostprot.Protocol == HTTP || (hostprot.Protocol == HTTPS && !hostprot.Passthrough) {
 			for _, host := range hostprot.Hosts {
 				if host == "*" || strings.HasSuffix(vshost, strings.Trim(host, "*.")) {
 					// Wild card on the gateway port
-					if hostprot.Port != 80 {
+					if hostprot.Port != 80 && hostprot.Port != 443 {
 						qualifiedHostsMap[vshost+":"+fmt.Sprint(hostprot.Port)] = true
 					} else {
 						qualifiedHostsMap[vshost] = true
 					}
 				}
 			}
+
 		}
 	}
 	qualifiedHosts := make([]string, 0)
@@ -596,13 +595,13 @@ func matchHosts(vshosts []string, hostPortList []AviPortHostProtocol) []string {
 	return qualifiedHosts
 }
 
-func (o *AviObjectGraph) ConstructAviHttpPolicyNodes(gatewayNs string, vsObj *istio_objs.IstioObject, pgNodes []*AviPoolGroupNode, portHostProto []AviPortHostProtocol) *AviHttpPolicySetNode {
+func (o *AviObjectGraph) ConstructAviHttpPolicyNodes(gatewayNs string, vsObj *istio_objs.IstioObject, pgNodes []*AviPoolGroupNode, portHostProto AviPortHostProtocol, isSniNode bool) *AviHttpPolicySetNode {
 	// Extract the hosts from the vsObj
 	vsSpec := vsObj.Spec.(*networking.VirtualService)
 	var httpPolicySet []AviHostPathPortPoolPG
 	for _, pgNode := range pgNodes {
 		// Let's figure out the host headers for each host.
-		hosts := matchHosts(vsSpec.Hosts, portHostProto)
+		hosts := matchHttpHosts(vsSpec.Hosts, portHostProto)
 		if len(hosts) == 0 {
 			// This VS has no eligible hosts. We should return. TODO: Check if we should not even create the PGs in that case.
 			return nil
@@ -626,7 +625,15 @@ func (o *AviObjectGraph) ConstructAviHttpPolicyNodes(gatewayNs string, vsObj *is
 		httpPGPath.PoolGroup = pgNode.Name
 		httpPolicySet = append(httpPolicySet, httpPGPath)
 	}
-	policyNode := &AviHttpPolicySetNode{Name: vsObj.ConfigMeta.Name, HppMap: httpPolicySet, Tenant: gatewayNs}
+	var httppolname string
+	if isSniNode {
+		httppolname = "tls-" + vsObj.ConfigMeta.Name
+		utils.AviLog.Info.Printf("Evaluating an SNI node, hence the HTTP policy name is  %s", httppolname)
+
+	} else {
+		httppolname = vsObj.ConfigMeta.Name
+	}
+	policyNode := &AviHttpPolicySetNode{Name: httppolname, HppMap: httpPolicySet, Tenant: gatewayNs}
 	policyNode.CalculateCheckSum()
 	o.GraphChecksum = o.GraphChecksum + policyNode.GetCheckSum()
 	utils.AviLog.Info.Printf("The value of HTTP Policy Set is :%s", utils.Stringify(policyNode))
@@ -701,9 +708,10 @@ func (o *AviObjectGraph) extractServers(epObj *corev1.Endpoints, port_num int32,
 	return pool_meta
 }
 
-func (o *AviObjectGraph) ConstructAviSSLCert(vsNode *AviVsNode) {
+func (o *AviObjectGraph) CreatePortClassifiedObjects(vsNode *AviVsNode, namespace string, gatewayNs string, gatewayName string, gwObj *istio_objs.IstioObject) {
 	var keycertMap map[string][]byte
 	//This means we need to create cert and key
+	httpProcessed := false
 	for _, pp := range vsNode.PortProto {
 		if pp.Protocol == HTTPS {
 			if pp.Secret != "" {
@@ -714,6 +722,7 @@ func (o *AviObjectGraph) ConstructAviSSLCert(vsNode *AviVsNode) {
 					utils.AviLog.Info.Printf("Secret Object not found for secret: %s", pp.Secret)
 					continue
 				} else {
+
 					vsNode.ApplicationProfile = "System-Secure-HTTP"
 					tlsVSNode := &AviVsTLSNode{Name: "tls-" + vsNode.Name, VHParentName: vsNode.Name, VHDomainNames: pp.Hosts, Tenant: vsNode.Tenant}
 					tlsVSNode.AviVsNode = vsNode
@@ -734,18 +743,108 @@ func (o *AviObjectGraph) ConstructAviSSLCert(vsNode *AviVsNode) {
 						utils.AviLog.Info.Printf("Key not found for secret: %s", secretObj.Name)
 					}
 					tlsVSNode.TLSKeyCert = append(tlsVSNode.TLSKeyCert, tlsNode)
+					relExists, vsNames := istio_objs.SharedGatewayLister().Gateway(gatewayNs).GetVSMapping(gatewayName)
+					// Does the VS exist?
+					if relExists {
+						for _, vsName := range vsNames {
+							virtualNs := namespace
+							namespacedVs := strings.Contains(vsName, "/")
+							if namespacedVs {
+								nsVs := strings.Split(vsName, "/")
+								virtualNs = nsVs[0]
+								vsName = nsVs[1]
+							}
+							vsFound, vsObj := istio_objs.SharedVirtualServiceLister().VirtualService(virtualNs).Get(vsName)
+							if vsFound {
+								// If a VS is found for this gateway - first check if the hosts in the gateway match the ones on the VS.
+								// If it does not match, then don't process it.
+								vsSpec := vsObj.Spec.(*networking.VirtualService)
+								hosts := matchHttpHosts(vsSpec.Hosts, pp)
+								if len(hosts) == 0 {
+									// This VS has no eligible hosts. We should return. TODO: Check if we should not even create the PGs in that case.
+									return
+								}
+								model_name := gatewayNs + "/" + gatewayName
+								PGNodes := o.ConstructAviHTTPPGPoolNodes(vsObj, model_name, tlsVSNode.Name, gatewayNs, tlsVSNode, true)
+								// Now let's Build the HTTP policy set. More checks here for 'type' of route.
+								var hostPortList []AviPortHostProtocol
+								hostPortList = append(hostPortList, pp)
+								httpPolicyNode := o.ConstructAviHttpPolicyNodes(gatewayNs, vsObj, PGNodes, pp, true)
+								if httpPolicyNode != nil {
+									tlsVSNode.HttpPoolRefs = append(vsNode.HttpPoolRefs, httpPolicyNode)
+									tlsVSNode.HTTPChecksum = httpPolicyNode.GetCheckSum()
+								}
+							}
+						}
+					}
+					tlsVSNode.SSLKeyCertRefs = append(tlsVSNode.SSLKeyCertRefs, tlsNode)
 					o.AddModelNode(tlsVSNode)
-					o.AddModelNode(tlsNode)
 				}
 
 			} else if pp.Passthrough {
+				relExists, vsNames := istio_objs.SharedGatewayLister().Gateway(gatewayNs).GetVSMapping(gatewayName)
+				// Does the VS exist?
+				if relExists {
+					for _, vsName := range vsNames {
+						virtualNs := namespace
+						namespacedVs := strings.Contains(vsName, "/")
+						if namespacedVs {
+							nsVs := strings.Split(vsName, "/")
+							virtualNs = nsVs[0]
+							vsName = nsVs[1]
+						}
+						vsFound, vsObj := istio_objs.SharedVirtualServiceLister().VirtualService(virtualNs).Get(vsName)
+						if vsFound {
+							//model_name := gatewayNs + "/" + gatewayName
+							o.ConstructTLSPassthroughPGs(vsObj.Spec.(*networking.VirtualService), gatewayNs, vsNode)
+						}
+					}
+
+				}
 				// This is a TLS PASSTHROUGH case. We need the SNI child but no certs.
 				vsNode.ApplicationProfile = "System-Secure-HTTP"
 				vsNode.SNIParent = true
 				//o.AddModelNode(tlsVSNode)
 			}
+		} else if pp.Protocol == HTTP && !httpProcessed {
+			utils.AviLog.Info.Printf("Evaluating a HTTP route for Parent VS")
+			// If we find the HTTP protocol on the Gateway, we should process it only once.
+			relExists, vsNames := istio_objs.SharedGatewayLister().Gateway(gatewayNs).GetVSMapping(gatewayName)
+			// Does the VS exist?
+			if relExists {
+				for _, vsName := range vsNames {
+					virtualNs := namespace
+					namespacedVs := strings.Contains(vsName, "/")
+					if namespacedVs {
+						nsVs := strings.Split(vsName, "/")
+						virtualNs = nsVs[0]
+						vsName = nsVs[1]
+					}
+					vsFound, vsObj := istio_objs.SharedVirtualServiceLister().VirtualService(virtualNs).Get(vsName)
+					if vsFound {
+						// If a VS is found for this gateway - first check if the hosts in the gateway match the ones on the VS.
+						// If it does not match, then don't process it.
+						vsSpec := vsObj.Spec.(*networking.VirtualService)
+						hosts := matchHttpHosts(vsSpec.Hosts, pp)
+						if len(hosts) == 0 {
+							// This VS has no eligible hosts. We should return. TODO: Check if we should not even create the PGs in that case.
+							return
+						}
+						model_name := gatewayNs + "/" + gatewayName
+						PGNodes := o.ConstructAviHTTPPGPoolNodes(vsObj, model_name, gatewayName, gatewayNs, vsNode, false)
+						// Now let's Build the HTTP policy set. More checks here for 'type' of route.
+						httpPolicyNode := o.ConstructAviHttpPolicyNodes(gatewayNs, vsObj, PGNodes, pp, false)
+						if httpPolicyNode != nil {
+							vsNode.HttpPoolRefs = append(vsNode.HttpPoolRefs, httpPolicyNode)
+							vsNode.HTTPChecksum = httpPolicyNode.GetCheckSum()
+						}
+					}
+				}
+			}
+			httpProcessed = true
 		}
 	}
+
 }
 
 func (o *AviObjectGraph) BuildAviObjectGraph(namespace string, gatewayNs string, gatewayName string, gwObj *istio_objs.IstioObject) {
@@ -753,32 +852,7 @@ func (o *AviObjectGraph) BuildAviObjectGraph(namespace string, gatewayNs string,
 	var VsNode *AviVsNode
 
 	VsNode = o.ConstructAviVsNode(gwObj)
-	o.ConstructAviSSLCert(VsNode)
-
-	// Let's see if the Gateway has associated VSes?
-	relExists, vsNames := istio_objs.SharedGatewayLister().Gateway(gatewayNs).GetVSMapping(gatewayName)
-	// Does the VS exist?
-	if relExists {
-		for _, vsName := range vsNames {
-			virtualNs := namespace
-			namespacedVs := strings.Contains(vsName, "/")
-			if namespacedVs {
-				nsVs := strings.Split(vsName, "/")
-				virtualNs = nsVs[0]
-				vsName = nsVs[1]
-			}
-			vsFound, vsObj := istio_objs.SharedVirtualServiceLister().VirtualService(virtualNs).Get(vsName)
-			if vsFound {
-				model_name := gatewayNs + "/" + gatewayName
-				PGNodes := o.ConstructAviPGPoolNodes(vsObj, model_name, gatewayNs, VsNode)
-				// Now let's Build the HTTP policy set. More checks here for 'type' of route.
-				httpPolicyNode := o.ConstructAviHttpPolicyNodes(gatewayNs, vsObj, PGNodes, VsNode.PortProto)
-				if httpPolicyNode != nil {
-					VsNode.HTTPChecksum = httpPolicyNode.GetCheckSum()
-				}
-			}
-		}
-	}
+	o.CreatePortClassifiedObjects(VsNode, namespace, gatewayNs, gatewayName, gwObj)
 	o.AddModelNode(VsNode)
 	VsNode.CalculateCheckSum()
 	o.GraphChecksum = o.GraphChecksum + VsNode.GetCheckSum()

@@ -33,10 +33,16 @@ func AviVsSniBuild(vs_meta *nodes.AviVsTLSNode, httppolicynode []*nodes.AviHttpP
 	cr := utils.OSHIFT_K8S_CLOUD_CONNECTOR
 
 	east_west := false
-
+	var app_prof string
+	if vs_meta.TLSType != "PASSTHROUGH" {
+		app_prof = "/api/applicationprofile/?name=" + "System-HTTP"
+	} else {
+		app_prof = "/api/applicationprofile/?name=" + "System-Secure-HTTP"
+	}
 	sniChild := &avimodels.VirtualService{Name: &name, CloudConfigCksum: &checksumstr,
-		CreatedBy:         &cr,
-		EastWestPlacement: &east_west}
+		CreatedBy:             &cr,
+		ApplicationProfileRef: &app_prof,
+		EastWestPlacement:     &east_west}
 
 	//This VS has a TLSKeyCert associated, we need to mark 'type': 'VS_TYPE_VH_PARENT'
 	vh_type := "VS_TYPE_VH_CHILD"
