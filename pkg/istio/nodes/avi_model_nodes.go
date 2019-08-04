@@ -29,14 +29,17 @@ type AviVsNode struct {
 	ApplicationProfile string
 	NetworkProfile     string
 	PortProto          []AviPortHostProtocol // for listeners
-	//PoolGroupMap       map[AviPortProtocol]string // for mapping listener to Pools
-	DefaultPool      string
-	EastWest         bool
-	CloudConfigCksum uint32
-	DefaultPoolGroup string
+	DefaultPool        string
+	EastWest           bool
+	CloudConfigCksum   uint32
+	DefaultPoolGroup   string
 	// This field will detect if the HTTP policy set rules have changed.
-	HTTPChecksum uint32
-	SNIParent    bool
+	HTTPChecksum   uint32
+	SNIParent      bool
+	HttpPoolRefs   []*AviHttpPolicySetNode
+	PoolGroupRefs  []*AviPoolGroupNode
+	PoolRefs       []*AviPoolNode
+	SSLKeyCertRefs []*AviTLSKeyCertNode
 }
 
 type AviVsTLSNode struct {
@@ -48,6 +51,10 @@ type AviVsTLSNode struct {
 	DefaultPool      string
 	TLSType          string
 	Tenant           string
+	HttpPoolRefs     []*AviHttpPolicySetNode
+	PoolGroupRefs    []*AviPoolGroupNode
+	PoolRefs         []*AviPoolNode
+	SSLKeyCertRefs   []*AviTLSKeyCertNode
 	*AviVsNode
 }
 

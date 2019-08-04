@@ -41,9 +41,9 @@ func DeQueueNodes(key string) {
 		return
 	}
 	avimodel := avimodelIntf.(*nodes.AviObjectGraph)
-	sniNode := avimodel.GetAviSNIVS()
+	sniNodes := avimodel.GetAviSNIVS()
 	// Check for SNI child delete cases
-	if len(sniNode) == 0 && vs_cache_obj != nil && vs_cache_obj.SNIChildCollection != nil {
+	if len(sniNodes) == 0 && vs_cache_obj != nil && vs_cache_obj.SNIChildCollection != nil {
 		// The SNI nodes in the current model is 0 however, the cache contains a child collection.
 		for _, sni_uuid := range vs_cache_obj.SNIChildCollection {
 			sni_vs_key, ok := cache.VsCache.AviCacheGetKeyByUuid(sni_uuid)
@@ -65,11 +65,13 @@ func DeQueueNodes(key string) {
 		}
 	}
 
-	RestOperation(vsName, gatewayNs, avimodel, false, cache)
+	RestOperation(vsName, gatewayNs, avimodel.GetAviVS()[0], false, cache)
 
-	if len(sniNode) != 0 {
-		utils.AviLog.Info.Printf("Found SNI nodes to process :%s", utils.Stringify(sniNode))
-		RestOperation(sniNode[0].Name, gatewayNs, avimodel, true, cache)
+	if len(sniNodes) != 0 {
+		// Range over the SNI nodes
+		for _, sniNode := range sniNodes {
+			RestOperation(sniNode.Name, gatewayNs, sniNode, true, cache)
+		}
 	}
 
 }
@@ -122,34 +124,38 @@ func deleteVSOper(vs_cache_obj *utils.AviVsCache, gatewayNs string, cache *utils
 	return false
 }
 
-func RestOperation(vsName string, gatewayNs string, avimodel *nodes.AviObjectGraph, sniNode bool, cache *utils.AviObjCache) {
+func RestOperation(vsName string, gatewayNs string, avimodelNode nodes.AviModelNode, sniNode bool, cache *utils.AviObjCache) {
 	avi_rest_client_pool := utils.SharedAVIClients()
 	var rest_ops []*utils.RestOp
 	var pools_to_delete []utils.NamespaceName
 	var pgs_to_delete []utils.NamespaceName
 	var https_to_delete []utils.NamespaceName
 	var sslkeys_to_delete []utils.NamespaceName
+	var pools []*nodes.AviPoolNode
+	var poolGroups []*nodes.AviPoolGroupNode
+	var HTTPPolicies []*nodes.AviHttpPolicySetNode
+	var SSLCertKeys []*nodes.AviTLSKeyCertNode
 	// Order would be this: 1. Pools 2. PGs  3. HTTPPolicies. 4. SSLKeyCert 5. VS
 
-	pools := avimodel.GetAviPools()
-	poolGroups := avimodel.GetAviPoolGroups()
-	HTTPPolicies := avimodel.GetAviHttpPolicies()
-	SSLCertKeys := avimodel.GetAviSSLCertKeys()
 	vsKey := utils.NamespaceName{Namespace: gatewayNs, Name: vsName}
 	vs_cache, found := cache.VsCache.AviCacheGet(vsKey)
 
 	var aviVSes nodes.AviModelNode
 
 	if sniNode {
-		aviVSes = avimodel.GetAviSNIVS()[0]
+		aviVSes = avimodelNode.(*nodes.AviVsTLSNode)
+		pools = avimodelNode.(*nodes.AviVsTLSNode).PoolRefs
+		poolGroups = avimodelNode.(*nodes.AviVsTLSNode).PoolGroupRefs
+		HTTPPolicies = avimodelNode.(*nodes.AviVsTLSNode).HttpPoolRefs
+		SSLCertKeys = avimodelNode.(*nodes.AviVsTLSNode).SSLKeyCertRefs
 	} else {
-		aviVSes = avimodel.GetAviVS()[0]
-		if aviVSes.(*nodes.AviVsNode).SNIParent {
-			// For now - assume SNI parents won't have HTTP policies. We will further refine it for allowing HTTP traffic
-			// for SNIParents as well.
-			HTTPPolicies = nil
-		}
+		aviVSes = avimodelNode.(*nodes.AviVsNode)
+		pools = avimodelNode.(*nodes.AviVsNode).PoolRefs
+		poolGroups = avimodelNode.(*nodes.AviVsNode).PoolGroupRefs
+		HTTPPolicies = avimodelNode.(*nodes.AviVsNode).HttpPoolRefs
+		SSLCertKeys = avimodelNode.(*nodes.AviVsNode).SSLKeyCertRefs
 	}
+
 	//Decide pool create/delete/update
 	if found {
 		vs_cache_obj, ok := vs_cache.(*utils.AviVsCache)

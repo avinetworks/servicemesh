@@ -71,8 +71,6 @@ func DequeueIngestion(key string) {
 			aviModelGraph.BuildAviObjectGraph(namespace, gatewayNs, gateway, gwObj)
 			if len(aviModelGraph.GetOrderedNodes()) != 0 {
 				publishKeyToRestLayer(aviModelGraph, gatewayNs, gateway, sharedQueue)
-				utils.AviLog.Info.Printf("%s: The list of ordered nodes :%s", key, utils.Stringify(aviModelGraph.GetOrderedNodes()))
-
 			}
 		}
 

@@ -229,7 +229,7 @@ func (c *AviObjCache) AviObjVSCachePopulate(client *clients.AviClient,
 				pg_key_collection := c.AviPGCachePopulate(client, cloud, vs["uuid"].(string))
 				pool_key_collection := c.AviPoolCachePopulate(client, cloud, vs["uuid"].(string))
 				http_policy_collection := c.AviHTTPPolicyCachePopulate(client, cloud, vs["uuid"].(string))
-				ssl_key_collection := c.AviHTTPPolicyCachePopulate(client, cloud, vs["uuid"].(string))
+				ssl_key_collection := c.AviSSLKeyAndCertPopulate(client, cloud, vs["uuid"].(string))
 				var sni_child_collection []string
 				vh_child, found := vs["vh_child_vs_uuid"]
 				if found {
@@ -238,16 +238,18 @@ func (c *AviObjCache) AviObjVSCachePopulate(client *clients.AviClient,
 					}
 
 				}
-				vs_cache_obj := AviVsCache{Name: vs["name"].(string),
-					Tenant: tenant, Uuid: vs["uuid"].(string), Vip: nil,
-					CloudConfigCksum: vs["cloud_config_cksum"].(string),
-					ServiceMetadata:  svc_mdata_obj, PGKeyCollection: pg_key_collection, PoolKeyCollection: pool_key_collection, HTTPKeyCollection: http_policy_collection,
-					SSLKeyCertCollection: ssl_key_collection, SNIChildCollection: sni_child_collection}
-				k := NamespaceName{Namespace: tenant, Name: vs["name"].(string)}
-				c.VsCache.AviCacheAdd(k, &vs_cache_obj)
+				if vs["cloud_config_cksum"] != nil {
+					vs_cache_obj := AviVsCache{Name: vs["name"].(string),
+						Tenant: tenant, Uuid: vs["uuid"].(string), Vip: nil,
+						CloudConfigCksum: vs["cloud_config_cksum"].(string),
+						ServiceMetadata:  svc_mdata_obj, PGKeyCollection: pg_key_collection, PoolKeyCollection: pool_key_collection, HTTPKeyCollection: http_policy_collection,
+						SSLKeyCertCollection: ssl_key_collection, SNIChildCollection: sni_child_collection}
+					k := NamespaceName{Namespace: tenant, Name: vs["name"].(string)}
+					c.VsCache.AviCacheAdd(k, &vs_cache_obj)
 
-				AviLog.Info.Printf("Added Vs cache k %v val %v",
-					k, vs_cache_obj)
+					AviLog.Info.Printf("Added Vs cache k %v val %v",
+						k, vs_cache_obj)
+				}
 			}
 		}
 	}
