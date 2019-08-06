@@ -130,7 +130,7 @@ func Hash(s string) uint32 {
 	return h.Sum32()
 }
 
-var letters = []rune("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ")
+var letters = []rune("abcdefghijklmnopqrstuvwxyz1234567890")
 
 func RandomSeq(n int) string {
 	b := make([]rune, n)

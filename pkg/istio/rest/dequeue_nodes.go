@@ -152,6 +152,10 @@ func RestOperation(vsName string, gatewayNs string, avimodelNode nodes.AviModelN
 		aviVSes = avimodelNode.(*nodes.AviVsNode)
 		pools = avimodelNode.(*nodes.AviVsNode).PoolRefs
 		poolGroups = avimodelNode.(*nodes.AviVsNode).PoolGroupRefs
+		// Check if there any L4 PGs as well, in that case - just append them to the list
+		if avimodelNode.(*nodes.AviVsNode).TCPPoolGroupRefs != nil {
+			poolGroups = append(poolGroups, avimodelNode.(*nodes.AviVsNode).TCPPoolGroupRefs...)
+		}
 		HTTPPolicies = avimodelNode.(*nodes.AviVsNode).HttpPoolRefs
 		SSLCertKeys = avimodelNode.(*nodes.AviVsNode).SSLKeyCertRefs
 	}
@@ -483,8 +487,9 @@ func SSLKeyCertCU(sslkey_nodes []*nodes.AviTLSKeyCertNode, cache_ssl_nodes []uti
 				if ok {
 					cache_ssl_nodes = Remove(cache_ssl_nodes, ssl_key)
 					ssl_cache_obj, _ := ssl_cache.(*utils.AviSSLCache)
-					// Cache found. Let's compare the checksums
+
 					// The checksums are different, so it should be a PUT call.
+
 					restOp := AviSSLBuild(ssl, ssl_cache_obj)
 					rest_ops = append(rest_ops, restOp)
 
@@ -504,7 +509,6 @@ func SSLKeyCertCU(sslkey_nodes []*nodes.AviTLSKeyCertNode, cache_ssl_nodes []uti
 		}
 
 	}
-	//utils.AviLog.Info.Printf("The SSLKeyCert rest_op is %s", utils.Stringify(rest_ops))
 	return cache_ssl_nodes, rest_ops
 }
 

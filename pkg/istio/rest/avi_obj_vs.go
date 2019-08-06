@@ -105,6 +105,15 @@ func AviVsSniBuild(vs_meta *nodes.AviVsTLSNode, httppolicynode []*nodes.AviHttpP
 	return rest_ops
 }
 
+func FindPoolGroupForPort(pgList []*nodes.AviPoolGroupNode, portToSearch int32) string {
+	for _, pg := range pgList {
+		if pg.Port == fmt.Sprint(portToSearch) {
+			return pg.Name
+		}
+	}
+	return ""
+}
+
 func AviVsBuild(vs_meta *nodes.AviVsNode, httppolicynode []*nodes.AviHttpPolicySetNode, rest_method utils.RestMethod, cache_obj *utils.AviVsCache) []*utils.RestOp {
 
 	var vip avimodels.Vip
@@ -174,9 +183,26 @@ func AviVsBuild(vs_meta *nodes.AviVsNode, httppolicynode []*nodes.AviHttpPolicyS
 	for _, pp := range vs_meta.PortProto {
 		port := pp.Port
 		svc := avimodels.Service{Port: &port}
-		if pp.Protocol == "tcp" && vs_meta.NetworkProfile == "System-UDP-Fast-Path" {
+		if pp.Protocol == "TCP" {
+			utils.AviLog.Info.Printf("Processing TCP ports for VS creation :%v", pp.Port)
 			onw_profile := "/api/networkprofile/?name=System-TCP-Proxy"
 			svc.OverrideNetworkProfileRef = &onw_profile
+			port := pp.Port
+			var sproto string
+			sproto = "PROTOCOL_TYPE_TCP_PROXY"
+			pg_name := FindPoolGroupForPort(vs_meta.TCPPoolGroupRefs, port)
+			if pg_name != "" {
+				utils.AviLog.Info.Printf("TCP ports for VS creation returned PG: %s", pg_name)
+				pg_ref := "/api/poolgroup/?name=" + pg_name
+				sps := avimodels.ServicePoolSelector{ServicePoolGroupRef: &pg_ref,
+					ServicePort: &port, ServiceProtocol: &sproto}
+				vs.ServicePoolSelect = append(vs.ServicePoolSelect, &sps)
+				oap_app_prof := "/api/applicationprofile/?name=System-L4-Application"
+				svc.OverrideApplicationProfileRef = &oap_app_prof
+			} else {
+				utils.AviLog.Info.Printf("TCP ports for VS creation returned no matching PGs")
+			}
+
 		} else if pp.Protocol == "udp" && vs_meta.NetworkProfile == "System-TCP-Proxy" {
 			onw_profile := "/api/networkprofile/?name=System-UDP-Fast-Path"
 			svc.OverrideNetworkProfileRef = &onw_profile

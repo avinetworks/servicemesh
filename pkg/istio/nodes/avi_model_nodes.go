@@ -34,12 +34,13 @@ type AviVsNode struct {
 	CloudConfigCksum   uint32
 	DefaultPoolGroup   string
 	// This field will detect if the HTTP policy set rules have changed.
-	HTTPChecksum   uint32
-	SNIParent      bool
-	HttpPoolRefs   []*AviHttpPolicySetNode
-	PoolGroupRefs  []*AviPoolGroupNode
-	PoolRefs       []*AviPoolNode
-	SSLKeyCertRefs []*AviTLSKeyCertNode
+	HTTPChecksum     uint32
+	SNIParent        bool
+	HttpPoolRefs     []*AviHttpPolicySetNode
+	PoolGroupRefs    []*AviPoolGroupNode
+	PoolRefs         []*AviPoolNode
+	SSLKeyCertRefs   []*AviTLSKeyCertNode
+	TCPPoolGroupRefs []*AviPoolGroupNode
 }
 
 type AviVsTLSNode struct {
@@ -65,7 +66,7 @@ func (v *AviVsTLSNode) GetCheckSum() uint32 {
 
 func (v *AviVsTLSNode) CalculateCheckSum() {
 	// A sum of fields for this VS.
-	checksum := utils.Hash(v.VHParentName) + utils.Hash(utils.Stringify(v.VHDomainNames))
+	checksum := utils.Hash(v.VHParentName) + utils.Hash(utils.Stringify(v.VHDomainNames)) + utils.Hash(fmt.Sprint(v.HttpPoolRefs)) + utils.Hash(utils.Stringify(v.TCPPoolGroupRefs)) + utils.Hash(utils.Stringify(v.SSLKeyCertRefs)) + utils.Hash(utils.Stringify(v.PoolRefs)) + utils.Hash(utils.Stringify(v.PoolGroupRefs))
 	v.CloudConfigCksum = checksum
 }
 
@@ -76,7 +77,7 @@ func (v *AviVsNode) GetCheckSum() uint32 {
 
 func (v *AviVsNode) CalculateCheckSum() {
 	// A sum of fields for this VS.
-	checksum := utils.Hash(v.ApplicationProfile) + utils.Hash(v.NetworkProfile) + utils.Hash(utils.Stringify(v.PortProto)) + utils.Hash(fmt.Sprint(v.HTTPChecksum))
+	checksum := utils.Hash(v.ApplicationProfile) + utils.Hash(v.NetworkProfile) + utils.Hash(utils.Stringify(v.PortProto)) + utils.Hash(fmt.Sprint(v.HTTPChecksum)) + utils.Hash(utils.Stringify(v.TCPPoolGroupRefs)) + utils.Hash(utils.Stringify(v.SSLKeyCertRefs)) + utils.Hash(utils.Stringify(v.PoolRefs)) + utils.Hash(utils.Stringify(v.PoolGroupRefs))
 	v.CloudConfigCksum = checksum
 }
 
@@ -107,6 +108,7 @@ type AviPoolGroupNode struct {
 	RuleChecksum     uint32
 	Members          []*avimodels.PoolGroupMember
 	MatchList        []MatchCriteria
+	Port             string
 }
 
 func (v *AviPoolGroupNode) GetCheckSum() uint32 {
@@ -149,6 +151,7 @@ type AviPoolMetaServer struct {
 }
 
 type AviPortHostProtocol struct {
+	PortMap     map[string][]int32
 	Port        int32
 	Protocol    string
 	Hosts       []string
