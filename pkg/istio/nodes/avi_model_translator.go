@@ -140,6 +140,10 @@ func (o *AviObjectGraph) constructProtocolPortMaps(gwSpec *networking.Gateway) [
 		// Support HTTP only for now.
 		if server.Port.Protocol == HTTP {
 			pp := AviPortHostProtocol{Port: int32(server.Port.Number), Protocol: HTTP, Hosts: server.Hosts}
+			if server.Tls != nil && server.Tls.HttpsRedirect {
+				// Find out which port it should re-direct to.
+				pp.Redirect = true
+			}
 			portProtocols = append(portProtocols, pp)
 		} else if server.Port.Protocol == HTTPS {
 			secretName := ""
@@ -898,7 +902,7 @@ func (o *AviObjectGraph) CreatePortClassifiedObjects(vsNode *AviVsNode, namespac
 				vsNode.SNIParent = true
 				//o.AddModelNode(tlsVSNode)
 			}
-		} else if pp.Protocol == HTTP {
+		} else if pp.Protocol == HTTP && !pp.Redirect {
 			utils.AviLog.Info.Printf("Evaluating a HTTP route for Parent VS for port: %v for hosts :%s", pp.Port, pp.Hosts)
 			// If we find the HTTP protocol on the Gateway, we should process it only once.
 			relExists, vsNames := istio_objs.SharedGatewayLister().Gateway(gatewayNs).GetVSMapping(gatewayName)
@@ -968,9 +972,49 @@ func (o *AviObjectGraph) CreatePortClassifiedObjects(vsNode *AviVsNode, namespac
 				}
 			}
 			tcpProcessed = true
+		} else if pp.Protocol == HTTP && pp.Redirect {
+			utils.AviLog.Info.Printf("Evaluating a HTTP redirect for Port: %v on Parent VS", pp.Port)
+			// Fetch the re-direct hosts and map it to various ports on the gateway where the traffic should be re-directed.
+			redirPortToHost := make(map[int32][]string)
+			for _, host := range pp.Hosts {
+				// Find out which port should this host be redirected to.
+				for _, hostproto := range vsNode.PortProto {
+					// Skip the port that belongs to this port itself.
+					if hostproto.Port != pp.Port {
+						if utils.HasElem(hostproto.Hosts, host) {
+							// Record the port
+							hosts, ok := redirPortToHost[hostproto.Port]
+							if ok {
+								hosts = append(hosts, host)
+							} else {
+								redirPortToHost[hostproto.Port] = []string{host}
+							}
+						}
+					}
+				}
+			}
+			utils.AviLog.Info.Printf("The re-direct map : %s", utils.Stringify(redirPortToHost))
+			if len(redirPortToHost) != 0 {
+				o.ConstructHTTPRedirectPolicies(pp.Port, redirPortToHost, gatewayNs, gatewayName, vsNode)
+			}
 		}
+
 	}
 
+}
+
+func (o *AviObjectGraph) ConstructHTTPRedirectPolicies(vsport int32, redirPortToHost map[int32][]string, gatewayNs string, gatewayName string, vsNode *AviVsNode) {
+	httpPolicyName := "redirect-" + gatewayNs + "-" + gatewayName + fmt.Sprint(vsport)
+	var AviRedirectPortList []AviRedirectPort
+	for port, hosts := range redirPortToHost {
+		redirPort := AviRedirectPort{Hosts: hosts, RedirectPort: port, StatusCode: "HTTP_REDIRECT_STATUS_CODE_301", VsPort: vsport}
+		AviRedirectPortList = append(AviRedirectPortList, redirPort)
+	}
+	httpPolicyNode := &AviHttpPolicySetNode{Name: httpPolicyName, RedirectPorts: AviRedirectPortList, Tenant: gatewayNs}
+	vsNode.HttpPoolRefs = append(vsNode.HttpPoolRefs, httpPolicyNode)
+	httpPolicyNode.CalculateCheckSum()
+	o.GraphChecksum = o.GraphChecksum + httpPolicyNode.GetCheckSum()
+	o.AddModelNode(httpPolicyNode)
 }
 
 func (o *AviObjectGraph) BuildAviObjectGraph(namespace string, gatewayNs string, gatewayName string, gwObj *istio_objs.IstioObject) {

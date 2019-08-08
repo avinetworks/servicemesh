@@ -80,6 +80,31 @@ func AviHttpPSBuild(hps_meta *nodes.AviHttpPolicySetNode, cache_obj *utils.AviHT
 		idx = idx + 1
 	}
 
+	for _, hppmap := range hps_meta.RedirectPorts {
+		enable := true
+		name := fmt.Sprintf("%s-%d", hps_meta.Name, idx)
+		match_target := avimodels.MatchTarget{}
+		if len(hppmap.Hosts) > 0 {
+			match_crit := "HDR_EQUALS"
+			host_hdr_match := avimodels.HostHdrMatch{MatchCriteria: &match_crit,
+				Value: hppmap.Hosts}
+			match_target.HostHdr = &host_hdr_match
+			port_match_crit := "IS_IN"
+			match_target.VsPort = &avimodels.PortMatch{MatchCriteria: &port_match_crit, Ports: []int64{int64(hppmap.VsPort)}}
+		}
+		redirect_action := avimodels.HTTPRedirectAction{}
+		protocol := "HTTP"
+		redirect_action.StatusCode = &hppmap.StatusCode
+		redirect_action.Protocol = &protocol
+		redirect_action.Port = &hppmap.RedirectPort
+		var j int32
+		j = idx
+		rule := avimodels.HTTPRequestRule{Enable: &enable, Index: &j,
+			Name: &name, Match: &match_target, RedirectAction: &redirect_action}
+		http_req_pol.Rules = append(http_req_pol.Rules, &rule)
+		idx = idx + 1
+	}
+
 	macro := utils.AviRestObjMacro{ModelName: "HTTPPolicySet", Data: hps}
 	var path string
 	var rest_op utils.RestOp

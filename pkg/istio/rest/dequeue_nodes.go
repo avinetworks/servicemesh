@@ -217,7 +217,6 @@ func RestOperation(vsName string, gatewayNs string, avimodelNode nodes.AviModelN
 	rest_ops = PoolDelete(pools_to_delete, gatewayNs, rest_ops)
 
 	aviclient := avi_rest_client_pool.AviClient[0]
-	utils.AviLog.Info.Printf("The list of REST OPS: %s", utils.Stringify(rest_ops))
 	err := avi_rest_client_pool.AviRestOperate(aviclient, rest_ops)
 	if err != nil {
 		utils.AviLog.Warning.Printf("There was an error sending the macro %s", err)

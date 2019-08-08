@@ -157,6 +157,7 @@ type AviPortHostProtocol struct {
 	Hosts       []string
 	Secret      string
 	Passthrough bool
+	Redirect    bool
 }
 
 type AviPortStrProtocol struct {
@@ -173,11 +174,19 @@ type AviHostPathPortPoolPG struct {
 	MatchCriteria string
 }
 
+type AviRedirectPort struct {
+	Hosts        []string
+	RedirectPort int32
+	StatusCode   string
+	VsPort       int32
+}
+
 type AviHttpPolicySetNode struct {
 	Name             string
 	Tenant           string
 	CloudConfigCksum uint32
 	HppMap           []AviHostPathPortPoolPG
+	RedirectPorts    []AviRedirectPort
 }
 
 func (v *AviHttpPolicySetNode) GetCheckSum() uint32 {
@@ -192,6 +201,10 @@ func (v *AviHttpPolicySetNode) CalculateCheckSum() {
 		sort.Strings(hpp.Host)
 		sort.Strings(hpp.Path)
 		checksum = checksum + utils.Hash(utils.Stringify(hpp))
+	}
+	for _, redir := range v.RedirectPorts {
+		sort.Strings(redir.Hosts)
+		checksum = checksum + utils.Hash(utils.Stringify(redir.Hosts))
 	}
 	utils.AviLog.Info.Printf("The HTTP rules during checksum calculation is: %s with checksum: %v", utils.Stringify(v.HppMap), checksum)
 	v.CloudConfigCksum = checksum
