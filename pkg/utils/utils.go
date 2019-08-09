@@ -30,6 +30,7 @@ import (
 	extensions "k8s.io/api/extensions/v1beta1"
 	kubeinformers "k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/tools/cache"
 )
 
 var CtrlVersion string
@@ -191,4 +192,13 @@ func HasElem(s interface{}, elem interface{}) bool {
 	}
 
 	return false
+}
+
+func ObjKey(obj interface{}) string {
+	key, err := cache.DeletionHandlingMetaNamespaceKeyFunc(obj)
+	if err != nil {
+		AviLog.Warning.Print(err)
+	}
+
+	return key
 }

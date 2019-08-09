@@ -53,15 +53,6 @@ func SharedAviController() *AviController {
 	return controllerInstance
 }
 
-func ObjKey(obj interface{}) string {
-	key, err := cache.DeletionHandlingMetaNamespaceKeyFunc(obj)
-	if err != nil {
-		utils.AviLog.Warning.Print(err)
-	}
-
-	return key
-}
-
 func NewInformers(cs *kubernetes.Clientset) *utils.Informers {
 	kubeInformerFactory := kubeinformers.NewSharedInformerFactory(cs, time.Second*30)
 	informers := utils.Informers{
@@ -87,8 +78,8 @@ func (c *AviController) SetupEventHandlers(cs *kubernetes.Clientset) {
 	ep_event_handler := cache.ResourceEventHandlerFuncs{
 		AddFunc: func(obj interface{}) {
 			ep := obj.(*corev1.Endpoints)
-			namespace, _, _ := cache.SplitMetaNamespaceKey(ObjKey(ep))
-			key := "Endpoints/" + ObjKey(ep)
+			namespace, _, _ := cache.SplitMetaNamespaceKey(utils.ObjKey(ep))
+			key := "Endpoints/" + utils.ObjKey(ep)
 			bkt := utils.Bkt(namespace, numWorkers)
 			c.workqueue[bkt].AddRateLimited(key)
 			utils.AviLog.Info.Printf("ADD Endpoint key: %s", key)
@@ -109,8 +100,8 @@ func (c *AviController) SetupEventHandlers(cs *kubernetes.Clientset) {
 				}
 			}
 			ep = obj.(*corev1.Endpoints)
-			namespace, _, _ := cache.SplitMetaNamespaceKey(ObjKey(ep))
-			key := "Endpoints/" + ObjKey(ep)
+			namespace, _, _ := cache.SplitMetaNamespaceKey(utils.ObjKey(ep))
+			key := "Endpoints/" + utils.ObjKey(ep)
 			bkt := utils.Bkt(namespace, numWorkers)
 			c.workqueue[bkt].AddRateLimited(key)
 			utils.AviLog.Info.Printf("DELETE Endpoint key: %s", key)
@@ -119,8 +110,8 @@ func (c *AviController) SetupEventHandlers(cs *kubernetes.Clientset) {
 			oep := old.(*corev1.Endpoints)
 			cep := cur.(*corev1.Endpoints)
 			if !reflect.DeepEqual(cep.Subsets, oep.Subsets) {
-				namespace, _, _ := cache.SplitMetaNamespaceKey(ObjKey(cep))
-				key := "Endpoints/" + ObjKey(cep)
+				namespace, _, _ := cache.SplitMetaNamespaceKey(utils.ObjKey(cep))
+				key := "Endpoints/" + utils.ObjKey(cep)
 				bkt := utils.Bkt(namespace, numWorkers)
 				c.workqueue[bkt].AddRateLimited(key)
 				utils.AviLog.Info.Printf("UPDATE Endpoint key: %s", key)
@@ -131,8 +122,8 @@ func (c *AviController) SetupEventHandlers(cs *kubernetes.Clientset) {
 	pod_event_handler := cache.ResourceEventHandlerFuncs{
 		AddFunc: func(obj interface{}) {
 			pod := obj.(*corev1.Pod)
-			namespace, _, _ := cache.SplitMetaNamespaceKey(ObjKey(pod))
-			key := "Pods/" + ObjKey(pod)
+			namespace, _, _ := cache.SplitMetaNamespaceKey(utils.ObjKey(pod))
+			key := "Pods/" + utils.ObjKey(pod)
 			bkt := utils.Bkt(namespace, numWorkers)
 			c.workqueue[bkt].AddRateLimited(key)
 			utils.AviLog.Info.Printf("ADD POD key: %s", key)
@@ -153,8 +144,8 @@ func (c *AviController) SetupEventHandlers(cs *kubernetes.Clientset) {
 				}
 			}
 			pod = obj.(*corev1.Pod)
-			namespace, _, _ := cache.SplitMetaNamespaceKey(ObjKey(pod))
-			key := "Pods/" + ObjKey(pod)
+			namespace, _, _ := cache.SplitMetaNamespaceKey(utils.ObjKey(pod))
+			key := "Pods/" + utils.ObjKey(pod)
 			bkt := utils.Bkt(namespace, numWorkers)
 			c.workqueue[bkt].AddRateLimited(key)
 			utils.AviLog.Info.Printf("DELETE POD key: %s", key)
@@ -163,8 +154,8 @@ func (c *AviController) SetupEventHandlers(cs *kubernetes.Clientset) {
 			oPod := old.(*corev1.Pod)
 			cPod := cur.(*corev1.Pod)
 			if oPod.ResourceVersion != cPod.ResourceVersion {
-				namespace, _, _ := cache.SplitMetaNamespaceKey(ObjKey(cPod))
-				key := "Pods/" + ObjKey(cPod)
+				namespace, _, _ := cache.SplitMetaNamespaceKey(utils.ObjKey(cPod))
+				key := "Pods/" + utils.ObjKey(cPod)
 				bkt := utils.Bkt(namespace, numWorkers)
 				c.workqueue[bkt].AddRateLimited(key)
 				utils.AviLog.Info.Printf("UPDATE POD key: %s", key)
@@ -175,8 +166,8 @@ func (c *AviController) SetupEventHandlers(cs *kubernetes.Clientset) {
 	secret_event_handler := cache.ResourceEventHandlerFuncs{
 		AddFunc: func(obj interface{}) {
 			secret := obj.(*corev1.Secret)
-			namespace, _, _ := cache.SplitMetaNamespaceKey(ObjKey(secret))
-			key := "Secrets/" + ObjKey(secret)
+			namespace, _, _ := cache.SplitMetaNamespaceKey(utils.ObjKey(secret))
+			key := "Secrets/" + utils.ObjKey(secret)
 			bkt := utils.Bkt(namespace, numWorkers)
 			c.workqueue[bkt].AddRateLimited(key)
 			utils.AviLog.Info.Printf("ADD SECRET key: %s", key)
@@ -197,8 +188,8 @@ func (c *AviController) SetupEventHandlers(cs *kubernetes.Clientset) {
 				}
 			}
 			secret = obj.(*corev1.Secret)
-			namespace, _, _ := cache.SplitMetaNamespaceKey(ObjKey(secret))
-			key := "Secrets/" + ObjKey(secret)
+			namespace, _, _ := cache.SplitMetaNamespaceKey(utils.ObjKey(secret))
+			key := "Secrets/" + utils.ObjKey(secret)
 			bkt := utils.Bkt(namespace, numWorkers)
 			c.workqueue[bkt].AddRateLimited(key)
 			utils.AviLog.Info.Printf("DELETE secret key: %s", key)
@@ -207,8 +198,8 @@ func (c *AviController) SetupEventHandlers(cs *kubernetes.Clientset) {
 			oSecret := old.(*corev1.Secret)
 			cSecret := cur.(*corev1.Secret)
 			if oSecret.ResourceVersion != cSecret.ResourceVersion {
-				namespace, _, _ := cache.SplitMetaNamespaceKey(ObjKey(cSecret))
-				key := "Secrets/" + ObjKey(cSecret)
+				namespace, _, _ := cache.SplitMetaNamespaceKey(utils.ObjKey(cSecret))
+				key := "Secrets/" + utils.ObjKey(cSecret)
 				bkt := utils.Bkt(namespace, numWorkers)
 				c.workqueue[bkt].AddRateLimited(key)
 				utils.AviLog.Info.Printf("UPDATE secret key: %s", key)
@@ -219,8 +210,8 @@ func (c *AviController) SetupEventHandlers(cs *kubernetes.Clientset) {
 	svc_event_handler := cache.ResourceEventHandlerFuncs{
 		AddFunc: func(obj interface{}) {
 			svc := obj.(*corev1.Service)
-			namespace, _, _ := cache.SplitMetaNamespaceKey(ObjKey(svc))
-			key := "Service/" + ObjKey(svc)
+			namespace, _, _ := cache.SplitMetaNamespaceKey(utils.ObjKey(svc))
+			key := "Service/" + utils.ObjKey(svc)
 			bkt := utils.Bkt(namespace, numWorkers)
 			c.workqueue[bkt].AddRateLimited(key)
 			utils.AviLog.Info.Printf("ADD Service key: %s", key)
@@ -241,8 +232,8 @@ func (c *AviController) SetupEventHandlers(cs *kubernetes.Clientset) {
 				}
 			}
 			svc = obj.(*corev1.Service)
-			namespace, _, _ := cache.SplitMetaNamespaceKey(ObjKey(svc))
-			key := "Service/" + ObjKey(svc)
+			namespace, _, _ := cache.SplitMetaNamespaceKey(utils.ObjKey(svc))
+			key := "Service/" + utils.ObjKey(svc)
 			bkt := utils.Bkt(namespace, numWorkers)
 			c.workqueue[bkt].AddRateLimited(key)
 			utils.AviLog.Info.Printf("DELETE Service key: %s", key)
@@ -252,8 +243,8 @@ func (c *AviController) SetupEventHandlers(cs *kubernetes.Clientset) {
 			svc := cur.(*corev1.Service)
 			if oldobj.ResourceVersion != svc.ResourceVersion {
 				// Only add the key if the resource versions have changed.
-				namespace, _, _ := cache.SplitMetaNamespaceKey(ObjKey(svc))
-				key := "Service/" + ObjKey(svc)
+				namespace, _, _ := cache.SplitMetaNamespaceKey(utils.ObjKey(svc))
+				key := "Service/" + utils.ObjKey(svc)
 				bkt := utils.Bkt(namespace, numWorkers)
 				c.workqueue[bkt].AddRateLimited(key)
 				utils.AviLog.Info.Printf("UPDATE service key: %s", key)
@@ -292,19 +283,6 @@ func (c *AviController) Start(stopCh <-chan struct{}) {
 // // workers to finish processing their current work items.
 func (c *AviController) Run(stopCh <-chan struct{}) error {
 	defer runtime.HandleCrash()
-	// for i := uint32(0); i < c.num_workers; i++ {
-	// 	defer c.workqueue[i].ShutDown()
-	// }
-
-	// Start the informer factories to begin populating the informer caches
-	// utils.AviLog.Info.Print("Starting Avi controller")
-
-	// utils.AviLog.Info.Print("Starting workers")
-	// // Launch two workers to process Foo resources
-	// sharedQueue := utils.SharedWorkQueueWrappers().GetQueueByName("MCPLayer")
-	// for i := uint32(0); i < sharedQueue.NumWorkers; i++ {
-	// 	go wait.Until(sharedQueue.runWorker, time.Second, stopCh)
-	// }
 
 	utils.AviLog.Info.Print("Started the Kubernetes Controller")
 	<-stopCh
@@ -312,130 +290,3 @@ func (c *AviController) Run(stopCh <-chan struct{}) error {
 
 	return nil
 }
-
-// // processNextWorkItem will read a single work item off the workqueue and
-// // attempt to process it, by calling the syncHandler.
-// func (c *AviController) processNextWorkItem(worker_id uint32) bool {
-// 	obj, shutdown := c.workqueue[worker_id].Get()
-
-// 	if shutdown {
-// 		return false
-// 	}
-
-// 	// We wrap this block in a func so we can defer c.workqueue.Done.
-// 	err := func(obj interface{}) error {
-// 		// We call Done here so the workqueue knows we have finished
-// 		// processing this item. We also must remember to call Forget if we
-// 		// do not want this work item being re-queued. For example, we do
-// 		// not call Forget if a transient error occurs, instead the item is
-// 		// put back on the workqueue and attempted again after a back-off
-// 		// period.
-// 		defer c.workqueue[worker_id].Done(obj)
-// 		var ok bool
-// 		var ev string
-// 		// We expect string to come off the workqueue.  We do this as the
-// 		// delayed nature of the workqueue means the items in the informer
-// 		// cache may actually be more up to date that when the item was
-// 		// initially put onto the workqueue.
-// 		if ev, ok = obj.(string); !ok {
-// 			// As the item in the workqueue is actually invalid, we call
-// 			// Forget here else we'd go into a loop of attempting to
-// 			// process a work item that is invalid.
-// 			c.workqueue[worker_id].Forget(obj)
-// 			runtime.HandleError(fmt.Errorf("expected string in workqueue but got %#v", obj))
-// 			return nil
-// 		}
-// 		// Run the syncHandler, passing it the ev resource to be synced.
-// 		if err := c.syncHandler(ev, worker_id); err != nil {
-// 			// If it's a sync error, let's not re-queue the object.
-// 			_, ok := err.(*utils.SkipSyncError)
-// 			if !ok {
-// 				// Put the item back on the workqueue to handle any transient errors.
-// 				c.workqueue[worker_id].AddRateLimited(obj)
-
-// 				return fmt.Errorf("error syncing '%v': %s, requeuing", ev, err.Error())
-// 			} else {
-// 				// No need to put the item back
-// 				utils.AviLog.Info.Printf("Skip sync of '%s'", ev)
-// 				c.workqueue[worker_id].Forget(obj)
-// 				return nil
-// 			}
-
-// 		}
-// 		// Finally, if no error occurs we Forget this item so it does not
-// 		// get queued again until another change happens.
-// 		c.workqueue[worker_id].Forget(obj)
-// 		utils.AviLog.Info.Printf("Successfully synced '%s'", ev)
-// 		return nil
-// 	}(obj)
-
-// 	if err != nil {
-// 		runtime.HandleError(err)
-// 		return true
-// 	}
-
-// 	return true
-// }
-
-// // syncHandler compares the actual state with the desired, and attempts to
-// // converge the two. It then updates the Status block of the Foo resource
-// // with the current status of the resource.
-// func (c *AviController) syncHandler(key string, worker_id uint32) error {
-// 	obj_type_ns := strings.SplitN(key, "/", 3)
-// 	if len(obj_type_ns) != 3 {
-// 		runtime.HandleError(fmt.Errorf("invalid resource key: %s", key))
-// 		return nil
-// 	}
-// 	// Convert the namespace/name string into a distinct namespace and name
-// 	namespace, name, err := cache.SplitMetaNamespaceKey(obj_type_ns[2])
-// 	if err != nil {
-// 		runtime.HandleError(fmt.Errorf("invalid resource key: %s", key))
-// 		return nil
-// 	}
-
-// 	var obj interface{}
-// 	var evt utils.EvType
-// 	// Get the latest Service resource with this namespace/name
-// 	if obj_type_ns[0] == "Service" {
-// 		obj, err = c.informers.ServiceInformer.Lister().Services(namespace).Get(name)
-// 	} else if obj_type_ns[0] == "Endpoints" {
-// 		obj, err = c.informers.EpInformer.Lister().Endpoints(namespace).Get(name)
-// 	} else if obj_type_ns[0] == "Ingress" {
-// 		obj, err = c.informers.IngInformer.Lister().Ingresses(namespace).Get(name)
-// 	} else {
-// 		utils.AviLog.Error.Printf("Unable to handle unknown obj type %v", key)
-// 		return errors.New("Unable to handle unknown obj type")
-// 	}
-
-// 	if err != nil {
-// 		// The Obj may no longer exist, in which case we process deletion
-// 		if k8s_errors.IsNotFound(err) {
-// 			runtime.HandleError(fmt.Errorf("obj '%s' in work queue no longer exists", key))
-// 			utils.AviLog.Info.Printf("Obj key NotFound %v obj type %T value %v", key, obj, obj)
-// 			evt = utils.DeleteEv
-// 		} else {
-// 			return err
-// 		}
-// 	} else {
-// 		evt = utils.UpdateEv
-// 	}
-
-// 	if obj_type_ns[0] == "Endpoints" {
-// 		if evt == utils.UpdateEv {
-// 			_, err = c.k8s_ep.K8sObjCrUpd(worker_id, obj.(*corev1.Endpoints),
-// 				"", obj_type_ns[1])
-// 		} else {
-// 			_, err = c.k8s_ep.K8sObjDelete(worker_id, key)
-// 		}
-// 	} else if obj_type_ns[0] == "Service" {
-// 		if evt == utils.UpdateEv {
-// 			_, err = c.k8s_svc.K8sObjCrUpd(worker_id, obj.(*corev1.Service))
-// 		} else {
-// 			_, err = c.k8s_svc.K8sObjDelete(worker_id, key)
-// 		}
-// 	}
-
-// 	// TODO
-// 	// c.recorder.Event(foo, corev1.EventTypeNormal, SuccessSynced, MessageResourceSynced)
-// 	return err
-// }

@@ -17,6 +17,7 @@ package main
 import (
 	"flag"
 	"os"
+	"time"
 
 	"github.com/avinetworks/servicemesh/pkg/istio/mcp"
 	"github.com/avinetworks/servicemesh/pkg/istio/nodes"
@@ -25,8 +26,11 @@ import (
 	//avirest "github.com/avinetworks/servicemesh/pkg/istio/rest"
 	"github.com/avinetworks/servicemesh/pkg/k8s"
 	"github.com/avinetworks/servicemesh/pkg/utils"
+	v1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
+	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/tools/clientcmd"
 )
 
@@ -63,10 +67,9 @@ func main() {
 	}
 
 	utils.NewInformers(kubeClient)
-	avi_obj_cache := utils.SharedAviObjCache()
 
 	avi_rest_client_pool := utils.SharedAVIClients()
-
+	avi_obj_cache := utils.SharedAviObjCache()
 	avi_obj_cache.AviObjCachePopulate(avi_rest_client_pool.AviClient[0],
 		utils.CtrlVersion, "Default-Cloud")
 	istioEnabled := "False"
@@ -92,7 +95,12 @@ func main() {
 	graphQueue := utils.SharedWorkQueue().GetQueueByName(utils.GraphLayer)
 	graphQueue.SyncFunc = SyncFromNodesLayer
 	graphQueue.Run(stopCh)
+	// TODO (sudswas): Remove hard coding.
+	worker := utils.NewFullSyncThread(50 * time.Second)
+	worker.SyncFunction = FullSync
+	go worker.Run()
 	<-stopCh
+	worker.Shutdown()
 	ingestionQueue.StopWorkers(stopCh)
 	graphQueue.StopWorkers(stopCh)
 	//c.Run(stopCh)
@@ -118,4 +126,66 @@ func SyncFromNodesLayer(key string) error {
 	// TBU
 	avirest.DeQueueNodes(key)
 	return nil
+}
+
+func FullSync(istioEnabled string) {
+	avi_obj_cache := utils.SharedAviObjCache()
+	avi_rest_client_pool := utils.SharedAVIClients()
+	avi_obj_cache.AviObjCachePopulate(avi_rest_client_pool.AviClient[0],
+		utils.CtrlVersion, "Default-Cloud")
+	FullSyncK8s()
+	if istioEnabled == "True" {
+		FullSyncIstio()
+	}
+}
+
+func FullSyncK8s() {
+	// List all the kubernetes resources
+	epObjs, err := utils.GetInformers().EpInformer.Lister().List(labels.Set(nil).AsSelector())
+	if err == nil {
+		utils.AviLog.Trace.Printf("Obtained all the endpoints :%s", utils.Stringify(epObjs))
+	} else {
+		utils.AviLog.Warning.Printf("Unable to fetch the endpoints, will not process them as a part of full sync")
+	}
+	svcObjs, err := utils.GetInformers().ServiceInformer.Lister().List(labels.Set(nil).AsSelector())
+	if err == nil {
+		utils.AviLog.Trace.Printf("Obtained all the Services :%s", utils.Stringify(svcObjs))
+	} else {
+		utils.AviLog.Info.Printf("Unable to fetch Services, will not process them as a part of full sync")
+	}
+	secretObjs, err := utils.GetInformers().SecretInformer.Lister().List(labels.Set(nil).AsSelector())
+	if err == nil {
+		utils.AviLog.Trace.Printf("Obtained all the Secrets :%s", utils.Stringify(secretObjs))
+	} else {
+		utils.AviLog.Warning.Printf("Unable to fetch Secrets, will not process them as a part of full sync")
+	}
+	PublishK8sKeys(svcObjs, epObjs, secretObjs)
+}
+
+func FullSyncIstio() {
+	utils.AviLog.Info.Printf("To be implemented")
+}
+
+func PublishK8sKeys(svcObjs []*v1.Service, epObjs []*v1.Endpoints, secretObjs []*v1.Secret) {
+	ingestionQueue := utils.SharedWorkQueue().GetQueueByName(utils.ObjectIngestionLayer)
+	for _, svcObj := range svcObjs {
+		namespace, _, _ := cache.SplitMetaNamespaceKey(utils.ObjKey(svcObj))
+		key := "Service/" + utils.ObjKey(svcObj)
+		bkt := utils.Bkt(namespace, ingestionQueue.NumWorkers)
+		ingestionQueue.Workqueue[bkt].AddRateLimited(key)
+	}
+
+	for _, epObj := range epObjs {
+		namespace, _, _ := cache.SplitMetaNamespaceKey(utils.ObjKey(epObj))
+		key := "Endpoints/" + utils.ObjKey(epObj)
+		bkt := utils.Bkt(namespace, ingestionQueue.NumWorkers)
+		ingestionQueue.Workqueue[bkt].AddRateLimited(key)
+	}
+
+	for _, secretObj := range secretObjs {
+		namespace, _, _ := cache.SplitMetaNamespaceKey(utils.ObjKey(secretObj))
+		key := "Secrets/" + utils.ObjKey(secretObj)
+		bkt := utils.Bkt(namespace, ingestionQueue.NumWorkers)
+		ingestionQueue.Workqueue[bkt].AddRateLimited(key)
+	}
 }
