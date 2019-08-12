@@ -167,6 +167,7 @@ func (o *AviObjectGraph) constructProtocolPortMaps(gwSpec *networking.Gateway) [
 func (o *AviObjectGraph) generateRandomStringName(vsName string) string {
 	// TODO: Watch out for collisions, if need we can increase 10 below.
 	random_string := utils.RandomSeq(5)
+	// TODO: Find a way to avoid collisions
 	utils.AviLog.Info.Printf("Random string generated :%s", random_string)
 	pgName := vsName + "-" + random_string
 	return pgName
@@ -262,6 +263,8 @@ func (o *AviObjectGraph) evaluateDestinations(destination *networking.Destinatio
 	var labels map[string]string
 	// For each destination, generate one pool. If weight is not present evalute it to 100.
 	serviceName := destination.Host
+
+	// TODO : Right now we are not handling weight - we will do this in the future. Remove this TODO once done.
 	if weight == 0 {
 		weight = 100
 	}
@@ -983,9 +986,9 @@ func (o *AviObjectGraph) CreatePortClassifiedObjects(vsNode *AviVsNode, namespac
 					if hostproto.Port != pp.Port {
 						if utils.HasElem(hostproto.Hosts, host) {
 							// Record the port
-							hosts, ok := redirPortToHost[hostproto.Port]
+							_, ok := redirPortToHost[hostproto.Port]
 							if ok {
-								hosts = append(hosts, host)
+								redirPortToHost[hostproto.Port] = append(redirPortToHost[hostproto.Port], host)
 							} else {
 								redirPortToHost[hostproto.Port] = []string{host}
 							}

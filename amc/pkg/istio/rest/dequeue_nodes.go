@@ -43,7 +43,7 @@ func DeQueueNodes(key string) {
 	avimodel := avimodelIntf.(*nodes.AviObjectGraph)
 	sniNodes := avimodel.GetAviSNIVS()
 	// Check for SNI child delete cases
-	if len(sniNodes) == 0 && vs_cache_obj != nil && vs_cache_obj.SNIChildCollection != nil {
+	if (len(sniNodes) != len(vs_cache_obj.SNIChildCollection)) && vs_cache_obj != nil {
 		// The SNI nodes in the current model is 0 however, the cache contains a child collection.
 		for _, sni_uuid := range vs_cache_obj.SNIChildCollection {
 			sni_vs_key, ok := cache.VsCache.AviCacheGetKeyByUuid(sni_uuid)
@@ -69,6 +69,7 @@ func DeQueueNodes(key string) {
 
 	if len(sniNodes) != 0 {
 		// Range over the SNI nodes
+		utils.AviLog.Info.Printf("Found SNI nodes to process :%s", utils.Stringify(sniNodes))
 		for _, sniNode := range sniNodes {
 			RestOperation(sniNode.Name, gatewayNs, sniNode, true, cache)
 		}
