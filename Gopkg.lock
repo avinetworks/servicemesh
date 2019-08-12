@@ -38,6 +38,14 @@
   version = "v1.0.0"
 
 [[projects]]
+  digest = "1:c3f4f5bc77b998746a8061a52a2b8fb172c1744801165227692d702483995d58"
+  name = "github.com/go-ini/ini"
+  packages = ["."]
+  pruneopts = ""
+  revision = "d4cae42d398bc0095297fc3315669590d29166ea"
+  version = "v1.46.0"
+
+[[projects]]
   branch = "master"
   digest = "1:54d5c6a784a9de9c836fc070d51d0689c3e99ee6d24dba8a36f0762039dae830"
   name = "github.com/gogo/googleapis"
@@ -843,6 +851,7 @@
     "github.com/avinetworks/sdk/go/models",
     "github.com/avinetworks/sdk/go/session",
     "github.com/davecgh/go-spew/spew",
+    "github.com/go-ini/ini",
     "github.com/gogo/protobuf/types",
     "github.com/golang/protobuf/proto",
     "github.com/onsi/gomega",
@@ -855,6 +864,7 @@
     "istio.io/istio/pkg/mcp/sink",
     "k8s.io/api/core/v1",
     "k8s.io/api/extensions/v1beta1",
+    "k8s.io/apimachinery/pkg/labels",
     "k8s.io/apimachinery/pkg/util/runtime",
     "k8s.io/apimachinery/pkg/util/wait",
     "k8s.io/client-go/informers",
