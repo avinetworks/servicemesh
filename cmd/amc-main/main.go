@@ -71,7 +71,7 @@ func main() {
 	avi_rest_client_pool := utils.SharedAVIClients()
 	avi_obj_cache := utils.SharedAviObjCache()
 	avi_obj_cache.AviObjCachePopulate(avi_rest_client_pool.AviClient[0],
-		utils.CtrlVersion, "Default-Cloud")
+		utils.CtrlVersion, utils.CloudName)
 	istioEnabled := "False"
 	istioEnabled = os.Getenv("ISTIO_ENABLED")
 	if istioEnabled == "True" {
@@ -96,7 +96,7 @@ func main() {
 	graphQueue.SyncFunc = SyncFromNodesLayer
 	graphQueue.Run(stopCh)
 	// TODO (sudswas): Remove hard coding.
-	worker := utils.NewFullSyncThread(50 * time.Second)
+	worker := utils.NewFullSyncThread(50000 * time.Second)
 	worker.SyncFunction = FullSync
 	go worker.Run()
 	<-stopCh
@@ -132,7 +132,7 @@ func FullSync(istioEnabled string) {
 	avi_obj_cache := utils.SharedAviObjCache()
 	avi_rest_client_pool := utils.SharedAVIClients()
 	avi_obj_cache.AviObjCachePopulate(avi_rest_client_pool.AviClient[0],
-		utils.CtrlVersion, "Default-Cloud")
+		utils.CtrlVersion, utils.CloudName)
 	FullSyncK8s()
 	if istioEnabled == "True" {
 		FullSyncIstio()

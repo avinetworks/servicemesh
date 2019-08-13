@@ -1,0 +1,6 @@
+{"exclude_discovered_subnets":false,
+    "cloud_ref": null,
+    "ip6_autocfg_enabled":true,"synced_from_se":false,
+    "dhcp_enabled":true,"vcenter_dvs":true,
+    "configured_subnets":[],
+        "discovery":{"ip_subnet":[]},"name":"northsouthnetwork"}

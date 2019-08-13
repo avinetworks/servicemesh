@@ -14,9 +14,21 @@
 
 package main
 
-import cloud "github.com/avinetworks/servicemesh/avi-cloud/bootstrap"
+import (
+	"os"
+
+	cloud "github.com/avinetworks/servicemesh/avi-cloud/bootstrap"
+)
 
 // This code base should be kept independent from the rest of the AMC since it's only meant for bootstraping
 func main() {
-	cloud.ReadPropertiesFile("cloud_properties.ini")
+	cloud.IPAMRestOps("nsipam.json")
+	cloud.IPAMProviderProfileRestOps("ipamprofile.json")
+	cloud.IPAMDNSProfileRestOps("ipamdnsprofile.json")
+	// At this time, the above 3 commands may result into failures given there might be network profiles pre-created. So we would not care
+	// about their return status. However, for now assume that the cloud creation should succeed and only then we will proceed.
+	success := cloud.CloudRestOps("cloud.json")
+	if !success {
+		os.Exit(1)
+	}
 }

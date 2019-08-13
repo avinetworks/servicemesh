@@ -39,10 +39,12 @@ func AviVsSniBuild(vs_meta *nodes.AviVsTLSNode, httppolicynode []*nodes.AviHttpP
 	} else {
 		app_prof = "/api/applicationprofile/?name=" + "System-Secure-HTTP"
 	}
+	cloudRef := "/api/cloud?name=" + utils.CloudName
 	sniChild := &avimodels.VirtualService{Name: &name, CloudConfigCksum: &checksumstr,
 		CreatedBy:             &cr,
 		ApplicationProfileRef: &app_prof,
-		EastWestPlacement:     &east_west}
+		EastWestPlacement:     &east_west,
+		CloudRef:              &cloudRef}
 
 	//This VS has a TLSKeyCert associated, we need to mark 'type': 'VS_TYPE_VH_PARENT'
 	vh_type := "VS_TYPE_VH_CHILD"
@@ -146,20 +148,22 @@ func AviVsBuild(vs_meta *nodes.AviVsNode, httppolicynode []*nodes.AviHttpPolicyS
 	var dns_info_arr []*avimodels.DNSInfo
 	// Form the DNS_Info name_of_vs.namespace.<dns_ipam>
 	cache := utils.SharedAviObjCache()
-	cloud, _ := cache.CloudKeyCache.AviCacheGet("Default-Cloud")
+	cloud, _ := cache.CloudKeyCache.AviCacheGet(utils.CloudName)
 	fqdn := name + "." + vs_meta.Tenant + "." + cloud.(*utils.AviCloudPropertyCache).NSIpamDNS
 	dns_info := avimodels.DNSInfo{Fqdn: &fqdn}
 	dns_info_arr = append(dns_info_arr, &dns_info)
 	cksum := vs_meta.CloudConfigCksum
 	checksumstr := fmt.Sprint(cksum)
 	cr := utils.OSHIFT_K8S_CLOUD_CONNECTOR
+	cloudRef := "/api/cloud?name=" + utils.CloudName
 	vs := avimodels.VirtualService{Name: &name,
 		NetworkProfileRef:     &network_prof,
 		ApplicationProfileRef: &app_prof,
 		CloudConfigCksum:      &checksumstr,
 		CreatedBy:             &cr,
 		DNSInfo:               dns_info_arr,
-		EastWestPlacement:     &east_west}
+		EastWestPlacement:     &east_west,
+		CloudRef:              &cloudRef}
 
 	if vs_meta.DefaultPoolGroup != "" {
 		pool_ref := "/api/poolgroup/?name=" + vs_meta.DefaultPoolGroup

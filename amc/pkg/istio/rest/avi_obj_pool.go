@@ -43,8 +43,9 @@ func AviPoolBuild(pool_meta *nodes.AviPoolNode, cache_obj *utils.AviPoolCache) *
 		utils.AviLog.Info.Printf("Using Default pool algorithm :%s", poolAlgorithm)
 		poolAlgorithm = utils.LeastConnection
 	}
+	cloudRef := "/api/cloud?name=" + utils.CloudName
 	pool := avimodels.Pool{Name: &name, CloudConfigCksum: &cksumString,
-		CreatedBy: &cr, TenantRef: &tenant, ServiceMetadata: &svc_mdata, LbAlgorithm: &poolAlgorithm}
+		CreatedBy: &cr, TenantRef: &tenant, ServiceMetadata: &svc_mdata, LbAlgorithm: &poolAlgorithm, CloudRef: &cloudRef}
 
 	// TODO other fields like cloud_ref and lb algo
 

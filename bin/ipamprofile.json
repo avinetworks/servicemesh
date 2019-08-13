@@ -1,0 +1,5 @@
+{"name":"ns",
+    "tenant_ref":"/api/tenant/?name=admin",
+    "allocate_ip_in_vrf":false,
+    "internal_profile":{"usable_network_refs":["/api/network/?name=northsouthnetwork"],"ttl":30},
+    "type":"IPAMDNS_TYPE_INTERNAL"}
