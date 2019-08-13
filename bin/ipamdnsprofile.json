@@ -1,0 +1,3 @@
+{"allocate_ip_in_vrf":false,
+    "internal_profile":{"ttl":30,"dns_service_domain":[{"domain_name":"avi.ns"}]},
+    "type":"IPAMDNS_TYPE_INTERNAL_DNS","name":"nsdns"}

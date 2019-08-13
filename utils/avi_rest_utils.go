@@ -90,7 +90,7 @@ func (p *AviRestClientPool) AviRestOperate(c *clients.AviClient, rest_ops []*Res
 		if op.Err != nil {
 			AviLog.Warning.Printf(`RestOp method %v path %v tenant %v Obj %s 
                     returned err %v`, op.Method, op.Path, op.Tenant,
-				spew.Sprint(op.Obj), Stringify(op.Err))
+				spew.Sprint(op.Obj), Stringify(op.Response))
 			for j := i + 1; j < len(rest_ops); j++ {
 				rest_ops[j].Err = errors.New("Aborted due to prev error")
 			}
