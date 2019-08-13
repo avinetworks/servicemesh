@@ -18,7 +18,6 @@ package cache
 
 import (
 	"k8s.io/klog"
-        "fmt"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -32,7 +31,6 @@ type AppendFunc func(interface{})
 
 func ListAll(store Store, selector labels.Selector, appendFn AppendFunc) error {
 	selectAll := selector.Empty()
-        fmt.Println("DOES IT PRINT") 
 	for _, m := range store.List() {
 		if selectAll {
 			// Avoid computing labels of the objects to speed up common flows

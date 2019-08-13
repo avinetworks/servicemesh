@@ -16,6 +16,7 @@ package utils
 
 import (
 	"fmt"
+	"os"
 
 	avimodels "github.com/avinetworks/sdk/go/models"
 	coreinformers "k8s.io/client-go/informers/core/v1"
@@ -32,7 +33,7 @@ const (
 )
 
 const (
-	OSHIFT_K8S_CLOUD_CONNECTOR string = "oshift-k8s-cloud-connector"
+	OSHIFT_K8S_CLOUD_CONNECTOR string = "amc-k8s-cloud-connector"
 )
 
 const (
@@ -217,3 +218,13 @@ type WebSyncError struct {
 
 func (e *WebSyncError) Error() string  { return fmt.Sprintf("Error during %s: %v", e.operation, e.err) }
 func (e *SkipSyncError) Error() string { return e.Msg }
+
+var CloudName string
+
+func init() {
+	CloudName = os.Getenv("CLOUD_NAME")
+	if CloudName == "" {
+		// If the cloud name is blank - assume it to be Default-Cloud
+		CloudName = "Default-Cloud"
+	}
+}

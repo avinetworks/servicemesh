@@ -34,16 +34,19 @@ func CloudRestOps(cloudfilename string) bool {
 	jsonParser := json.NewDecoder(file)
 	if err = jsonParser.Decode(&cloud); err != nil {
 		utils.AviLog.Warning.Printf("parsing cloud config file %s", err.Error())
+		os.Exit(1)
 	}
 	// Let's set some values based on environment variables.
 	master_node := os.Getenv("MASTER_NODES")
 	token := os.Getenv("SERVICE_TOKEN")
-	if token == "" || master_node == "" {
-		utils.AviLog.Info.Printf("Master Node information and Service Token information are mandatory fields.")
+	cloud_name := os.Getenv("CLOUD_NAME")
+	if token == "" || master_node == "" || cloud_name == "" {
+		utils.AviLog.Info.Printf("Cloud Name, Master Node information and Service Token information are mandatory.")
 		os.Exit(1)
 	}
 	cloud.Oshiftk8sConfiguration.MasterNodes = append(cloud.Oshiftk8sConfiguration.MasterNodes, master_node)
 	cloud.Oshiftk8sConfiguration.ServiceAccountToken = &token
+	cloud.Name = &cloud_name
 	var rest_ops []*utils.RestOp
 	avi_rest_client_pool := utils.SharedAVIClients()
 	aviclient := avi_rest_client_pool.AviClient[0]

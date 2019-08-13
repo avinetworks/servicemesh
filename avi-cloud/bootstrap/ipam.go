@@ -36,6 +36,7 @@ func IPAMRestOps(ipamfilename string) {
 	jsonParser := json.NewDecoder(file)
 	if err = jsonParser.Decode(&network); err != nil {
 		utils.AviLog.Warning.Printf("parsing config file %s", err.Error())
+		os.Exit(1)
 	}
 	// Let's set some values based on environment variables.
 	cidr := os.Getenv("CIDR")
@@ -101,6 +102,7 @@ func IPAMProviderProfileRestOps(ipamprofilefilename string) {
 	jsonParser := json.NewDecoder(file)
 	if err = jsonParser.Decode(&dnsProfile); err != nil {
 		utils.AviLog.Warning.Printf("parsing config file %s", err.Error())
+		os.Exit(1)
 	}
 
 	var rest_ops []*utils.RestOp
@@ -127,24 +129,30 @@ func IPAMDNSProfileRestOps(ipamprofilefilename string) {
 	}
 	defer file.Close()
 
-	dnsProfile := avimodels.IPAMDNSInternalProfile{}
+	dnsProfile := avimodels.IPAMDNSProviderProfile{}
 	jsonParser := json.NewDecoder(file)
 	if err = jsonParser.Decode(&dnsProfile); err != nil {
 		utils.AviLog.Warning.Printf("parsing config file %s", err.Error())
+		os.Exit(1)
 	}
 
 	var rest_ops []*utils.RestOp
 	avi_rest_client_pool := utils.SharedAVIClients()
 	aviclient := avi_rest_client_pool.AviClient[0]
 	dnsSubDomain := os.Getenv("DNS_SUBDOMAIN")
+	utils.AviLog.Info.Printf("Sending DNS Profile info %s for creation", utils.Stringify(dnsProfile))
 	if dnsSubDomain == "" {
 		utils.AviLog.Info.Printf("DNS subdomain not provided, will use default value.")
+	} else {
+		dnsSD := avimodels.DNSServiceDomain{DomainName: &dnsSubDomain}
+		dnsInternalProfile := avimodels.IPAMDNSInternalProfile{}
+		dnsInternalProfile.DNSServiceDomain = append(dnsInternalProfile.DNSServiceDomain, &dnsSD)
+		dnsProfile.InternalProfile = &dnsInternalProfile
 	}
-	dnsSD := avimodels.DNSServiceDomain{DomainName: &dnsSubDomain}
-	dnsProfile.DNSServiceDomain = append(dnsProfile.DNSServiceDomain, &dnsSD)
+	utils.AviLog.Info.Printf("Sending DNS Profile info %s for creation", utils.Stringify(dnsProfile))
 	path := "/api/ipamdnsproviderprofile/"
 	rest_op := utils.RestOp{Path: path, Method: "POST", Obj: dnsProfile,
-		Tenant: "admin", Model: "IPAMDNSInternalProfile", Version: utils.CtrlVersion}
+		Tenant: "admin", Model: "IPAMDNSProviderProfile", Version: utils.CtrlVersion}
 	rest_ops = append(rest_ops, &rest_op)
 	err = avi_rest_client_pool.AviRestOperate(aviclient, rest_ops)
 	if err != nil {

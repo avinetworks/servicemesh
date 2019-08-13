@@ -34,8 +34,9 @@ func AviPoolGroupBuild(pg_meta *nodes.AviPoolGroupNode, cache_obj *utils.AviPGCa
 	svc_mdata := string(svc_mdata_json)
 	members := pg_meta.Members
 	cr := utils.OSHIFT_K8S_CLOUD_CONNECTOR
+	cloudRef := "/api/cloud?name=" + utils.CloudName
 	pg := avimodels.PoolGroup{Name: &name, CloudConfigCksum: &cksumString,
-		CreatedBy: &cr, TenantRef: &tenant, ServiceMetadata: &svc_mdata, Members: members}
+		CreatedBy: &cr, TenantRef: &tenant, ServiceMetadata: &svc_mdata, Members: members, CloudRef: &cloudRef}
 	// TODO other fields like cloud_ref and lb algo
 
 	macro := utils.AviRestObjMacro{ModelName: "PoolGroup", Data: pg}
