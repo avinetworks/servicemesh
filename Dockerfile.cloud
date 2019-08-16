@@ -1,0 +1,11 @@
+FROM golang:latest AS build
+ENV BUILD_PATH="github.com/avinetworks/servicemesh/"
+RUN mkdir -p $GOPATH/src/$BUILD_PATH
+COPY . $GOPATH/src/$BUILD_PATH
+WORKDIR $GOPATH/src/$BUILD_PATH
+RUN cp $GOPATH/src/$BUILD_PATH/bin/*.json $GOPATH/bin/
+RUN GOARCH=amd64 CGO_ENABLED=0 GOOS=linux go build -o $GOPATH/bin/servicemesh-bootstrap $BUILD_PATH/cmd/cloud-main
+
+FROM alpine:latest
+COPY --from=build /go/bin/ .
+ENTRYPOINT ["./servicemesh-bootstrap"]

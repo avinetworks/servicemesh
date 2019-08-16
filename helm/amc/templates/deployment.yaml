@@ -1,0 +1,67 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "amc.fullname" . }}
+  labels:
+{{ include "amc.labels" . | indent 4 }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: {{ include "amc.name" . }}
+      app.kubernetes.io/instance: {{ .Release.Name }}
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: {{ include "amc.name" . }}
+        app.kubernetes.io/instance: {{ .Release.Name }}
+    spec:
+      initContainers:
+      - name: init-cloud
+        image: servicemesh-cloud:latest
+        command: ['sh', '-c', './servicemesh-bootstrap']
+        imagePullPolicy: {{ .Values.image.pullPolicy }}
+        env:
+        - name: CTRL_USERNAME
+          value: {{ .Values.avi.controller_username | quote }}
+        - name: CTRL_PASSWORD
+          value: {{ .Values.avi.controller_password | quote }}
+        - name: CTRL_IPADDRESS
+          value: {{ .Values.avi.controller_ip | quote }}
+        - name: CTRL_VERSION
+          value: {{ .Values.avi.constroller_version | quote }}
+        - name: CLOUD_NAME
+          value: {{ .Values.avi.cloud_name | quote }}
+        - name: MASTER_NODES
+          value: {{ .Values.avi.k8s_master_node | quote }}
+        - name: SERVICE_TOKEN
+          value: {{ .Values.avi.k8s_service_token | quote }}
+        - name: CIDR
+          value: {{ .Values.avi.network_cidr | quote }}
+        - name: STATIC_RANGE_START
+          value: {{ .Values.avi.network_static_range_start | quote }}
+        - name: STATIC_RANGE_END
+          value: {{ .Values.avi.network_static_range_end | quote }}
+        - name: DNS_SUBDOMAIN
+          value: {{ .Values.avi.ipam_subdomain | quote }}
+        - name: NETWORK_NAME
+          value: {{ .Values.avi.network_name | quote }}
+      containers:
+      - name: avi-controller
+        image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+        imagePullPolicy: {{ .Values.image.pullPolicy }}
+        env:
+        - name: CTRL_USERNAME
+          value: {{ .Values.avi.controller_username | quote }}
+        - name: CTRL_PASSWORD
+          value: {{ .Values.avi.controller_password | quote }}
+        - name: CTRL_IPADDRESS
+          value: {{ .Values.avi.controller_ip | quote }}
+        - name: CTRL_VERSION
+          value: {{ .Values.avi.constroller_version | quote }}
+        - name: ISTIO_ENABLED
+          value: {{ .Values.istio.enabled | quote }}
+        - name: MCP_URL
+          value: {{ .Values.istio.mcp_url | quote }}
+        - name: CLOUD_NAME
+          value: {{ .Values.avi.cloud_name | quote }}

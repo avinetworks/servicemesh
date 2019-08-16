@@ -1,5 +1,5 @@
 {"name":"Istio-Cloud","tenant_ref":"/api/tenant/?name=admin",
-    "dhcp_enabled":true,"vtype":"CLOUD_OSHIFT_K8S","ipam_provider_ref":"/api/ipamdnsproviderprofile/?name=ns",
+    "dhcp_enabled":true,"vtype":"CLOUD_OSHIFT_K8S","ipam_provider_ref":null,
     "state_based_dns_registration":true,
     "ip6_autocfg_enabled":false,"mtu":1500,
     "east_west_ipam_provider_ref": null,
@@ -33,5 +33,5 @@
         "license_type":"LIC_CORES",
         "license_tier":"ENTERPRISE_18",
         "enable_vip_static_routes":false,
-        "dns_provider_ref":"/api/ipamdnsproviderprofile/?name=nsdns",
+        "dns_provider_ref":null,
         "east_west_dns_provider_ref": null}
