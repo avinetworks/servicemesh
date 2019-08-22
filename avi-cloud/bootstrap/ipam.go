@@ -25,7 +25,36 @@ import (
 	"github.com/avinetworks/servicemesh/utils"
 )
 
-func IPAMRestOps(ipamfilename string) {
+func IPAMRestOps(ipamfilename string, avi_rest_client_pool *utils.AviRestClientPool) {
+	network := HydrateNetwork(ipamfilename)
+	cloud_name := os.Getenv("CLOUD_NAME")
+	if cloud_name != "" {
+		cloud_ref := "/api/cloud/?name=" + cloud_name
+		utils.AviLog.Info.Printf("Setting cloud reference to the network profile :%s", cloud_name)
+		network.CloudRef = &cloud_ref
+	}
+	network_name := os.Getenv("NETWORK_NAME")
+	// Override the network name if it's provided
+	if network_name != "" {
+		utils.AviLog.Info.Printf("Overriding the network name with :%s", network_name)
+		network.Name = &network_name
+	}
+	var rest_ops []*utils.RestOp
+
+	path := "/api/network/"
+	rest_op := utils.RestOp{Path: path, Method: "POST", Obj: network,
+		Tenant: "admin", Model: "Network", Version: utils.CtrlVersion}
+	rest_ops = append(rest_ops, &rest_op)
+	err := avi_rest_client_pool.AviRestOperate(avi_rest_client_pool.AviClient[0], rest_ops)
+	if err != nil {
+		utils.AviLog.Warning.Printf("Couldn't create the network IPAM name:%s due to the following error :%s ", *network.Name, err.Error())
+
+	} else {
+		utils.AviLog.Info.Printf("Successfully created the network IPAM :%s", *network.Name)
+	}
+}
+
+func HydrateNetwork(ipamfilename string) avimodels.Network {
 	file, err := os.Open(ipamfilename)
 	if err != nil {
 		log.Fatal(err)
@@ -74,24 +103,10 @@ func IPAMRestOps(ipamfilename string) {
 		utils.AviLog.Info.Printf("Static range not provided")
 	}
 	network.ConfiguredSubnets = append(network.ConfiguredSubnets, &subnet)
-	var rest_ops []*utils.RestOp
-	avi_rest_client_pool := utils.SharedAVIClients()
-	aviclient := avi_rest_client_pool.AviClient[0]
-
-	path := "/api/network/"
-	rest_op := utils.RestOp{Path: path, Method: "POST", Obj: network,
-		Tenant: "admin", Model: "Network", Version: utils.CtrlVersion}
-	rest_ops = append(rest_ops, &rest_op)
-	err = avi_rest_client_pool.AviRestOperate(aviclient, rest_ops)
-	if err != nil {
-		utils.AviLog.Warning.Printf("Couldn't create the network IPAM name:%s due to the following error :%s ", *network.Name, err.Error())
-
-	} else {
-		utils.AviLog.Info.Printf("Successfully created the network IPAM :%s", *network.Name)
-	}
+	return network
 }
 
-func IPAMProviderProfileRestOps(ipamprofilefilename string) {
+func IPAMProviderProfileRestOps(ipamprofilefilename string, avi_rest_client_pool *utils.AviRestClientPool) {
 	file, err := os.Open(ipamprofilefilename)
 	if err != nil {
 		log.Fatal(err)
@@ -106,14 +121,21 @@ func IPAMProviderProfileRestOps(ipamprofilefilename string) {
 	}
 
 	var rest_ops []*utils.RestOp
-	avi_rest_client_pool := utils.SharedAVIClients()
-	aviclient := avi_rest_client_pool.AviClient[0]
 
+	network_name := os.Getenv("NETWORK_NAME")
+	// Override the network name if it's provided
+	if network_name != "" {
+		utils.AviLog.Info.Printf("Overriding the network name with :%s", network_name)
+		networkRef := "/api/network/?name=" + network_name
+		dnsInternalProfile := avimodels.IPAMDNSInternalProfile{}
+		dnsInternalProfile.UsableNetworkRefs = append(dnsInternalProfile.UsableNetworkRefs, networkRef)
+		dnsProfile.InternalProfile = &dnsInternalProfile
+	}
 	path := "/api/ipamdnsproviderprofile/"
 	rest_op := utils.RestOp{Path: path, Method: "POST", Obj: dnsProfile,
 		Tenant: "admin", Model: "IPAMDNSProviderProfile", Version: utils.CtrlVersion}
 	rest_ops = append(rest_ops, &rest_op)
-	err = avi_rest_client_pool.AviRestOperate(aviclient, rest_ops)
+	err = avi_rest_client_pool.AviRestOperate(avi_rest_client_pool.AviClient[0], rest_ops)
 	if err != nil {
 		utils.AviLog.Warning.Printf("Couldn't create the DNS Provider IPAM due to the following error :%s ", err.Error())
 	} else {
@@ -122,7 +144,7 @@ func IPAMProviderProfileRestOps(ipamprofilefilename string) {
 
 }
 
-func IPAMDNSProfileRestOps(ipamprofilefilename string) {
+func IPAMDNSProfileRestOps(ipamprofilefilename string, avi_rest_client_pool *utils.AviRestClientPool) {
 	file, err := os.Open(ipamprofilefilename)
 	if err != nil {
 		log.Fatal(err)
@@ -137,8 +159,6 @@ func IPAMDNSProfileRestOps(ipamprofilefilename string) {
 	}
 
 	var rest_ops []*utils.RestOp
-	avi_rest_client_pool := utils.SharedAVIClients()
-	aviclient := avi_rest_client_pool.AviClient[0]
 	dnsSubDomain := os.Getenv("DNS_SUBDOMAIN")
 	utils.AviLog.Info.Printf("Sending DNS Profile info %s for creation", utils.Stringify(dnsProfile))
 	if dnsSubDomain == "" {
@@ -154,7 +174,7 @@ func IPAMDNSProfileRestOps(ipamprofilefilename string) {
 	rest_op := utils.RestOp{Path: path, Method: "POST", Obj: dnsProfile,
 		Tenant: "admin", Model: "IPAMDNSProviderProfile", Version: utils.CtrlVersion}
 	rest_ops = append(rest_ops, &rest_op)
-	err = avi_rest_client_pool.AviRestOperate(aviclient, rest_ops)
+	err = avi_rest_client_pool.AviRestOperate(avi_rest_client_pool.AviClient[0], rest_ops)
 	if err != nil {
 		utils.AviLog.Warning.Printf("Couldn't create the DNS Profile due to the following error :%s ", err.Error())
 	} else {
