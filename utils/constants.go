@@ -21,4 +21,8 @@ const (
 	RandomConnection      = "RANDOM_CONN"
 	PassthroughConnection = "PASSTHROUGH_CONN"
 	RoundRobinConnection  = "LB_ALGORITHM_ROUND_ROBIN"
+	ServiceInformer       = "ServiceInformer"
+	PodInformer           = "PodInformer"
+	SecretInformer        = "SecretInformer"
+	EndpointInformer      = "EndpointInformer"
 )
