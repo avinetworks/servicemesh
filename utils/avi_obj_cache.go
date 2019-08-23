@@ -112,6 +112,8 @@ func (c *AviObjCache) AviPoolCachePopulate(client *clients.AviClient,
 					}
 				} else {
 					AviLog.Warning.Printf("service_metadata %v malformed", pool)
+					// Not caching a pool with malformed metadata?
+					continue
 				}
 
 				var tenant string
@@ -382,8 +384,10 @@ func (c *AviObjCache) AviHTTPPolicyCachePopulate(client *clients.AviClient,
 				}
 				if http_pol != nil {
 					http_cache_obj := AviHTTPCache{Name: http_pol["name"].(string),
-						Tenant: tenant, Uuid: http_pol["uuid"].(string),
-						CloudConfigCksum: http_pol["cloud_config_cksum"].(string)}
+						Tenant: tenant, Uuid: http_pol["uuid"].(string)}
+					if http_pol["cloud_config_cksum"] != nil {
+						http_cache_obj.CloudConfigCksum = http_pol["cloud_config_cksum"].(string)
+					}
 					k := NamespaceName{Namespace: tenant, Name: http_pol["name"].(string)}
 					c.HTTPCache.AviCacheAdd(k, &http_cache_obj)
 					AviLog.Info.Printf("Added HTTP Policy cache key %v val %v",

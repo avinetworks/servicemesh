@@ -144,14 +144,21 @@ func RandomSeq(n int) string {
 var informer sync.Once
 var informerInstance *Informers
 
-func NewInformers(cs *kubernetes.Clientset) *Informers {
+func NewInformers(cs *kubernetes.Clientset, registeredInformers []string) *Informers {
 	kubeInformerFactory := kubeinformers.NewSharedInformerFactory(cs, time.Second*30)
 	informer.Do(func() {
-		informerInstance = &Informers{
-			ServiceInformer: kubeInformerFactory.Core().V1().Services(),
-			EpInformer:      kubeInformerFactory.Core().V1().Endpoints(),
-			PodInformer:     kubeInformerFactory.Core().V1().Pods(),
-			SecretInformer:  kubeInformerFactory.Core().V1().Secrets(),
+		informerInstance = &Informers{}
+		for _, informer := range registeredInformers {
+			switch informer {
+			case ServiceInformer:
+				informerInstance.ServiceInformer = kubeInformerFactory.Core().V1().Services()
+			case PodInformer:
+				informerInstance.PodInformer = kubeInformerFactory.Core().V1().Pods()
+			case EndpointInformer:
+				informerInstance.EpInformer = kubeInformerFactory.Core().V1().Endpoints()
+			case SecretInformer:
+				informerInstance.SecretInformer = kubeInformerFactory.Core().V1().Secrets()
+			}
 		}
 	})
 	return informerInstance

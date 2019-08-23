@@ -18,12 +18,10 @@ import (
 	"fmt"
 	"reflect"
 	"sync"
-	"time"
 
 	"github.com/avinetworks/servicemesh/utils"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/util/runtime"
-	kubeinformers "k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes"
 	typedcorev1 "k8s.io/client-go/kubernetes/typed/core/v1"
 	"k8s.io/client-go/tools/cache"
@@ -51,17 +49,6 @@ func SharedAviController() *AviController {
 		}
 	})
 	return controllerInstance
-}
-
-func NewInformers(cs *kubernetes.Clientset) *utils.Informers {
-	kubeInformerFactory := kubeinformers.NewSharedInformerFactory(cs, time.Second*30)
-	informers := utils.Informers{
-		ServiceInformer: kubeInformerFactory.Core().V1().Services(),
-		EpInformer:      kubeInformerFactory.Core().V1().Endpoints(),
-		PodInformer:     kubeInformerFactory.Core().V1().Pods(),
-		SecretInformer:  kubeInformerFactory.Core().V1().Secrets(),
-	}
-	return &informers
 }
 
 func (c *AviController) SetupEventHandlers(cs *kubernetes.Clientset) {
