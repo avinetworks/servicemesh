@@ -9,3 +9,7 @@
 [[constraint]]
   name = "k8s.io/apimachinery"
   branch = "release-1.15"
+
+[[constraint]]
+  name = "github.com/openshift/client-go"
+  version = "3.9.0"
