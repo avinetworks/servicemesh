@@ -25,4 +25,6 @@ const (
 	PodInformer           = "PodInformer"
 	SecretInformer        = "SecretInformer"
 	EndpointInformer      = "EndpointInformer"
+	IngressInformer       = "IngressInformer"
+	RouteInformer         = "RouteInformer"
 )

@@ -38,14 +38,6 @@
   version = "v1.0.0"
 
 [[projects]]
-  digest = "1:c3f4f5bc77b998746a8061a52a2b8fb172c1744801165227692d702483995d58"
-  name = "github.com/go-ini/ini"
-  packages = ["."]
-  pruneopts = ""
-  revision = "d4cae42d398bc0095297fc3315669590d29166ea"
-  version = "v1.46.0"
-
-[[projects]]
   branch = "master"
   digest = "1:54d5c6a784a9de9c836fc070d51d0689c3e99ee6d24dba8a36f0762039dae830"
   name = "github.com/gogo/googleapis"
@@ -233,6 +225,31 @@
   pruneopts = ""
   revision = "90e289841c1ed79b7a598a7cd9959750cb5e89e2"
   version = "v1.5.0"
+
+[[projects]]
+  digest = "1:8aeb4a73c41fd79a868943af3319dc9472172b21063deff6b4391872139f7728"
+  name = "github.com/openshift/api"
+  packages = ["route/v1"]
+  pruneopts = ""
+  revision = "0d921e363e951d89f583292c60d013c318df64dc"
+  version = "v3.9.0"
+
+[[projects]]
+  digest = "1:7da30d36edabf50fb5bc07f759991589c5ca72e75b3dd50fa58c57d94e96fd15"
+  name = "github.com/openshift/client-go"
+  packages = [
+    "route/clientset/versioned",
+    "route/clientset/versioned/scheme",
+    "route/clientset/versioned/typed/route/v1",
+    "route/informers/externalversions",
+    "route/informers/externalversions/internalinterfaces",
+    "route/informers/externalversions/route",
+    "route/informers/externalversions/route/v1",
+    "route/listers/route/v1",
+  ]
+  pruneopts = ""
+  revision = "1fa528d3be060e4c7178eb69e76d37cf7e699e3c"
+  version = "v3.9.0"
 
 [[projects]]
   digest = "1:6f218995d6a74636cfcab45ce03005371e682b4b9bee0e5eb0ccfd83ef85364f"
@@ -851,10 +868,12 @@
     "github.com/avinetworks/sdk/go/models",
     "github.com/avinetworks/sdk/go/session",
     "github.com/davecgh/go-spew/spew",
-    "github.com/go-ini/ini",
     "github.com/gogo/protobuf/types",
     "github.com/golang/protobuf/proto",
     "github.com/onsi/gomega",
+    "github.com/openshift/client-go/route/clientset/versioned",
+    "github.com/openshift/client-go/route/informers/externalversions",
+    "github.com/openshift/client-go/route/informers/externalversions/route/v1",
     "google.golang.org/grpc",
     "istio.io/api/mcp/v1alpha1",
     "istio.io/api/networking/v1alpha3",
@@ -869,6 +888,7 @@
     "k8s.io/apimachinery/pkg/util/wait",
     "k8s.io/client-go/informers",
     "k8s.io/client-go/informers/core/v1",
+    "k8s.io/client-go/informers/extensions/v1beta1",
     "k8s.io/client-go/kubernetes",
     "k8s.io/client-go/kubernetes/typed/core/v1",
     "k8s.io/client-go/rest",
