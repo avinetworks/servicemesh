@@ -25,4 +25,7 @@ const (
 	PodInformer           = "PodInformer"
 	SecretInformer        = "SecretInformer"
 	EndpointInformer      = "EndpointInformer"
+	IstioMutualKey        = "key.pem"
+	IstioMutualCertChain  = "cert-chain.pem"
+	IstioMutualRootCA     = "root-cert.pem"
 )

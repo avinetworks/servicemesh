@@ -193,6 +193,13 @@ type AviSSLCache struct {
 	//CloudConfigCksum string
 }
 
+type AviPkiProfileCache struct {
+	Name   string
+	Tenant string
+	Uuid   string
+	//CloudConfigCksum string
+}
+
 type AviCloudPropertyCache struct {
 	Name      string
 	VType     string

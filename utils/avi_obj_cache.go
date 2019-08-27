@@ -25,13 +25,14 @@ import (
 )
 
 type AviObjCache struct {
-	VsCache        *AviCache
-	PgCache        *AviCache
-	HTTPCache      *AviCache
-	SSLKeyCache    *AviCache
-	CloudKeyCache  *AviCache
-	PoolCache      *AviCache
-	SvcToPoolCache *AviMultiCache
+	VsCache         *AviCache
+	PgCache         *AviCache
+	HTTPCache       *AviCache
+	SSLKeyCache     *AviCache
+	PkiProfileCache *AviCache
+	CloudKeyCache   *AviCache
+	PoolCache       *AviCache
+	SvcToPoolCache  *AviMultiCache
 }
 
 func NewAviObjCache() *AviObjCache {
@@ -40,6 +41,7 @@ func NewAviObjCache() *AviObjCache {
 	c.PgCache = NewAviCache()
 	c.HTTPCache = NewAviCache()
 	c.PoolCache = NewAviCache()
+	c.PkiProfileCache = NewAviCache()
 	c.SSLKeyCache = NewAviCache()
 	c.CloudKeyCache = NewAviCache()
 	c.SvcToPoolCache = NewAviMultiCache()
@@ -414,12 +416,12 @@ func (c *AviObjCache) AviSSLKeyAndCertPopulate(client *clients.AviClient,
 			AviLog.Warning.Printf(`SSLKeyAndCert Get uri %v returned %v type %T`, uri,
 				rest_response, rest_response)
 		} else {
-			AviLog.Info.Printf("SSLKeyAndCert Get uri %v returned %v HTTP Policies", uri,
+			AviLog.Info.Printf("SSLKeyAndCert Get uri %v returned %v SSLKeys.", uri,
 				resp["count"])
 			results, ok := resp["results"].([]interface{})
 			if !ok {
 				AviLog.Warning.Printf(`results not of type []interface{}
-								 Instead of type %T for HTTP Policies`, resp["results"])
+								 Instead of type %T for SSLKeys`, resp["results"])
 				return nil
 			}
 			for _, ssl_intf := range results {
@@ -456,6 +458,117 @@ func (c *AviObjCache) AviSSLKeyAndCertPopulate(client *clients.AviClient,
 		}
 	}
 	return ssl_key_collection
+}
+
+func (c *AviObjCache) IstioMutualSSLKeyCert(client *clients.AviClient,
+	cloud string, vs_uuid string) {
+	var rest_response interface{}
+	uri := "/api/sslkeyandcertificate?name=istio.default"
+	err := client.AviSession.Get(uri, &rest_response)
+	if err != nil {
+		AviLog.Warning.Printf(`IstioMutualSSLKeyCert Get uri %v returned err %v`, uri, err)
+		return
+	}
+	resp, ok := rest_response.(map[string]interface{})
+	if !ok {
+		AviLog.Warning.Printf(`IstioMutualSSLKeyCert Get uri %v returned %v type %T`, uri,
+			rest_response, rest_response)
+		return
+	}
+	AviLog.Info.Printf("IstioMutualSSLKeyCert Get uri %v returned %v SSLKeys", uri,
+		resp["count"])
+	results, ok := resp["results"].([]interface{})
+	if !ok {
+		AviLog.Warning.Printf(`results not of type []interface{}
+								 Instead of type %T for SSLKeys`, resp["results"])
+	}
+	for _, ssl_intf := range results {
+		ssl_pol, ok := ssl_intf.(map[string]interface{})
+		if !ok {
+			AviLog.Warning.Printf(`ssl_intf not of type map[string]
+									 interface{}. Instead of type %T`, ssl_intf)
+			continue
+		}
+
+		var tenant string
+		url, err := url.Parse(ssl_pol["tenant_ref"].(string))
+		if err != nil {
+			AviLog.Warning.Printf(`Error parsing tenant_ref %v in
+					IstioMutualSSLKeyCert %v`, ssl_pol["tenant_ref"], ssl_pol)
+			continue
+		} else if url.Fragment == "" {
+			AviLog.Warning.Printf(`Error extracting name tenant_ref %v
+										 in IstioMutualSSLKeyCert set %v`, ssl_pol["tenant_ref"], ssl_pol)
+			continue
+		} else {
+			tenant = url.Fragment
+		}
+		if ssl_pol != nil {
+			ssl_cache_obj := AviSSLCache{Name: ssl_pol["name"].(string),
+				Tenant: tenant, Uuid: ssl_pol["uuid"].(string)}
+			k := NamespaceName{Namespace: tenant, Name: ssl_pol["name"].(string)}
+			c.SSLKeyCache.AviCacheAdd(k, &ssl_cache_obj)
+			AviLog.Info.Printf("Added IstioMutualSSLKeyCert cache key %v val %v",
+				k, ssl_cache_obj)
+		}
+
+	}
+
+}
+
+func (c *AviObjCache) IstioMutualPkiProfile(client *clients.AviClient,
+	cloud string, vs_uuid string) {
+	var rest_response interface{}
+	uri := "/api/pkiprofile?name=istio.default"
+	err := client.AviSession.Get(uri, &rest_response)
+	if err != nil {
+		AviLog.Warning.Printf(`IstioMutualPkiProfile Get uri %v returned err %v`, uri, err)
+		return
+	}
+	resp, ok := rest_response.(map[string]interface{})
+	if !ok {
+		AviLog.Warning.Printf(`IstioMutualPkiProfile Get uri %v returned %v type %T`, uri,
+			rest_response, rest_response)
+		return
+	}
+	AviLog.Info.Printf("IstioMutualPkiProfile Get uri %v returned %v PkiProfile", uri,
+		resp["count"])
+	results, ok := resp["results"].([]interface{})
+	if !ok {
+		AviLog.Warning.Printf(`results not of type []interface{}
+								 Instead of type %T for PkiProfile`, resp["results"])
+	}
+	for _, pki_intf := range results {
+		pki_pro, ok := pki_intf.(map[string]interface{})
+		if !ok {
+			AviLog.Warning.Printf(`pki_intf not of type map[string]
+									 interface{}. Instead of type %T`, pki_intf)
+			continue
+		}
+
+		var tenant string
+		url, err := url.Parse(pki_pro["tenant_ref"].(string))
+		if err != nil {
+			AviLog.Warning.Printf(`Error parsing tenant_ref %v in
+					IstioMutualPkiProfile %v`, pki_pro["tenant_ref"], pki_pro)
+			continue
+		} else if url.Fragment == "" {
+			AviLog.Warning.Printf(`Error extracting name tenant_ref %v
+										 in IstioMutualPkiProfile set %v`, pki_pro["tenant_ref"], pki_pro)
+			continue
+		} else {
+			tenant = url.Fragment
+		}
+		if pki_pro != nil {
+			pki_cache_obj := AviPkiProfileCache{Name: pki_pro["name"].(string),
+				Tenant: tenant, Uuid: pki_pro["uuid"].(string)}
+			k := NamespaceName{Namespace: tenant, Name: pki_pro["name"].(string)}
+			c.PkiProfileCache.AviCacheAdd(k, &pki_cache_obj)
+			AviLog.Info.Printf("Added IstioMutualPkiProfile cache key %v val %v",
+				k, pki_cache_obj)
+		}
+	}
+
 }
 
 func (c *AviObjCache) AviCloudPropertiesPopulate(client *clients.AviClient,
