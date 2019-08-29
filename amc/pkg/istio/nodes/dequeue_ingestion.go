@@ -32,7 +32,24 @@ func DequeueIngestion(key string) {
 		utils.AviLog.Warning.Printf("%s: Invalid Graph Schema type obtained.", key)
 		return
 	}
+
 	sharedQueue := utils.SharedWorkQueue().GetQueueByName(utils.GraphLayer)
+	// Special case handling of the ISTIO_MUTUAL case, where we expect a secret to be present
+	// in each namespace by the name of istio.default
+	if objType == "Secrets" && name == "istio.default" {
+		// Short circuit and generate the model
+		utils.AviLog.Info.Printf("ISTIO_MUTUAL: Found key to process: %s", key)
+		model_name := namespace + "/" + "ISTIO_MUTUAL_SECRET" + "/" + name
+		aviModelGraph := NewAviObjectGraph()
+		aviModelGraph.BuildIstioMutualSecret(namespace, name)
+
+		istio_objs.SharedAviGraphLister().Save(model_name, aviModelGraph)
+		bkt := utils.Bkt(model_name, sharedQueue.NumWorkers)
+		sharedQueue.Workqueue[bkt].AddRateLimited(model_name)
+		utils.AviLog.Info.Printf("ISTIO_MUTUAL: Published key to REST layer: %s", model_name)
+
+		return
+	}
 	gatewayNames, gateway_found := schema.GetParentGateways(name, namespace)
 	// Update the relationships associated with this object
 	if !gateway_found && objType == "gateway" {

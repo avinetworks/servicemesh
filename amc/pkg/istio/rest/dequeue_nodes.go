@@ -16,6 +16,7 @@ package rest
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/avinetworks/servicemesh/amc/pkg/istio/nodes"
 	"github.com/avinetworks/servicemesh/amc/pkg/istio/objects"
@@ -30,6 +31,19 @@ func DeQueueNodes(key string) {
 		return
 	}
 	cache := utils.SharedAviObjCache()
+	// Special case handling of ISTIO_MUTUAL
+	keysplit := strings.Split(key, "/")
+	if len(keysplit) > 2 {
+		if keysplit[1] == "ISTIO_MUTUAL_SECRET" {
+			if avimodelIntf != nil {
+				sslNodesModel := avimodelIntf.(*nodes.AviObjectGraph)
+				processSSLKeyPkiProfile(keysplit[0], keysplit[1], sslNodesModel, cache)
+			} else {
+				processSSLKeyPkiProfile(keysplit[0], keysplit[1], nil, cache)
+			}
+		}
+		return
+	}
 	gatewayNs, vsName := utils.ExtractGatewayNamespace(key)
 	vsKey := utils.NamespaceName{Namespace: gatewayNs, Name: vsName}
 	vs_cache_obj := getVsCacheObj(vsKey)
@@ -75,6 +89,79 @@ func DeQueueNodes(key string) {
 		}
 	}
 
+}
+
+func processSSLKeyPkiProfile(namespace string, secretName string, avimodel *nodes.AviObjectGraph, cache *utils.AviObjCache) bool {
+	var rest_ops []*utils.RestOp
+	utils.AviLog.Info.Printf("Found a ISTIO_MUTUAL secret to process for namespace: %s", namespace)
+	// First fetch the cache
+	sslkeycachekey := utils.NamespaceName{Name: secretName, Namespace: namespace}
+	sslkey, found := cache.SSLKeyCache.AviCacheGet(sslkeycachekey)
+	if found {
+		sslkey_obj, ok := sslkey.(*utils.AviSSLCache)
+		if !ok {
+			utils.AviLog.Warning.Printf("Invalid SSL Key object found. Cannot cast. Not doing anything")
+			return false
+		}
+		if avimodel == nil {
+			// DELETE request
+			rest_op := AviSSLKeyCertDel(sslkey_obj.Uuid, namespace)
+			rest_ops = append(rest_ops, rest_op)
+		} else {
+			// Proces it as a PUT request
+			sslnodes := avimodel.GetAviSSLCertKeys()
+			if len(sslnodes) == 1 {
+				rest_op := AviSSLBuild(sslnodes[0], sslkey_obj)
+				rest_ops = append(rest_ops, rest_op)
+			} else {
+				utils.AviLog.Warning.Printf("More than one SSL node found for secret :%s", secretName)
+				return false
+			}
+		}
+	} else {
+		//Process it as a POST request
+		if avimodel != nil {
+			sslnodes := avimodel.GetAviSSLCertKeys()
+			utils.AviLog.Info.Printf("ISTIO_MUTUAL:POST request for SSL key: %s in namespace: %s, length of nodes: %v", secretName, namespace, len(sslnodes))
+			if len(sslnodes) == 1 {
+				rest_op := AviSSLBuild(sslnodes[0], nil)
+				rest_ops = append(rest_ops, rest_op)
+			} else {
+				utils.AviLog.Warning.Printf("More than one SSL node found for secret during POST :%s", secretName)
+				return false
+			}
+		}
+	}
+	pkicachekey := utils.NamespaceName{Name: secretName, Namespace: namespace}
+	pkikey, found := cache.PkiProfileCache.AviCacheGet(pkicachekey)
+	if found {
+		pki_obj, ok := pkikey.(*utils.AviPkiProfileCache)
+		if !ok {
+			utils.AviLog.Warning.Printf("Invalid PKI Key object found. Cannot cast. Not doing anything")
+			return false
+		}
+		if avimodel == nil {
+			// DELETE request
+			rest_op := AviPkiProfileDel(pki_obj.Uuid, namespace)
+			rest_ops = append(rest_ops, rest_op)
+		} else {
+			// Proces it as a PUT request
+			sslnodes := avimodel.GetAviSSLCertKeys()
+			rest_op := AviPkiProfileBuild(sslnodes[0], pki_obj)
+			rest_ops = append(rest_ops, rest_op)
+
+		}
+	} else {
+		if avimodel != nil {
+			//Process it as a POST request
+			sslnodes := avimodel.GetAviSSLCertKeys()
+			rest_op := AviPkiProfileBuild(sslnodes[0], nil)
+			rest_ops = append(rest_ops, rest_op)
+
+		}
+	}
+	ExecuteRestAndPopulateCache(rest_ops, cache, utils.NamespaceName{}, sslkeycachekey)
+	return true
 }
 
 func getVsCacheObj(vsKey utils.NamespaceName) *utils.AviVsCache {
@@ -126,7 +213,6 @@ func deleteVSOper(vs_cache_obj *utils.AviVsCache, gatewayNs string, cache *utils
 }
 
 func RestOperation(vsName string, gatewayNs string, avimodelNode nodes.AviModelNode, sniNode bool, cache *utils.AviObjCache) {
-	avi_rest_client_pool := utils.SharedAVIClients()
 	var rest_ops []*utils.RestOp
 	var pools_to_delete []utils.NamespaceName
 	var pgs_to_delete []utils.NamespaceName
@@ -216,7 +302,11 @@ func RestOperation(vsName string, gatewayNs string, avimodelNode nodes.AviModelN
 	rest_ops = HTTPPolicyDelete(https_to_delete, gatewayNs, rest_ops)
 	rest_ops = PoolGroupDelete(pgs_to_delete, gatewayNs, rest_ops)
 	rest_ops = PoolDelete(pools_to_delete, gatewayNs, rest_ops)
+	ExecuteRestAndPopulateCache(rest_ops, cache, vsKey)
+}
 
+func ExecuteRestAndPopulateCache(rest_ops []*utils.RestOp, cache *utils.AviObjCache, vsKey utils.NamespaceName, sslKey ...utils.NamespaceName) {
+	avi_rest_client_pool := utils.SharedAVIClients()
 	aviclient := avi_rest_client_pool.AviClient[0]
 	err := avi_rest_client_pool.AviRestOperate(aviclient, rest_ops)
 	if err != nil {
@@ -266,7 +356,13 @@ func RestOperation(vsName string, gatewayNs string, avimodelNode nodes.AviModelN
 				} else if rest_op.Model == "HTTPPolicySet" {
 					AviHTTPPolicyCacheAdd(cache, rest_op, vsKey)
 				} else if rest_op.Model == "SSLKeyAndCertificate" {
-					AviSSLKeyCertAdd(cache, rest_op, vsKey)
+					if sslKey == nil {
+						AviSSLKeyCertAdd(cache, rest_op, vsKey)
+					} else {
+						AviSSLKeyCertAdd(cache, rest_op, utils.NamespaceName{})
+					}
+				} else if rest_op.Model == "PKIprofile" {
+					AviPkiProfileAdd(cache, rest_op)
 				}
 			} else {
 				if rest_op.Model == "Pool" {
@@ -278,7 +374,13 @@ func RestOperation(vsName string, gatewayNs string, avimodelNode nodes.AviModelN
 				} else if rest_op.Model == "HTTPPolicySet" {
 					AviHTTPCacheDel(cache, rest_op, vsKey)
 				} else if rest_op.Model == "SSLKeyAndCertificate" {
-					AviSSLCacheDel(cache, rest_op, vsKey)
+					if sslKey == nil {
+						AviSSLCacheDel(cache, rest_op, vsKey)
+					} else {
+						AviSSLCacheDel(cache, rest_op, utils.NamespaceName{})
+					}
+				} else if rest_op.Model == "PKIprofile" {
+					AviPkiProfileCacheDel(cache, rest_op)
 				}
 			}
 		}

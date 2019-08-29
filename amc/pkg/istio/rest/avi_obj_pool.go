@@ -47,6 +47,12 @@ func AviPoolBuild(pool_meta *nodes.AviPoolNode, cache_obj *utils.AviPoolCache) *
 	pool := avimodels.Pool{Name: &name, CloudConfigCksum: &cksumString,
 		CreatedBy: &cr, TenantRef: &tenant, ServiceMetadata: &svc_mdata, LbAlgorithm: &poolAlgorithm, CloudRef: &cloudRef}
 
+	if pool_meta.ServerClientCert != "" && pool_meta.PkiProfile != "" {
+		pool.PkiProfileRef = &pool_meta.PkiProfile
+		pool.SslKeyAndCertificateRef = &pool_meta.ServerClientCert
+		pool.SslProfileRef = &pool_meta.SSLProfileRef
+
+	}
 	// TODO other fields like cloud_ref and lb algo
 
 	for _, server := range pool_meta.Servers {

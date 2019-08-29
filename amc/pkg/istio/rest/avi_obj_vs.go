@@ -37,7 +37,7 @@ func AviVsSniBuild(vs_meta *nodes.AviVsTLSNode, httppolicynode []*nodes.AviHttpP
 	if vs_meta.TLSType != "PASSTHROUGH" {
 		app_prof = "/api/applicationprofile/?name=" + "System-HTTP"
 	} else {
-		app_prof = "/api/applicationprofile/?name=" + "System-SSL-Application"
+		app_prof = "/api/applicationprofile/?name=" + "System-Secure-HTTP"
 	}
 	cloudRef := "/api/cloud?name=" + utils.CloudName
 	sniChild := &avimodels.VirtualService{Name: &name, CloudConfigCksum: &checksumstr,
@@ -197,10 +197,12 @@ func AviVsBuild(vs_meta *nodes.AviVsNode, httppolicynode []*nodes.AviHttpPolicyS
 			pg_name := FindPoolGroupForPort(vs_meta.TCPPoolGroupRefs, port)
 			if pg_name != "" {
 				utils.AviLog.Info.Printf("TCP ports for VS creation returned PG: %s", pg_name)
+				oapp_profile := "/api/applicationprofile/?name=System-L4-Application"
 				pg_ref := "/api/poolgroup/?name=" + pg_name
 				sps := avimodels.ServicePoolSelector{ServicePoolGroupRef: &pg_ref,
 					ServicePort: &port, ServiceProtocol: &sproto}
 				vs.ServicePoolSelect = append(vs.ServicePoolSelect, &sps)
+				svc.OverrideApplicationProfileRef = &oapp_profile
 			} else {
 				utils.AviLog.Info.Printf("TCP ports for VS creation returned no matching PGs")
 			}

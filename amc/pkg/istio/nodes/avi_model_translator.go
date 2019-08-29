@@ -195,6 +195,7 @@ func (o *AviObjectGraph) ProcessDRs(drList []string, poolNode *AviPoolNode, name
 	for _, drName := range drList {
 		found, istioObj := istio_objs.SharedDRLister().DestinationRule(namespace).Get(drName)
 		drSpec := istioObj.Spec.(*networking.DestinationRule)
+		utils.AviLog.Info.Printf("Obtained the drSpec as %v", found)
 		if found {
 			if subset != "" {
 				// We need to apply the DR's specific subset rule for this pool
@@ -210,9 +211,20 @@ func (o *AviObjectGraph) ProcessDRs(drList []string, poolNode *AviPoolNode, name
 			} else {
 				lbSettings := drSpec.TrafficPolicy.LoadBalancer
 				o.selectPolicy(poolNode, lbSettings)
-				return nil
 			}
 			// TODO: Add support for consistent hash
+			// Process TLS settings from DR. We support ISTIO_MUTUAL for now.
+			if drSpec.TrafficPolicy != nil {
+				if drSpec.TrafficPolicy.Tls != nil {
+					if drSpec.TrafficPolicy.Tls.Mode == 3 {
+						// This is the ISTIO_MUTUAL mode, that we currently support.
+						poolNode.PkiProfile = "/api/pkiprofile/?name=pkiprofile-istio-mutual-" + namespace + "-istio.default"
+						poolNode.ServerClientCert = "/api/sslkeyandcertificate/?name=istio-mutual-" + namespace + "-istio.default"
+						poolNode.SSLProfileRef = "/api/sslprofile/?name=System-Standard"
+					}
+				}
+			}
+
 		} else {
 			utils.AviLog.Warning.Printf("DR object not found for DR name: %s", drName)
 		}
@@ -495,7 +507,7 @@ func (o *AviObjectGraph) ConstructAviHTTPPGPoolNodes(vs *istio_objs.IstioObject,
 				pgName = pgNodeFromModel.Name
 			} else {
 				utils.AviLog.Info.Printf("PG : %s not found in cache or model, generating new PG name", pgNameToSearch)
-				pgName = o.generateRandomStringName(pgNamePrefix)
+				pgName = pgNameToSearch
 			}
 		} else {
 			utils.AviLog.Info.Printf("The PG %s exists in cache with the same checksum", pgName)
@@ -1031,4 +1043,37 @@ func (o *AviObjectGraph) BuildAviObjectGraph(namespace string, gatewayNs string,
 	o.GraphChecksum = o.GraphChecksum + VsNode.GetCheckSum()
 	utils.AviLog.Info.Printf("Checksum  for AVI VS object %v", VsNode.GetCheckSum())
 	utils.AviLog.Info.Printf("Computed Graph Checksum for VS is: %v", o.GraphChecksum)
+}
+
+func (o *AviObjectGraph) BuildIstioMutualSecret(namespace string, secretName string) {
+	secretObj, err := utils.GetInformers().SecretInformer.Lister().Secrets(namespace).Get(secretName)
+	if err != nil || secretObj == nil {
+		// This secret has been deleted.
+		utils.AviLog.Info.Printf("ISTIO_MUTUAL: Secret: %s has been deleted", secretName)
+		return
+	}
+	tlsNode := &AviTLSKeyCertNode{Name: "istio-mutual-" + namespace + "-" + secretName, Tenant: namespace}
+	keycertMap := secretObj.Data
+	cert, ok := keycertMap[utils.IstioMutualCertChain]
+	if ok {
+		tlsNode.Cert = cert
+	} else {
+		utils.AviLog.Info.Printf("ISTIO_MUTUAL: Certificate not found for secret: %s", secretObj.Name)
+		return
+	}
+	key, keyfound := keycertMap[utils.IstioMutualKey]
+	if keyfound {
+		tlsNode.Key = key
+	} else {
+		utils.AviLog.Info.Printf("ISTIO_MUTUAL: Key not found for secret: %s", secretObj.Name)
+		return
+	}
+	caCert, keyfound := keycertMap[utils.IstioMutualRootCA]
+	if keyfound {
+		tlsNode.CaCert = caCert
+	} else {
+		utils.AviLog.Info.Printf("ISTIO_MUTUAL: CaCert not found for secret: %s", secretObj.Name)
+		return
+	}
+	o.AddModelNode(tlsNode)
 }

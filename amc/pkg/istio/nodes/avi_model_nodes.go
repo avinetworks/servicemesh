@@ -88,6 +88,7 @@ type AviTLSKeyCertNode struct {
 	Key              []byte
 	Cert             []byte
 	Port             int32
+	CaCert           []byte
 }
 
 func (v *AviTLSKeyCertNode) CalculateCheckSum() {
@@ -132,6 +133,9 @@ type AviPoolNode struct {
 	Servers          []AviPoolMetaServer
 	Protocol         string
 	LbAlgorithm      string
+	ServerClientCert string
+	PkiProfile       string
+	SSLProfileRef    string
 }
 
 func (v *AviPoolNode) GetCheckSum() uint32 {
@@ -141,7 +145,7 @@ func (v *AviPoolNode) GetCheckSum() uint32 {
 
 func (v *AviPoolNode) CalculateCheckSum() {
 	// A sum of fields for this VS.
-	checksum := utils.Hash(v.Protocol) + utils.Hash(fmt.Sprint(v.Port)) + utils.Hash(v.PortName) + utils.Hash(utils.Stringify(v.Servers)) + utils.Hash(utils.Stringify(v.LbAlgorithm))
+	checksum := utils.Hash(v.Protocol) + utils.Hash(fmt.Sprint(v.Port)) + utils.Hash(v.PortName) + utils.Hash(utils.Stringify(v.Servers)) + utils.Hash(utils.Stringify(v.LbAlgorithm)) + utils.Hash(utils.Stringify(v.SSLProfileRef)) + utils.Hash(utils.Stringify(v.ServerClientCert)) + utils.Hash(utils.Stringify(v.PkiProfile))
 	v.CloudConfigCksum = checksum
 }
 
