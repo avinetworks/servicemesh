@@ -28,4 +28,6 @@ const (
 	IstioMutualKey        = "key.pem"
 	IstioMutualCertChain  = "cert-chain.pem"
 	IstioMutualRootCA     = "root-cert.pem"
+	IngressInformer       = "IngressInformer"
+	RouteInformer         = "RouteInformer"
 )

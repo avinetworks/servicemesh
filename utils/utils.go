@@ -29,6 +29,8 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	extensions "k8s.io/api/extensions/v1beta1"
 	kubeinformers "k8s.io/client-go/informers"
+	oshiftinformers "github.com/openshift/client-go/route/informers/externalversions"
+	oshiftclientset "github.com/openshift/client-go/route/clientset/versioned"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/cache"
 )
@@ -144,7 +146,7 @@ func RandomSeq(n int) string {
 var informer sync.Once
 var informerInstance *Informers
 
-func NewInformers(cs *kubernetes.Clientset, registeredInformers []string) *Informers {
+func NewInformers(cs *kubernetes.Clientset, registeredInformers []string, ocs ...oshiftclientset.Interface) *Informers {
 	kubeInformerFactory := kubeinformers.NewSharedInformerFactory(cs, time.Second*30)
 	informer.Do(func() {
 		informerInstance = &Informers{}
@@ -158,6 +160,13 @@ func NewInformers(cs *kubernetes.Clientset, registeredInformers []string) *Infor
 				informerInstance.EpInformer = kubeInformerFactory.Core().V1().Endpoints()
 			case SecretInformer:
 				informerInstance.SecretInformer = kubeInformerFactory.Core().V1().Secrets()
+			case IngressInformer:
+				informerInstance.IngressInformer = kubeInformerFactory.Extensions().V1beta1().Ingresses()
+			case RouteInformer:
+				if len(ocs) > 0 {
+					oshiftInformerFactory := oshiftinformers.NewSharedInformerFactory(ocs[0], time.Second*30)
+					informerInstance.RouteInformer = oshiftInformerFactory.Route().V1().Routes()
+				}
 			}
 		}
 	})

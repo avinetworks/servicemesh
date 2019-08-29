@@ -20,6 +20,8 @@ import (
 
 	avimodels "github.com/avinetworks/sdk/go/models"
 	coreinformers "k8s.io/client-go/informers/core/v1"
+	extensioninformers "k8s.io/client-go/informers/extensions/v1beta1"
+	oshiftinformers "github.com/openshift/client-go/route/informers/externalversions/route/v1"
 )
 
 type EvType string
@@ -46,6 +48,8 @@ type Informers struct {
 	EpInformer      coreinformers.EndpointsInformer
 	PodInformer     coreinformers.PodInformer
 	SecretInformer  coreinformers.SecretInformer
+	IngressInformer extensioninformers.IngressInformer
+	RouteInformer   oshiftinformers.RouteInformer
 }
 
 type AviRestObjMacro struct {
