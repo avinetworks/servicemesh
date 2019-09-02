@@ -70,10 +70,7 @@ Steps:
 The AMC service can be run standalone or inside the kubernetes cluster. If this service is being run outside of the Kubernetes cluster, one would need to expose the Galley server to become accessible over IP. For experiments, this can be achieved by exposing the Galley Service in Istio as NodePort service. Besides this, the following are a list of pre-requisites needed before we get started:
 
     - A Kubernetes cluster with Istio deployed with MCP services enabled.
-    - A AVI controller accesible over IP: 
-         -  The AVI controller should be configured with the Kubernetes/Openshift cloud. 
-         -  The IPAMs for the North/South and East/West services should be configured.
-         -  The service syncing for Backend/Frontend services should be disabled on the cloud.
+    - A AVI controller accesible over IP.
  
  #### Running AMC outside the cluster
 
@@ -86,20 +83,41 @@ The AMC service can be run standalone or inside the kubernetes cluster. If this 
  `export CTRL_PASSWORD=<password>` - The AVI Controller password
  
  `export MCP_URL=<Galley_URL>:<GalleyNodePort>` - The endpoint to contact Galley.
-
+ 
  `export CTRL_IPADDRESS=<AVI_API_SERVER_ADDR>` - The AVI controller API endpoint with port if applicable.
  
- Post these steps - one can simply start the AMC service using: `./servicmesh`
+ `export STATIC_RANGE_START=<N/S IP Range start>` - The start address of your n/s IPAM range.
+ 
+ `export STATIC_RANGE_END=<N/S IP Range end>` - The end address of your n/s IPAM range.
+ 
+ `export CIDR=<ip>/<mask>` - The CIDR information of your n/s IPAM.
+ 
+ `export CLOUD_NAME=<String>` - The name of your kubernetes cloud in AVI.
+ 
+ `export MASTER_NODES=<ip:port>` - The IP:port information of the Kubernetes API server.
+ 
+ `export SERVICE_TOKEN=<string>` - The service token to authenticate with the kube API server. Must have admin privileges.
+ 
+  Execute the following commands in order:
+    -  ./servicemesh-cloud
+    -  ./servicemesh-amc
 
-#### Running AMC inside the cluster
+#### Deploy AMC using Helm
 
- If you are running inside a kubernetes cluster, then a lot of automation is provided out of the box. Please follow the below steps to run it:
+ If you are running inside a kubernetes cluster, then a lot of automation is provided out of the box using helm charts. Please follow the below steps to run it:
  
  - Clone the code.
- - `cd servicemesh/k8s_tmpl`
- - Edit the secret.yaml file and update it with the relevant information by encoding it to base64. 
- - `kubectl create -f secret.yaml`
- - `kubectl create -f deployment.yaml`
- 
- The above should bring up a POD in your kubernetes cluster running the AVI Mesh Controller.
+ - Ensure tiller/helm is installed in your cluster.
+ - cd servicemesh/helm/amc
+ - Edit the `values.yaml` file and add appropriate values.
+ - cd ../helm
+ - helm install ./amc
+ - You may want to build the docker images using multi-stage docker builds (requires docker version > 17) by simply using `make docker` from the root directory of the project.
+
+After you execute the above helm command successfully, ensure that your AMC deployment is running as expected. Following changes can be observed:
+
+   -   A new cloud with the name provided in the values.yaml should be created in your AVI Controller.
+   -   A service engine should be placed on your kubernetes cluster running in the form of a DaemonSet.
+   -   All appropriate network/dns should be configured as mentioned in the values.yaml file and wired up to this cloud.
+   -   The istio resources would be synced to AVI in the form of AVI data model objects.
  
