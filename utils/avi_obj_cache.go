@@ -18,6 +18,7 @@ import (
 	"encoding/json"
 	"net/url"
 	"regexp"
+	"strings"
 	"sync"
 
 	"github.com/avinetworks/sdk/go/clients"
@@ -160,6 +161,8 @@ func (c *AviObjCache) AviObjCachePopulate(client *clients.AviClient,
 	// Populate the VS cache
 	c.AviObjVSCachePopulate(client, cloud)
 	c.AviCloudPropertiesPopulate(client, cloud)
+	c.IstioMutualSSLKeyCert(client, cloud)
+	c.IstioMutualPkiProfile(client, cloud)
 
 }
 
@@ -443,6 +446,7 @@ func (c *AviObjCache) AviSSLKeyAndCertPopulate(client *clients.AviClient,
 										 in SSLKeyAndCert set %v`, ssl_pol["tenant_ref"], ssl_pol)
 					continue
 				} else {
+					AviLog.Info.Printf("URL FRAGMENT :%s tenant_ref: %s", url, ssl_pol["tenant_ref"])
 					tenant = url.Fragment
 				}
 				if ssl_pol != nil {
@@ -461,9 +465,9 @@ func (c *AviObjCache) AviSSLKeyAndCertPopulate(client *clients.AviClient,
 }
 
 func (c *AviObjCache) IstioMutualSSLKeyCert(client *clients.AviClient,
-	cloud string, vs_uuid string) {
+	cloud string) {
 	var rest_response interface{}
-	uri := "/api/sslkeyandcertificate?name=istio.default"
+	uri := "/api/sslkeyandcertificate?include_name=true"
 	err := client.AviSession.Get(uri, &rest_response)
 	if err != nil {
 		AviLog.Warning.Printf(`IstioMutualSSLKeyCert Get uri %v returned err %v`, uri, err)
@@ -489,7 +493,11 @@ func (c *AviObjCache) IstioMutualSSLKeyCert(client *clients.AviClient,
 									 interface{}. Instead of type %T`, ssl_intf)
 			continue
 		}
-
+		if !strings.Contains(ssl_pol["name"].(string), "istio.default") {
+			// Don't parse non-istio.default secrets.
+			AviLog.Info.Printf("Skipping SSL Key cert with name :%s", ssl_pol["name"].(string))
+			continue
+		}
 		var tenant string
 		url, err := url.Parse(ssl_pol["tenant_ref"].(string))
 		if err != nil {
@@ -517,9 +525,9 @@ func (c *AviObjCache) IstioMutualSSLKeyCert(client *clients.AviClient,
 }
 
 func (c *AviObjCache) IstioMutualPkiProfile(client *clients.AviClient,
-	cloud string, vs_uuid string) {
+	cloud string) {
 	var rest_response interface{}
-	uri := "/api/pkiprofile?name=istio.default"
+	uri := "/api/pkiprofile?include_name=true"
 	err := client.AviSession.Get(uri, &rest_response)
 	if err != nil {
 		AviLog.Warning.Printf(`IstioMutualPkiProfile Get uri %v returned err %v`, uri, err)

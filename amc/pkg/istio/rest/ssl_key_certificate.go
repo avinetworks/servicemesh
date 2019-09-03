@@ -72,6 +72,7 @@ func AviPkiProfileBuild(ssl_node *nodes.AviTLSKeyCertNode, cache_obj *utils.AviP
 		rest_op = utils.RestOp{Path: path, Method: utils.RestPost, Obj: macroObj,
 			Tenant: ssl_node.Tenant, Model: "PKIprofile", Version: utils.CtrlVersion}
 	}
+	utils.AviLog.Info.Printf("The value of PKI Profile rest_op :%s", utils.Stringify(rest_op))
 	return &rest_op
 
 }
@@ -125,7 +126,7 @@ func AviSSLKeyCertAdd(cache *utils.AviObjCache, rest_op *utils.RestOp, vsKey uti
 		k := utils.NamespaceName{Namespace: rest_op.Tenant, Name: name}
 		cache.SSLKeyCache.AviCacheAdd(k, &ssl_cache_obj)
 		// Update the VS object
-		if vsKey == (utils.NamespaceName{}) {
+		if vsKey != (utils.NamespaceName{}) {
 			vs_cache, ok := cache.VsCache.AviCacheGet(vsKey)
 			if ok {
 				vs_cache_obj, found := vs_cache.(*utils.AviVsCache)
@@ -195,7 +196,7 @@ func AviPkiProfileAdd(cache *utils.AviObjCache, rest_op *utils.RestOp) error {
 func AviSSLCacheDel(cache *utils.AviObjCache, rest_op *utils.RestOp, vsKey utils.NamespaceName) error {
 	key := utils.NamespaceName{Namespace: rest_op.Tenant, Name: rest_op.ObjName}
 	cache.SSLKeyCache.AviCacheDelete(key)
-	if vsKey == (utils.NamespaceName{}) {
+	if vsKey != (utils.NamespaceName{}) {
 		vs_cache, ok := cache.VsCache.AviCacheGet(vsKey)
 		if ok {
 			vs_cache_obj, found := vs_cache.(*utils.AviVsCache)
