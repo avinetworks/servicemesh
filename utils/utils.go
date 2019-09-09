@@ -146,29 +146,43 @@ func RandomSeq(n int) string {
 var informer sync.Once
 var informerInstance *Informers
 
-func NewInformers(cs *kubernetes.Clientset, registeredInformers []string, ocs ...oshiftclientset.Interface) *Informers {
+func instantiateInformers(cs *kubernetes.Clientset, registeredInformers []string, ocs oshiftclientset.Interface) *Informers {
 	kubeInformerFactory := kubeinformers.NewSharedInformerFactory(cs, time.Second*30)
-	informer.Do(func() {
-		informerInstance = &Informers{}
-		for _, informer := range registeredInformers {
-			switch informer {
-			case ServiceInformer:
-				informerInstance.ServiceInformer = kubeInformerFactory.Core().V1().Services()
-			case PodInformer:
-				informerInstance.PodInformer = kubeInformerFactory.Core().V1().Pods()
-			case EndpointInformer:
-				informerInstance.EpInformer = kubeInformerFactory.Core().V1().Endpoints()
-			case SecretInformer:
-				informerInstance.SecretInformer = kubeInformerFactory.Core().V1().Secrets()
-			case IngressInformer:
-				informerInstance.IngressInformer = kubeInformerFactory.Extensions().V1beta1().Ingresses()
-			case RouteInformer:
-				if len(ocs) > 0 {
-					oshiftInformerFactory := oshiftinformers.NewSharedInformerFactory(ocs[0], time.Second*30)
-					informerInstance.RouteInformer = oshiftInformerFactory.Route().V1().Routes()
-				}
+	informers := &Informers{}
+	for _, informer := range registeredInformers {
+		switch informer {
+		case ServiceInformer:
+			informers.ServiceInformer = kubeInformerFactory.Core().V1().Services()
+		case PodInformer:
+			informers.PodInformer = kubeInformerFactory.Core().V1().Pods()
+		case EndpointInformer:
+			informers.EpInformer = kubeInformerFactory.Core().V1().Endpoints()
+		case SecretInformer:
+			informers.SecretInformer = kubeInformerFactory.Core().V1().Secrets()
+		case IngressInformer:
+			informers.IngressInformer = kubeInformerFactory.Extensions().V1beta1().Ingresses()
+		case RouteInformer:
+			if ocs != nil {
+				oshiftInformerFactory := oshiftinformers.NewSharedInformerFactory(ocs, time.Second*30)
+				informers.RouteInformer = oshiftInformerFactory.Route().V1().Routes()
 			}
 		}
+	}
+	return informers
+}
+
+/* Returns a set of informes. If instanciateOnce is false, then a new set would be returned for each call,
+else the informer set would be instanciated once and reused for subsequent calls */
+func NewInformers(instanciateOnce bool, cs *kubernetes.Clientset, registeredInformers []string, ocs ...oshiftclientset.Interface) *Informers {
+	var oshiftclient oshiftclientset.Interface
+	if len(ocs) > 0 {
+		oshiftclient = ocs[0]
+	}
+	if !instanciateOnce {
+		return instantiateInformers(cs, registeredInformers, oshiftclient)
+	}
+	informer.Do(func() {
+		informerInstance = instantiateInformers(cs, registeredInformers, oshiftclient)
 	})
 	return informerInstance
 }
