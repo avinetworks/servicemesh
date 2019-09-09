@@ -74,15 +74,6 @@ func main() {
 		utils.CtrlVersion, utils.CloudName)
 	istioEnabled := "False"
 	istioEnabled = os.Getenv("ISTIO_ENABLED")
-	if istioEnabled == "True" {
-		//MCP_URL format: mcp://<IP>:port
-		mcpServerURL := os.Getenv("MCP_URL")
-		mcpServers := []string{mcpServerURL}
-		mcpClient := mcp.MCPClient{MCPServerAddrs: mcpServers}
-		_ = mcpClient.InitMCPClient()
-		// TODO (sudswas): Need to handle the stop signal
-		mcpClient.Start(stopCh)
-	}
 
 	c := k8s.SharedAviController()
 	c.SetupEventHandlers(kubeClient)
@@ -95,6 +86,15 @@ func main() {
 	graphQueue := utils.SharedWorkQueue().GetQueueByName(utils.GraphLayer)
 	graphQueue.SyncFunc = SyncFromNodesLayer
 	graphQueue.Run(stopCh)
+	if istioEnabled == "True" {
+		//MCP_URL format: mcp://<IP>:port
+		mcpServerURL := os.Getenv("MCP_URL")
+		mcpServers := []string{mcpServerURL}
+		mcpClient := mcp.MCPClient{MCPServerAddrs: mcpServers}
+		_ = mcpClient.InitMCPClient()
+		// TODO (sudswas): Need to handle the stop signal
+		mcpClient.Start(stopCh)
+	}
 	// TODO (sudswas): Remove hard coding.
 	worker := utils.NewFullSyncThread(50000 * time.Second)
 	worker.SyncFunction = FullSync

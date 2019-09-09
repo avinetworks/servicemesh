@@ -201,16 +201,24 @@ func (o *AviObjectGraph) ProcessDRs(drList []string, poolNode *AviPoolNode, name
 				// We need to apply the DR's specific subset rule for this pool
 				for _, drSubset := range drSpec.Subsets {
 					if subset == drSubset.Name {
-						lbSettings := drSubset.TrafficPolicy.LoadBalancer
-						o.selectPolicy(poolNode, lbSettings)
+						if drSubset.TrafficPolicy != nil {
+							if drSubset.TrafficPolicy.LoadBalancer != nil {
+								lbSettings := drSubset.TrafficPolicy.LoadBalancer
+								o.selectPolicy(poolNode, lbSettings)
+							}
+						}
 						// Return the labels to search for.
 						utils.AviLog.Info.Printf("The DR subset labels for the pool %s are: %v", poolNode.Name, drSubset.Labels)
 						return drSubset.Labels
 					}
 				}
 			} else {
-				lbSettings := drSpec.TrafficPolicy.LoadBalancer
-				o.selectPolicy(poolNode, lbSettings)
+				if drSpec.TrafficPolicy != nil {
+					if drSpec.TrafficPolicy.LoadBalancer != nil {
+						lbSettings := drSpec.TrafficPolicy.LoadBalancer
+						o.selectPolicy(poolNode, lbSettings)
+					}
+				}
 			}
 			// TODO: Add support for consistent hash
 			// Process TLS settings from DR. We support ISTIO_MUTUAL for now.
@@ -296,19 +304,17 @@ func (o *AviObjectGraph) evaluateDestinations(destination *networking.Destinatio
 	utils.AviLog.Info.Printf(" Destination rules :%v obtained for service :%s", destinationRules, serviceName)
 	if found {
 		// We need to process Destination Rules for this service
+		utils.AviLog.Info.Printf("The DR subsets to search: %s", destination.Subset)
 		labels = o.ProcessDRs(destinationRules, poolNode, ns, destination.Subset)
 	}
 	if err != nil || epObj == nil {
 		// There's no endpoint object for the service.
 		poolNode.Servers = nil
+		utils.AviLog.Info.Printf("No endpoint object found for service: %s", serviceName)
 	} else {
-		poolNode.Servers = o.extractServers(epObj, portNumber, portName, destination.Subset, ns, labels)
+		o.extractServers(epObj, portNumber, portName, destination.Subset, ns, labels, poolNode)
 	}
-	if portName != "" {
-		poolNode.PortName = portName
-	} else if portNumber != 0 {
-		poolNode.Port = portNumber
-	}
+
 	poolNode.CalculateCheckSum()
 	o.GraphChecksum = o.GraphChecksum + poolNode.GetCheckSum()
 	utils.AviLog.Info.Printf("Computed Graph Checksum after calculating pool nodes is :%v", o.GraphChecksum)
@@ -635,12 +641,10 @@ func (o *AviObjectGraph) evaluateTLSPools(ns string, randString string, destinat
 			// There's no endpoint object for the service.
 			poolNode.Servers = nil
 		} else {
-			poolNode.Servers = o.extractServers(epObj, portNumber, portName, destination.Destination.Subset, ns, labels)
+			o.extractServers(epObj, portNumber, portName, destination.Destination.Subset, ns, labels, poolNode)
 		}
 		if portName != "" {
 			poolNode.PortName = portName
-		} else if portNumber != 0 {
-			poolNode.Port = portNumber
 		}
 		poolNode.CalculateCheckSum()
 		o.GraphChecksum = o.GraphChecksum + poolNode.GetCheckSum()
@@ -749,7 +753,7 @@ func (o *AviObjectGraph) ConstructAviHttpPolicyNodes(gatewayNs string, vsObj *is
 	return policyNode
 }
 
-func (o *AviObjectGraph) extractServers(epObj *corev1.Endpoints, port_num int32, port_name string, subsets string, ns string, subsetLabels map[string]string) []AviPoolMetaServer {
+func (o *AviObjectGraph) extractServers(epObj *corev1.Endpoints, port_num int32, port_name string, subsets string, ns string, subsetLabels map[string]string, poolNode *AviPoolNode) {
 	//TODO: The POD based subsets will be handled subsequently.
 	var pool_meta []AviPoolMetaServer
 	for _, ss := range epObj.Subsets {
@@ -762,7 +766,8 @@ func (o *AviObjectGraph) extractServers(epObj *corev1.Endpoints, port_num int32,
 				break
 			}
 		}
-		if port_match {
+		if port_match || subsets != "" {
+			utils.AviLog.Info.Printf("Found port match")
 			//pool_meta.Port = epp_port
 			for _, addr := range ss.Addresses {
 				var atype string
@@ -786,6 +791,14 @@ func (o *AviObjectGraph) extractServers(epObj *corev1.Endpoints, port_num int32,
 										server.ServerNode = *addr.NodeName
 									}
 									if !utils.HasElem(pool_meta, server) {
+										if port_num != 0 {
+											poolNode.Port = port_num
+										} else {
+											// The port number is not specified in the DR. Pick the port from the EP Object
+											if len(ss.Ports) > 0 {
+												poolNode.Port = ss.Ports[0].Port
+											}
+										}
 										pool_meta = append(pool_meta, server)
 									}
 								}
@@ -811,7 +824,7 @@ func (o *AviObjectGraph) extractServers(epObj *corev1.Endpoints, port_num int32,
 			}
 		}
 	}
-	return pool_meta
+	poolNode.Servers = pool_meta
 }
 
 func (o *AviObjectGraph) CreatePortClassifiedObjects(vsNode *AviVsNode, namespace string, gatewayNs string, gatewayName string, gwObj *istio_objs.IstioObject) {

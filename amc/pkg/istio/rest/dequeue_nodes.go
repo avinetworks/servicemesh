@@ -33,13 +33,14 @@ func DeQueueNodes(key string) {
 	cache := utils.SharedAviObjCache()
 	// Special case handling of ISTIO_MUTUAL
 	keysplit := strings.Split(key, "/")
+	// Key format is: keysplit[0] = namespace,keysplit[1]="ISTIO_MUTUAL_SECRET",keysplit[2]=secret-name
 	if len(keysplit) > 2 {
 		if keysplit[1] == "ISTIO_MUTUAL_SECRET" {
 			if avimodelIntf != nil {
 				sslNodesModel := avimodelIntf.(*nodes.AviObjectGraph)
-				processSSLKeyPkiProfile(keysplit[0], keysplit[1], sslNodesModel, cache)
+				processSSLKeyPkiProfile(keysplit[0], keysplit[2], sslNodesModel, cache)
 			} else {
-				processSSLKeyPkiProfile(keysplit[0], keysplit[1], nil, cache)
+				processSSLKeyPkiProfile(keysplit[0], keysplit[2], nil, cache)
 			}
 		}
 		return
@@ -93,9 +94,10 @@ func DeQueueNodes(key string) {
 
 func processSSLKeyPkiProfile(namespace string, secretName string, avimodel *nodes.AviObjectGraph, cache *utils.AviObjCache) bool {
 	var rest_ops []*utils.RestOp
-	utils.AviLog.Info.Printf("Found a ISTIO_MUTUAL secret to process for namespace: %s", namespace)
+	utils.AviLog.Info.Printf("Found a ISTIO_MUTUAL secret: %s to process for namespace: %s", secretName, namespace)
 	// First fetch the cache
-	sslkeycachekey := utils.NamespaceName{Name: secretName, Namespace: namespace}
+
+	sslkeycachekey := utils.NamespaceName{Name: "istio-mutual-" + namespace + "-" + secretName, Namespace: namespace}
 	sslkey, found := cache.SSLKeyCache.AviCacheGet(sslkeycachekey)
 	if found {
 		sslkey_obj, ok := sslkey.(*utils.AviSSLCache)
@@ -132,7 +134,7 @@ func processSSLKeyPkiProfile(namespace string, secretName string, avimodel *node
 			}
 		}
 	}
-	pkicachekey := utils.NamespaceName{Name: secretName, Namespace: namespace}
+	pkicachekey := utils.NamespaceName{Name: "pkiprofile-" + "istio-mutual-" + namespace + "-" + secretName, Namespace: namespace}
 	pkikey, found := cache.PkiProfileCache.AviCacheGet(pkicachekey)
 	if found {
 		pki_obj, ok := pkikey.(*utils.AviPkiProfileCache)
@@ -144,12 +146,6 @@ func processSSLKeyPkiProfile(namespace string, secretName string, avimodel *node
 			// DELETE request
 			rest_op := AviPkiProfileDel(pki_obj.Uuid, namespace)
 			rest_ops = append(rest_ops, rest_op)
-		} else {
-			// Proces it as a PUT request
-			sslnodes := avimodel.GetAviSSLCertKeys()
-			rest_op := AviPkiProfileBuild(sslnodes[0], pki_obj)
-			rest_ops = append(rest_ops, rest_op)
-
 		}
 	} else {
 		if avimodel != nil {
