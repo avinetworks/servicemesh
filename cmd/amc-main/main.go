@@ -66,7 +66,7 @@ func main() {
 		utils.AviLog.Error.Fatalf("Error building kubernetes clientset: %s", err.Error())
 	}
 	registeredInformers := []string{utils.ServiceInformer, utils.PodInformer, utils.EndpointInformer, utils.SecretInformer}
-	utils.NewInformers(true, kubeClient, registeredInformers)
+	utils.NewInformers(kubeClient, registeredInformers)
 
 	avi_rest_client_pool := utils.SharedAVIClients()
 	avi_obj_cache := utils.SharedAviObjCache()
