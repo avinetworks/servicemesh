@@ -184,12 +184,12 @@ func NewInformers(cs *kubernetes.Clientset, registeredInformers []string, args .
 	if len(args) > 0 {
 		for k, v := range args[0] {
 			switch k {
-			case "instantiateOnce":
+			case INFORMERS_INSTANTIATE_ONCE:
 				instantiateOnce, ok = v.(bool)
 				if !ok {
 					AviLog.Warning.Printf("arg instantiateOnce is not of type bool")
 				}
-			case "oshiftclient":
+			case INFORMERS_OPENSHIFT_CLIENT:
 				oshiftclient, ok = v.(oshiftclientset.Interface)
 				if !ok {
 					AviLog.Warning.Printf("arg oshiftclient is not of type oshiftclientset.Interface")
