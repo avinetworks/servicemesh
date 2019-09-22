@@ -43,6 +43,11 @@ const (
 	AVI_DEFAULT_UDP_HM string = "System-UDP"
 )
 
+const (
+	INFORMERS_INSTANTIATE_ONCE string = "instantiateOnce"
+	INFORMERS_OPENSHIFT_CLIENT string = "oshiftClient"
+)
+
 type Informers struct {
 	ServiceInformer coreinformers.ServiceInformer
 	EpInformer      coreinformers.EndpointsInformer
