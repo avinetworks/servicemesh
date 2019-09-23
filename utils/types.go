@@ -22,6 +22,7 @@ import (
 	coreinformers "k8s.io/client-go/informers/core/v1"
 	extensioninformers "k8s.io/client-go/informers/extensions/v1beta1"
 	oshiftinformers "github.com/openshift/client-go/route/informers/externalversions/route/v1"
+	"k8s.io/client-go/kubernetes"
 )
 
 type EvType string
@@ -47,6 +48,10 @@ const (
 	INFORMERS_INSTANTIATE_ONCE string = "instantiateOnce"
 	INFORMERS_OPENSHIFT_CLIENT string = "oshiftClient"
 )
+
+type KubeClientIntf struct {
+	ClientSet kubernetes.Interface
+}
 
 type Informers struct {
 	ServiceInformer coreinformers.ServiceInformer
