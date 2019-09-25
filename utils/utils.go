@@ -31,7 +31,6 @@ import (
 	kubeinformers "k8s.io/client-go/informers"
 	oshiftinformers "github.com/openshift/client-go/route/informers/externalversions"
 	oshiftclientset "github.com/openshift/client-go/route/clientset/versioned"
-	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/cache"
 )
 
@@ -146,7 +145,8 @@ func RandomSeq(n int) string {
 var informer sync.Once
 var informerInstance *Informers
 
-func instantiateInformers(cs *kubernetes.Clientset, registeredInformers []string, ocs oshiftclientset.Interface) *Informers {
+func instantiateInformers(kubeClient KubeClientIntf, registeredInformers []string, ocs oshiftclientset.Interface) *Informers {
+	cs := kubeClient.ClientSet
 	kubeInformerFactory := kubeinformers.NewSharedInformerFactory(cs, time.Second*30)
 	informers := &Informers{}
 	for _, informer := range registeredInformers {
@@ -178,7 +178,7 @@ func instantiateInformers(cs *kubernetes.Clientset, registeredInformers []string
  * "oshiftclient" <oshiftclientset.Interface> : Informer for openshift route has to be registered using openshiftclient
  */
 
-func NewInformers(cs *kubernetes.Clientset, registeredInformers []string, args ...map[string]interface{}) *Informers {
+func NewInformers(kubeClient KubeClientIntf, registeredInformers []string, args ...map[string]interface{}) *Informers {
 	var oshiftclient oshiftclientset.Interface
 	var instantiateOnce, ok bool = true, true
 	if len(args) > 0 {
@@ -200,10 +200,10 @@ func NewInformers(cs *kubernetes.Clientset, registeredInformers []string, args .
 		}
 	}
 	if !instantiateOnce {
-		return instantiateInformers(cs, registeredInformers, oshiftclient)
+		return instantiateInformers(kubeClient, registeredInformers, oshiftclient)
 	}
 	informer.Do(func() {
-		informerInstance = instantiateInformers(cs, registeredInformers, oshiftclient)
+		informerInstance = instantiateInformers(kubeClient, registeredInformers, oshiftclient)
 	})
 	return informerInstance
 }
